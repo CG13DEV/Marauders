@@ -131,3 +131,44 @@ rules validate
 → save state updated
 
 This keeps AI expressive without making saves irreproducible.
+
+## Model-agnostic semantic layer
+
+**[GAME / TECH]** Архитектура не должна зависеть от возможностей конкретной AI-модели или поколения технологий.
+
+Проект долгосрочный, поэтому интерфейс должен оставаться стабильным даже при замене semantic model:
+
+World Entity State + Authorized Context + Player Input → Semantic Agent → Proposed Response / Action → Validation → Game Systems
+
+Сегодня Semantic Agent может быть небольшим LLM. Позже это может быть локальная realtime-модель, multimodal model или другой runtime. Замена модели не должна менять источник истины о мире.
+
+Из этого следуют требования:
+- world state хранится вне модели;
+- character knowledge собирается отдельно и передаётся по необходимости;
+- память имеет структурированное представление, а не только chat history;
+- actions проходят validation;
+- модель не получает скрытые факты автоматически;
+- интерфейс допускает разные cognitive depth tiers.
+
+## Cognitive AI LOD
+
+**[GAME / TECH]** Разные классы сущностей могут иметь разную глубину semantic simulation.
+
+Рабочая шкала:
+- core living characters — personality constraints, goals, beliefs, long-term memory, rich relationships;
+- important / named NPC — ограниченная долговременная память и social state;
+- ghosts — отдельный класс с собственной моделью continuity;
+- portraits — archetype, knowledge boundary, local observations, short context, optional salient memory;
+- background magical entities — преимущественно реактивное поведение.
+
+Это отдельная ось от spatial Simulation LOD. Сущность может быть визуально рядом, но когнитивно простой, или находиться off-screen, но сохранять глубокое состояние.
+
+## Free-form conversation as interface, not authority
+
+**[GAME / TECH]** Свободный естественный язык полезен там, где игрок исследует знание сущности, а не выбирает заранее написанную ветку.
+
+Пример с портретом:
+
+player asks an arbitrary question → intent is interpreted → portrait knowledge boundary is assembled → answer is generated within archetype and known facts
+
+Важно: свободный вопрос не даёт модели права придумывать новый факт мира. Если портрет не знает ответа, корректный результат — незнание, отказ, предположение, слух или ложное убеждение согласно его состоянию.
