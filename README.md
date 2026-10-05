@@ -16,6 +16,7 @@
 
 - [Vision](docs/vision.md)
 - [Game pillars](docs/game-design/game-pillars.md)
+- [Characters](docs/characters/README.md)
 - [Lore & Magic Model](docs/lore/lore-and-magic.md)
 - [Canon policy](docs/lore/canon-policy.md)
 - [Chronology](docs/lore/chronology.md)
