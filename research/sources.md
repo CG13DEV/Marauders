@@ -32,6 +32,87 @@ https://www.harrypotter.com/fact-file/magical-miscellany/marauders
 - анимагии;
 - создания карты.
 
+## Character anchors
+
+### J. K. Rowling — Remus Lupin
+https://www.harrypotter.com/writing-by-jk-rowling/remus-lupin
+
+Используется для:
+- роли Дамблдора при поступлении Ремуса;
+- статуса Дамблдора как Headmaster к началу эпохи Мародёров;
+- договорённости о тайне ликантропии;
+- устройства безопасных ежемесячных трансформаций.
+
+### Official Harry Potter Encyclopedia — Albus Dumbledore
+https://www.harrypotter.com/fact-file/characters-and-pets/albus-dumbledore
+
+Используется как общий канонический якорь персонажа и его роли в Хогвартсе.
+
+### Official Harry Potter Encyclopedia — The Shrieking Shack
+https://www.harrypotter.com/fact-file/locations/the-shrieking-shack
+
+Используется для связи Дамблдора с организацией безопасного места для Ремуса.
+
+### J. K. Rowling — Professor McGonagall
+https://www.harrypotter.com/writing-by-jk-rowling/professor-mcgonagall
+
+Используется для биографии, преподавательской карьеры, характера и отношений Макгонагалл с Дамблдором.
+
+### Official Harry Potter Encyclopedia — Minerva McGonagall
+https://www.harrypotter.com/fact-file/characters-and-pets/minerva-mcgonagall
+
+Используется как канонический якорь роли, факультета и Animagus status.
+
+### Official Harry Potter Encyclopedia — Severus Snape
+https://www.harrypotter.com/fact-file/characters-and-pets/severus-snape
+
+Используется как общий канонический якорь факультета и позднее подтверждённых магических компетенций Снейпа.
+
+Важно: взрослый Snape не переносится автоматически на школьного Snape без отдельного обоснования.
+
+### Wizarding World — Unsung heroes: Lily Potter
+https://www.harrypotter.com/features/unsung-heroes-of-harry-potter-stories-lily-potter
+
+Используется для детской дружбы Lily / Severus, школьного конфликта Severus / James и разрыва дружбы Lily / Severus.
+
+### Official Harry Potter Encyclopedia — Argus Filch
+https://www.harrypotter.com/fact-file/characters-and-pets/argus-filch
+
+Используется для роли caretaker, Squib status, связи с Mrs Norris и отношения к нарушениям правил.
+
+### Wizarding World — Influential cats of the wizarding world
+https://www.harrypotter.com/features/influential-cats-of-the-wizarding-world
+
+Используется для наблюдательной роли Mrs Norris и её взаимодействия с Filch.
+
+Не считать этот источник доказательством телепатической связи.
+
+### Official Harry Potter Encyclopedia — Horace Slughorn
+https://www.harrypotter.com/fact-file/characters-and-pets/horace-slughorn
+
+Используется для преподавательской роли, Head of Slytherin, Slug Club и склонности выбирать перспективных и известных учеников.
+
+### Official Harry Potter Encyclopedia — The Slug Club
+https://www.harrypotter.com/fact-file/magical-miscellany/the-slug-club
+
+Используется для структуры и социальной функции клуба.
+
+### Wizarding World — Famous faces from the Slug Club
+https://www.harrypotter.com/features/famous-faces-from-the-slug-club
+
+Используется для Lily Evans как одной из любимых учениц Slughorn, её таланта в Potions и присутствия Slughorn в её школьной среде.
+
+### Official Harry Potter Encyclopedia — Rubeus Hagrid
+https://www.harrypotter.com/fact-file/characters-and-pets/rubeus-hagrid
+
+Используется для роли gamekeeper / Keeper of Keys and Grounds, связи с magical creatures и принадлежности к Hogwarts staff.
+
+### Wizarding World — How Hogwarts taught us it's OK to be an outsider
+https://www.harrypotter.com/features/how-hogwarts-taught-us-its-ok-to-be-an-outsider
+
+Используется для жизни Hagrid в Хогвартсе после исключения и предоставленной ему работы.
+
+
 ## School progression
 
 ### O.W.L.s
