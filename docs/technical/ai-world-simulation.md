@@ -103,7 +103,7 @@ AI proposal can fail validation because:
 - the proposed action violates a hard behavioral constraint;
 - a required capability or opportunity is absent.
 
-Character consistency is therefore a property of the simulation, not только качества prompt.
+Character consistency is therefore a property of the simulation, а не только качества prompt.
 
 ## Simulation LOD
 
