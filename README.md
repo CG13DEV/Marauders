@@ -25,6 +25,8 @@
 - [Progression](docs/game-design/progression.md)
 - [AI world simulation](docs/technical/ai-world-simulation.md)
 - [Research sources](research/sources.md)
+- [Hogwarts geometry research](research/hogwarts-geometry.md)
+- [IP & asset policy](docs/production/ip-and-asset-policy.md)
 
 ## Статусы утверждений
 
