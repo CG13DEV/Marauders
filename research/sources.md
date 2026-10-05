@@ -59,6 +59,27 @@ https://www.harrypotter.com/fact-file/locations/the-room-of-requirement
 ### Everything you need to know about the Room of Requirement
 https://www.harrypotter.com/features/everything-you-need-to-know-about-the-room-of-requirement
 
+## Hogwarts exterior / geometry
+
+### Hogwarts Model Scan — Warner Bros Studio
+https://sketchfab.com/3d-models/hogwarts-model-scan-warner-bros-studio-fb7143080e4e4b6abd4a5620f6b56436
+
+Статус:
+- third-party photogrammetry scan;
+- кандидат на primary exterior reference;
+- использовать как reference / blockout / proportion source;
+- не считать автоматически release-safe production asset.
+
+Подробности: [hogwarts-geometry.md](hogwarts-geometry.md)
+
+### Warner Bros. Studio Tour London — Art Department / Hogwarts Castle Model
+https://www.wbstudiotour.co.uk/the-experience/explore-the-tour/art-department/
+
+Подтверждает:
+- физическая модель Хогвартса была построена для первого фильма;
+- её дворы, башни и башенки снимались и сочетались с digital effects;
+- модель использовалась для экранных экстерьеров Хогвартса.
+
 ## Research rule
 
 При добавлении нового CANON-утверждения:
