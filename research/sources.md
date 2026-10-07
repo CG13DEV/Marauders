@@ -113,6 +113,38 @@ https://www.harrypotter.com/features/how-hogwarts-taught-us-its-ok-to-be-an-outs
 Используется для жизни Hagrid в Хогвартсе после исключения и предоставленной ему работы.
 
 
+## Magical creatures
+
+### Official Harry Potter Encyclopedia — Cornish Pixie
+https://www.harrypotter.com/fact-file/creatures/cornish-pixie
+
+Подтверждает: Корнуолл, электрически-синий цвет, размер до восьми дюймов, бескрылый полёт, силу и классификацию XXX.
+
+### Official Harry Potter Encyclopedia — The Freezing Charm
+https://www.harrypotter.com/fact-file/spells/the-freezing-charm
+
+Подтверждает: применение Immobulus для обездвиживания пикси.
+
+### Wizarding World — Beasts Behaving Badly
+https://www.harrypotter.com/features/web-beasts-behaving-badly-mischievous-creature
+
+Подтверждает: групповые проказы, физический беспорядок в истории из Chamber of Secrets. Не переносить конкретное событие во время Мародёров.
+
+### J. K. Rowling — Boggart
+https://www.harrypotter.com/writing-by-jk-rowling/boggart
+
+Подтверждает: природу non-being, укрытия, неизвестный исходный облик, страх и механизм Riddikulus/смеха; эмоциональное происхождение — предположение.
+
+### Official Harry Potter Encyclopedia — Boggart
+https://www.harrypotter.com/fact-file/creatures/boggart
+
+Подтверждает: форму наибольшего страха наблюдателя, влияние на маглов, привычные укрытия.
+
+### Official Harry Potter Encyclopedia — The Boggart-Banishing Charm
+https://www.harrypotter.com/fact-file/spells/the-boggart-banishing-charm
+
+Подтверждает: назначение Riddikulus и роль юмора в изгнании боггарта.
+
 ## School progression
 
 ### O.W.L.s
