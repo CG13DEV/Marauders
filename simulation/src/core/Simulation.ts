@@ -21,14 +21,16 @@ export type Command =
   | { type: 'break_object'; actor: EntityId; target: EntityId }
   | { type: 'open_door'; actor: EntityId; door: EntityId }
   | { type: 'tell'; actor: EntityId; listener: EntityId; claim: Claim }
-  | { type: 'inspect_object'; actor: EntityId; target: EntityId };
+  | { type: 'inspect_object'; actor: EntityId; target: EntityId }
+  | { type: 'ask_about'; actor: EntityId; listener: EntityId; object: EntityId };
 
 export type WorldEvent =
   | { type: 'entity_moved'; actor: EntityId; from: EntityId; to: EntityId }
   | { type: 'object_broken'; actor: EntityId; target: EntityId; room: EntityId }
   | { type: 'door_opened'; actor: EntityId; door: EntityId }
   | { type: 'testimony_delivered'; actor: EntityId; listener: EntityId; claim: Claim }
-  | { type: 'object_inspected'; actor: EntityId; target: EntityId; broken: boolean };
+  | { type: 'object_inspected'; actor: EntityId; target: EntityId; broken: boolean }
+  | { type: 'question_asked'; actor: EntityId; listener: EntityId; object: EntityId; answered: boolean };
 
 /**
  * What a character is ALLOWED to know.
@@ -52,10 +54,11 @@ export type BreakRejection =
 export type SocialRejection = 'unknown_listener' | 'listener_not_character' | 'cannot_talk_to_self' | 'not_colocated' | 'listener_cannot_hear' | 'invalid_claim';
 export type DoorRejection = 'unknown_door' | 'not_door' | 'not_near_door' | 'already_open';
 export type InspectRejection = 'cannot_see' | 'not_inspectable' | 'not_in_reach';
+export type QuestionRejection = 'listener_cannot_hear' | 'not_known' | 'cannot_hear' | 'not_colocated' | 'not_inspectable' | 'unknown_listener' | 'listener_not_character' | 'cannot_talk_to_self' | 'unknown_target';
 
 export type CommandResult =
   | { ok: true; events: readonly WorldEvent[] }
-  | { ok: false; reason: MoveRejection | BreakRejection | SocialRejection | DoorRejection | InspectRejection; events: readonly [] };
+  | { ok: false; reason: MoveRejection | BreakRejection | SocialRejection | DoorRejection | InspectRejection | QuestionRejection; events: readonly [] };
 
 export type DoorOptions = {
   door: { key: string; label: string; open: boolean };
@@ -78,6 +81,7 @@ export function createSimulation() {
   const Vision = {};
   const Hearing = {};
   const Inquisitive = {};
+  const SociableInvestigator = {};
   const Trusts = createRelation();
   const Distrusts = createRelation();
   const Name = { value: [] as string[] };
@@ -89,6 +93,14 @@ export function createSimulation() {
   const events: WorldEvent[] = [];
   const observationsByCharacter = new Map<EntityId, Observation[]>();
   const beliefsByCharacter = createBeliefStore();
+  // Goals remember what has been attempted, not secret NPC locations.
+  type Search = {
+    object: EntityId;
+    asked: Set<EntityId>;
+    seenRooms: Set<EntityId>;
+    trail: EntityId[];
+  };
+  const searches = new Map<EntityId, Search>();
 
   function addNamedEntity(key: string, label: string): EntityId {
     if (keys.has(key)) throw new Error(`Duplicate entity key: ${key}`);
@@ -212,6 +224,15 @@ export function createSimulation() {
     else removeComponent(ecs, character, Inquisitive);
   }
 
+  function setSocialInvestigator(actor: EntityId, enabled: boolean): void {
+    if (!isCharacter(actor)) throw new Error('Social investigation requires a character');
+    if (enabled) addComponent(ecs, actor, SociableInvestigator);
+    else {
+      removeComponent(ecs, actor, SociableInvestigator);
+      searches.delete(actor);
+    }
+  }
+
   function assessment(observer: EntityId, object: EntityId): Assessment {
     if (!isCharacter(observer)) throw new Error('Assessment requires a character');
     return assessReports(object, beliefsByCharacter.read(observer),
@@ -332,6 +353,47 @@ export function createSimulation() {
       return { ok: true, events: [copyEvent(event)] };
     }
 
+    if (command.type === 'ask_about') {
+      if (!entityExists(ecs, command.listener)) return { ok: false, reason: 'unknown_listener', events: [] };
+      if (!isCharacter(command.listener)) return { ok: false, reason: 'listener_not_character', events: [] };
+      if (command.actor === command.listener) return { ok: false, reason: 'cannot_talk_to_self', events: [] };
+      if (!entityExists(ecs, command.object)) return { ok: false, reason: 'unknown_target', events: [] };
+      if (!hasComponent(ecs, command.object, Fragile)) return { ok: false, reason: 'not_inspectable', events: [] };
+      if (!beliefsByCharacter.read(command.actor).some(b => b.claim.object === command.object)) {
+        return { ok: false, reason: 'not_known', events: [] };
+      }
+      if (currentRoom(command.actor) === null || currentRoom(command.actor) !== currentRoom(command.listener)) {
+        return { ok: false, reason: 'not_colocated', events: [] };
+      }
+      if (!hasComponent(ecs, command.actor, Hearing)) return { ok: false, reason: 'cannot_hear', events: [] };
+      if (!hasComponent(ecs, command.listener, Hearing)) return { ok: false, reason: 'listener_cannot_hear', events: [] };
+
+      // The answerer may only choose among THEIR OWN recorded beliefs.
+      const memory = beliefsByCharacter.read(command.listener)
+        .filter(b => b.claim.object === command.object);
+      const statement = memory.find(b => b.evidence.kind === 'vision') ?? memory[0];
+      const question: WorldEvent = {
+        type: 'question_asked', actor: command.actor, listener: command.listener,
+        object: command.object, answered: statement !== undefined
+      };
+      emit(question);
+      if (!statement) return { ok: true, events: [copyEvent(question)] };
+
+      const response: WorldEvent = {
+        type: 'testimony_delivered', actor: command.listener,
+        listener: command.actor, claim: copyClaim(statement.claim)
+      };
+      emit(response);
+      const origin = statement.evidence.kind === 'vision'
+        ? { kind: 'vision' as const }
+        : { kind: 'testimony' as const, speaker: statement.evidence.speaker };
+      beliefsByCharacter.remember(command.actor, statement.claim, {
+        kind: 'testimony', speaker: command.listener,
+        eventSequence: events.length, origin
+      });
+      return { ok: true, events: [copyEvent(question), copyEvent(response)] };
+    }
+
     if (command.type === 'inspect_object') {
       if (!entityExists(ecs, command.target)) {
         return { ok: false, reason: 'unknown_target', events: [] };
@@ -396,6 +458,78 @@ export function createSimulation() {
       const result = execute(action);
       decisions.push({ actor, action, result });
     }
+    // A separate opt-in social policy keeps the original inspection policy
+    // independent. One physical/social action per NPC per tick.
+    for (const actor of query(ecs, [Character, SociableInvestigator])) {
+      if (decisions.some(d => d.actor === actor)) continue;
+      if (!hasComponent(ecs, actor, Hearing)) continue;
+      const room = currentRoom(actor);
+      if (room === null) continue;
+
+      const beliefs = beliefsByCharacter.read(actor);
+      const objects = [...new Set(beliefs.map(b => b.claim.object))].sort((a, b) => a - b);
+      const target = objects.find(o => assessment(actor, o).status === 'contested');
+      if (target === undefined) {
+        searches.delete(actor);
+        continue;
+      }
+      let search = searches.get(actor);
+      if (!search || search.object !== target) {
+        search = { object: target, asked: new Set(), seenRooms: new Set([room]), trail: [room] };
+        searches.set(actor, search);
+      }
+      // If a script or player moved the character, the previous exploration
+      // trail is obsolete; rebuild only from the NPC's current surroundings.
+      if (search.trail.at(-1) !== room) {
+        search.trail = [room];
+        search.seenRooms = new Set([room]);
+      }
+
+      const sources = [...new Set(beliefs
+        .filter(b => b.claim.object === target && b.evidence.kind === 'testimony')
+        .map(b => b.evidence.kind === 'testimony' ? b.evidence.speaker : -1))]
+        .filter(s => s !== actor && !search!.asked.has(s))
+        .sort((a, b) => {
+          const ranks: Record<Trust, number> = { trusted: 2, neutral: 1, distrusted: 0 };
+          return ranks[trustOf(actor, b)] - ranks[trustOf(actor, a)] || a - b;
+        });
+      if (sources.length === 0) continue;
+      const local = new Set(occupants(room));
+      const interview = sources.find(s => local.has(s) && hasComponent(ecs, s, Hearing));
+      if (interview !== undefined) {
+        const action: Command = { type: 'ask_about', actor, listener: interview, object: target };
+        const result = execute(action);
+        if (result.ok) search.asked.add(interview);
+        decisions.push({ actor, action, result });
+        continue;
+      }
+
+      // Depth-first exploration discovers one room at a time, without knowing
+      // where a source is. Only public adjacent exits are inspected.
+      const unexplored = getRelationTargets(ecs, room, PassageTo)
+        .filter(next => !search!.seenRooms.has(next)).sort((a, b) => a - b);
+      const next = unexplored[0];
+      if (next !== undefined) {
+        const door = doors.get(pairKey(room, next));
+        const action: Command = door !== undefined && Door.open[door] === 0
+          ? { type: 'open_door', actor, door }
+          : { type: 'move', actor, destination: next };
+        const result = execute(action);
+        if (result.ok && action.type === 'move') {
+          search.seenRooms.add(next);
+          search.trail.push(next);
+        }
+        decisions.push({ actor, action, result });
+        continue;
+      }
+      if (search.trail.length > 1) {
+        const parent = search.trail[search.trail.length - 2]!;
+        const action: Command = { type: 'move', actor, destination: parent };
+        const result = execute(action);
+        if (result.ok) search.trail.pop();
+        decisions.push({ actor, action, result });
+      }
+    }
     return decisions;
   }
 
@@ -411,7 +545,7 @@ export function createSimulation() {
 
   return {
     room, character, fragileObject, connect, execute, step,
-    setTrust, trustOf, setInquisitive, assessment,
+    setTrust, trustOf, setInquisitive, setSocialInvestigator, assessment,
     beliefs: (observer: EntityId): Belief[] => beliefsByCharacter.read(observer),
     currentRoom, locationOf, occupants, observations,
     isBroken: (eid: EntityId) => hasComponent(ecs, eid, Fragile) && Fragile.broken[eid] === 1,
