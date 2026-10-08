@@ -17,7 +17,9 @@ function move(to: number): void {
     console.log(`Переход невозможен: ${result.reason}`);
     return;
   }
-  console.log(`Лили переходит: ${world.label(result.events[0]!.from)} → ${world.label(to)}.`);
+  const event = result.events[0];
+  if (event?.type !== 'entity_moved') throw new Error('Expected movement event');
+  console.log(`Лили переходит: ${world.label(event.from)} → ${world.label(to)}.`);
 }
 
 if (process.argv.includes('--demo')) {
