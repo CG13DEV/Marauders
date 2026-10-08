@@ -11,6 +11,7 @@ import type { DoorOptions } from './Simulation.ts';
 import type { Trust } from './cognition.ts';
 import type { SpellId, SpellStage } from './spellcraft.ts';
 import type { Lesson, SchoolPriority } from './school-time.ts';
+import type { DailyLifePlan } from './daily-life.ts';
 import { remapRuntimeSnapshot, type RuntimeSnapshot } from './runtime-snapshot.ts';
 
 type EntityCreation =
@@ -26,6 +27,7 @@ type Operation = EntityCreation
   | { kind: 'setInquisitive' | 'setSocialInvestigator' | 'setGuarded' | 'setHelpSeeking' | 'setHelpful' | 'setExperimenter' | 'setManualControl'; actor: number; enabled: boolean }
   | { kind: 'setRoutine'; actor: number; destinations: number[] }
   | { kind: 'setTimetable'; actor: number; lessons: Lesson[]; priority?: SchoolPriority }
+  | { kind: 'setDailyLife'; actor: number; plan: DailyLifePlan | null }
   | { kind: 'seedSpellKnowledge'; actor: number; spell: SpellId; stage: Exclude<SpellStage, 'unaware'> };
 
 export type SavedCheckpointV2 = {
@@ -68,6 +70,8 @@ function remapCommand(command: Command, ids: Map<number, number>): Command {
     case 'practice_spell': return { ...command, actor: at(command.actor),
       ...(command.guide === undefined ? {} : { guide: at(command.guide) }) };
     case 'cast_spell': return { ...command, actor: at(command.actor) };
+    case 'eat_meal': return { ...command, actor: at(command.actor) };
+    case 'chat': return { ...command, actor: at(command.actor), listener: at(command.listener) };
     default: throw new Error('Unknown replay command');
   }
 }
@@ -118,7 +122,10 @@ function auditOf(world: Simulation, operations: readonly Operation[]): string {
       beliefs: world.beliefs(c.id), attendance: world.attendance(c.id),
       learning: world.learningHistory(c.id), gaps: world.knowledgeGaps(c.id),
       illuminated: world.isIlluminated(c.id),
-      request: world.tutoringRequest(c.id), help: world.assistance(c.id)
+      request: world.tutoringRequest(c.id), help: world.assistance(c.id),
+      meals: world.mealHistory(c.id),
+      conversations: world.conversationHistory(c.id),
+      rests: world.restHistory(c.id)
     })),
     objects: objects.map(o => ({ key: o.key, room: world.locationOf(o.id), broken: world.isBroken(o.id) })),
     doors: doors.map(o => ({ key: o.options?.door.key, open: world.doorIsOpen(o.doorId!) })),
@@ -201,6 +208,10 @@ function createFacade(world: Simulation, operations: Operation[]) {
     setRoutine(actor: number, destinations: readonly number[]) {
       world.setRoutine(actor, destinations);
       operations.push({ kind: 'setRoutine', actor, destinations: [...destinations] });
+    },
+    setDailyLife(actor: number, plan: DailyLifePlan | null) {
+      world.setDailyLife(actor, plan);
+      operations.push({ kind: 'setDailyLife', actor, plan: copy(plan) });
     },
     setTimetable(actor: number, lessons: readonly Lesson[], priority?: SchoolPriority) {
       world.setTimetable(actor, lessons, priority);
@@ -329,6 +340,9 @@ export function restoreSimulation(serialized: string | SavedSimulationV1 | Saved
       case 'setExperimenter': restored.setExperimenter(at(op.actor), op.enabled); break;
       case 'setRoutine': restored.setRoutine(at(op.actor), op.destinations.map(at)); break;
       case 'setTimetable': restored.setTimetable(at(op.actor), op.lessons.map(l => ({ ...l, room: at(l.room) })), op.priority); break;
+      case 'setDailyLife': restored.setDailyLife(at(op.actor), op.plan
+        ? { ...op.plan, homeRoom: at(op.plan.homeRoom), diningRoom: at(op.plan.diningRoom) }
+        : null); break;
       case 'seedSpellKnowledge': restored.seedSpellKnowledge(at(op.actor), op.spell, op.stage); break;
       default: throw new Error('Unsupported journal operation: ' + (op as Operation).kind);
     }
