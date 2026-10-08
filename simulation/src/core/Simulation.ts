@@ -6,11 +6,13 @@ import {
   entityExists,
   getRelationTargets,
   hasComponent,
+  removeComponent,
   query
 } from 'bitecs';
 import { validateMovement, type MoveRejection } from './movement-rules.ts';
 import { perceiveCrash } from './perception-rules.ts';
 import { createBeliefStore, copyClaim, type Claim, type Belief } from './beliefs.ts';
+import { assessReports, decideInvestigation, type Assessment, type Trust } from './cognition.ts';
 
 export type EntityId = number;
 
@@ -18,13 +20,15 @@ export type Command =
   | { type: 'move'; actor: EntityId; destination: EntityId }
   | { type: 'break_object'; actor: EntityId; target: EntityId }
   | { type: 'open_door'; actor: EntityId; door: EntityId }
-  | { type: 'tell'; actor: EntityId; listener: EntityId; claim: Claim };
+  | { type: 'tell'; actor: EntityId; listener: EntityId; claim: Claim }
+  | { type: 'inspect_object'; actor: EntityId; target: EntityId };
 
 export type WorldEvent =
   | { type: 'entity_moved'; actor: EntityId; from: EntityId; to: EntityId }
   | { type: 'object_broken'; actor: EntityId; target: EntityId; room: EntityId }
   | { type: 'door_opened'; actor: EntityId; door: EntityId }
-  | { type: 'testimony_delivered'; actor: EntityId; listener: EntityId; claim: Claim };
+  | { type: 'testimony_delivered'; actor: EntityId; listener: EntityId; claim: Claim }
+  | { type: 'object_inspected'; actor: EntityId; target: EntityId; broken: boolean };
 
 /**
  * What a character is ALLOWED to know.
@@ -34,7 +38,8 @@ export type WorldEvent =
  */
 export type Observation =
   | { kind: 'witnessed_breakage'; source: 'vision'; actor: EntityId; target: EntityId }
-  | { kind: 'heard_crash'; source: 'hearing' };
+  | { kind: 'heard_crash'; source: 'hearing' }
+  | { kind: 'inspected_object'; source: 'vision'; target: EntityId; broken: boolean };
 
 export type BreakRejection =
   | 'unknown_actor'
@@ -46,10 +51,11 @@ export type BreakRejection =
 
 export type SocialRejection = 'unknown_listener' | 'listener_not_character' | 'cannot_talk_to_self' | 'not_colocated' | 'listener_cannot_hear' | 'invalid_claim';
 export type DoorRejection = 'unknown_door' | 'not_door' | 'not_near_door' | 'already_open';
+export type InspectRejection = 'cannot_see' | 'not_inspectable' | 'not_in_reach';
 
 export type CommandResult =
   | { ok: true; events: readonly WorldEvent[] }
-  | { ok: false; reason: MoveRejection | BreakRejection | SocialRejection | DoorRejection; events: readonly [] };
+  | { ok: false; reason: MoveRejection | BreakRejection | SocialRejection | DoorRejection | InspectRejection; events: readonly [] };
 
 export type DoorOptions = {
   door: { key: string; label: string; open: boolean };
@@ -71,6 +77,9 @@ export function createSimulation() {
   const Door = { roomA: [] as EntityId[], roomB: [] as EntityId[], open: [] as number[] };
   const Vision = {};
   const Hearing = {};
+  const Inquisitive = {};
+  const Trusts = createRelation();
+  const Distrusts = createRelation();
   const Name = { value: [] as string[] };
   const LocatedIn = createRelation({ exclusive: true });
   const PassageTo = createRelation();
@@ -171,6 +180,40 @@ export function createSimulation() {
     return event.type === 'testimony_delivered'
       ? { ...event, claim: copyClaim(event.claim) }
       : { ...event };
+  }
+
+  function isCharacter(eid: EntityId): boolean {
+    return entityExists(ecs, eid) && hasComponent(ecs, eid, Character);
+  }
+
+  function setTrust(observer: EntityId, source: EntityId, value: Trust): void {
+    if (!isCharacter(observer) || !isCharacter(source) || observer === source) {
+      throw new Error('Trust requires two different characters');
+    }
+    removeComponent(ecs, observer, Trusts(source));
+    removeComponent(ecs, observer, Distrusts(source));
+    if (value === 'trusted') addComponent(ecs, observer, Trusts(source));
+    else if (value === 'distrusted') addComponent(ecs, observer, Distrusts(source));
+    else if (value !== 'neutral') throw new Error('Unknown trust level');
+  }
+
+  function trustOf(observer: EntityId, source: EntityId): Trust {
+    if (!isCharacter(observer) || !isCharacter(source)) return 'neutral';
+    if (hasComponent(ecs, observer, Trusts(source))) return 'trusted';
+    if (hasComponent(ecs, observer, Distrusts(source))) return 'distrusted';
+    return 'neutral';
+  }
+
+  function setInquisitive(character: EntityId, enabled: boolean): void {
+    if (!isCharacter(character)) throw new Error('Inquisitiveness requires a character');
+    if (enabled) addComponent(ecs, character, Inquisitive);
+    else removeComponent(ecs, character, Inquisitive);
+  }
+
+  function assessment(observer: EntityId, object: EntityId): Assessment {
+    if (!isCharacter(observer)) throw new Error('Assessment requires a character');
+    return assessReports(object, beliefsByCharacter.read(observer),
+      speaker => trustOf(observer, speaker));
   }
 
   function emit(event: WorldEvent): void {
@@ -287,6 +330,29 @@ export function createSimulation() {
       return { ok: true, events: [copyEvent(event)] };
     }
 
+    if (command.type === 'inspect_object') {
+      if (!entityExists(ecs, command.target)) {
+        return { ok: false, reason: 'unknown_target', events: [] };
+      }
+      if (!hasComponent(ecs, command.target, Fragile)) {
+        return { ok: false, reason: 'not_inspectable', events: [] };
+      }
+      if (!hasComponent(ecs, command.actor, Vision)) {
+        return { ok: false, reason: 'cannot_see', events: [] };
+      }
+      const room = currentRoom(command.actor);
+      if (room === null || locationOf(command.target) !== room) {
+        return { ok: false, reason: 'not_in_reach', events: [] };
+      }
+      const broken = Fragile.broken[command.target] === 1;
+      const event: WorldEvent = { type: 'object_inspected', actor: command.actor, target: command.target, broken };
+      emit(event);
+      observationsByCharacter.get(command.actor)!.push({
+        kind: 'inspected_object', source: 'vision', target: command.target, broken
+      });
+      return { ok: true, events: [copyEvent(event)] };
+    }
+
     if (!entityExists(ecs, command.target)) {
       return { ok: false, reason: 'unknown_target', events: [] };
     }
@@ -307,6 +373,30 @@ export function createSimulation() {
     return { ok: true, events: [event] };
   }
 
+  function step(): { actor: EntityId; action: Command; result: CommandResult }[] {
+    // The decision policy reads only the actor's beliefs and locally visible
+    // objects. In particular it never reads authoritative broken-state or events.
+    const decisions: { actor: EntityId; action: Command; result: CommandResult }[] = [];
+    for (const actor of query(ecs, [Character, Inquisitive])) {
+      if (!hasComponent(ecs, actor, Vision)) continue;
+      const room = currentRoom(actor);
+      if (room === null) continue;
+      const visibleObjects = Array.from(query(ecs, [Fragile, LocatedIn(room)]));
+      const beliefs = beliefsByCharacter.read(actor);
+      const claimedObjects = [...new Set(beliefs.map(b => b.claim.object))];
+      const inspected = new Set(observations(actor)
+        .filter(o => o.kind === 'inspected_object')
+        .map(o => o.target));
+      const assessments = claimedObjects.map(object => assessment(actor, object));
+      const target = decideInvestigation(assessments, visibleObjects, inspected, true);
+      if (target === null) continue;
+      const action: Command = { type: 'inspect_object', actor, target };
+      const result = execute(action);
+      decisions.push({ actor, action, result });
+    }
+    return decisions;
+  }
+
   function occupants(place: EntityId): EntityId[] {
     if (!isRoom(place)) return [];
     return Array.from(query(ecs, [Character, LocatedIn(place)]));
@@ -318,7 +408,8 @@ export function createSimulation() {
   }
 
   return {
-    room, character, fragileObject, connect, execute,
+    room, character, fragileObject, connect, execute, step,
+    setTrust, trustOf, setInquisitive, assessment,
     beliefs: (observer: EntityId): Belief[] => beliefsByCharacter.read(observer),
     currentRoom, locationOf, occupants, observations,
     isBroken: (eid: EntityId) => hasComponent(ecs, eid, Fragile) && Fragile.broken[eid] === 1,
