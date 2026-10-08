@@ -1238,6 +1238,12 @@ export function createSimulation() {
    * Authoritative materialization boundary. Never pass this object to NPCs.
    * It includes the actual pending decisions, cognition and interaction memory.
    */
+  function intentionEntries():[number,PersonalIntention[]][] {
+    return [...intentions.entries()].filter(([,goals])=>goals.length>0)
+      .map(([actor,goals]):[number,PersonalIntention[]]=>[
+        actor,goals.map(g=>({...g}))
+      ]);
+  }
   function captureRuntime(): RuntimeSnapshot {
     const characters = Array.from(query(ecs, [Character]));
     const traitFlags = (actor: EntityId): StateFlags => ({
@@ -1289,10 +1295,7 @@ export function createSimulation() {
       meals: [...meals.entries()],
       conversations: [...conversations.entries()],
       rests: [...rests.entries()],
-      ...([...intentions.values()].some(goals=>goals.length)
-        ? {intentions:[...intentions.entries()].filter(([,goals])=>goals.length)
-            .map(([actor,goals])=>([actor,goals.map(g=>({...g}))]
-              as [number,PersonalIntention[]]))}:{}),
+      ...(intentionEntries().length?{intentions:intentionEntries()}:{} ),
       ...(bodilyNeeds.size?{bodilyNeeds:[...bodilyNeeds.entries()]
         .map(([actor,needs])=>[actor,{...needs}] as [number,BodilyNeeds])}:{}),
       ...(commitments.length ? { commitments: commitments.map(m=>({...m})) } : {}),
