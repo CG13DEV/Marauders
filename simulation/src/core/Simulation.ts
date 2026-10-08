@@ -41,6 +41,9 @@ export type RoomDescriptor = {
   wing?: 'west' | 'east' | 'central';
   kind?: string;
   house?: string;
+  /** CANON: explicit book setting; INFERENCE: reconstruction; GAME: fixture. */
+  loreStatus?: 'CANON' | 'INFERENCE' | 'GAME';
+  loreSource?: string;
 };
 
 export type Command =

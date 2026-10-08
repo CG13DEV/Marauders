@@ -25,18 +25,18 @@ function reachableWithout(
 
 test('castle graph contains separate landings, multiple floors and useful destinations', () => {
   const { world, layout } = createSchoolWeek();
-  assert.equal(layout.places.size, 42);
+  assert.equal(layout.places.size, 49);
   assert.deepEqual([...new Set([...layout.places.values()].map(p => p.floor))].sort((a,b)=>a-b),
     [-1,0,1,2,3,4]);
   assert.equal(layout.places.get('hospital_wing')?.kind, 'hospital');
   assert.equal(layout.places.get('hospital_wing')?.floor, 1);
   assert.equal(layout.places.get('library')?.kind, 'library');
-  assert.equal(layout.places.get('library')?.floor, 2);
+  assert.equal(layout.places.get('library')?.floor, 4);
   assert.equal(layout.places.get('courtyard')?.kind, 'courtyard');
   assert.equal(layout.places.get('courtyard')?.floor, 0);
   assert.equal(layout.places.get('great_hall')?.kind, 'dining');
   const roomIds=[...layout.places.values()].map(x=>x.id);
-  assert.equal(new Set(roomIds).size,42);
+  assert.equal(new Set(roomIds).size,49);
   for(const room of roomIds) assert.equal(reachableWithout(world,room,layout.hall),true);
 });
 
@@ -91,15 +91,15 @@ test('floor and room-purpose metadata belong to the world and survive checkpoint
   const w = createPersistentSimulation();
   const {layout}=createSchoolWeek(w);
   const original = w.roomInfo(layout.library);
-  assert.deepEqual(original, {floor:2,wing:'east',kind:'library'});
+  assert.deepEqual(original, {floor:4,wing:'east',kind:'library',loreStatus:'INFERENCE',loreSource:'https://www.hp-lexicon.org/place/hogwarts-school-of-witchcraft-and-wizardry/hogwarts-fourth-floor/library/'});
   original!.floor = 999;
-  assert.equal(w.roomInfo(layout.library)?.floor,2);
+  assert.equal(w.roomInfo(layout.library)?.floor,4);
   const restored=restoreCheckpoint(w.checkpoint());
   const id=restored.id('library')!;
-  assert.deepEqual(restored.roomInfo(id), {floor:2,wing:'east',kind:'library'});
+  assert.deepEqual(restored.roomInfo(id), {floor:4,wing:'east',kind:'library',loreStatus:'INFERENCE',loreSource:'https://www.hp-lexicon.org/place/hogwarts-school-of-witchcraft-and-wizardry/hogwarts-fourth-floor/library/'});
   const v1=restoreSimulation(w.snapshot());
   assert.deepEqual(v1.roomInfo(v1.id('hospital_wing')!), {
-    floor:1,wing:'west',kind:'hospital'
+    floor:1,wing:'west',kind:'hospital',loreStatus:'INFERENCE',loreSource:'https://www.hp-lexicon.org/place/hogwarts-school-of-witchcraft-and-wizardry/hogwarts-third-floor/hospital-wing/'
   });
 });
 
@@ -108,5 +108,5 @@ test('spatial metadata is stable through a populated week of character movement'
   for(let i=0;i<40;i++) world.step();
   assert.equal(world.roomInfo(layout.dorms.gryffindor.girls)?.house,'gryffindor');
   assert.equal(world.roomInfo(layout.courtyard)?.floor,0);
-  assert.equal(world.roomInfo(layout.classrooms[6]!)?.floor,3);
+  assert.equal(world.roomInfo(layout.classrooms.Charms)?.floor,3);
 });
