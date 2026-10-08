@@ -36,3 +36,4 @@ jobs:
       - run: npm run commitment-demo
       - run: npm run invitations-demo
       - run: npm run learning-purpose-demo
+      - run: npm run intentions-demo

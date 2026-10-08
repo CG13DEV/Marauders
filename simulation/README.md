@@ -23,6 +23,7 @@ npm run planner-demo
 npm run commitment-demo
 npm run invitations-demo
 npm run learning-purpose-demo
+npm run intentions-demo
 npm run play
 npm start
 npm test
@@ -322,8 +323,23 @@ Run `npm run commitment-demo` to see the same two characters choose the lesson-f
 
 **Limitations:** a concrete intent is currently derived afresh from a knowledge gap; this is not yet a persistent general-purpose priority/goal queue. The next-day evening appointment and destination are simple [GAME] fixtures. The helper's willingness is deterministic, language is non-generative, and pupils still use a public map graph for navigation. Experiment #18 should own interruptions, resume semantics, motivational tradeoffs and richer negotiations across activities.
 
+## Experiment #18 — resumable intentions, meals and sustained rest
+
+**Scope:** First executable, opt-in slice of a **persistent general intention queue**, with bodily needs as world causes rather than quest-specific rewards. Existing homework/tutoring, class and social-commitment policies are still separate and must be unified later. The existing 84-pupil school week is a compatibility/control experiment, *not* a claim that all of its characters have adopted this new body model.
+
+- `src/core/intentions.ts` defines pure deterministic intention ordering and physiological choices. Every `intentionPlanning: true` character can `intend_visit` a real room with `casual|important` significance and an optional deadline, or `cancel_intention`. World-local, persisted goals progress through `queued → active → paused → active → completed`, or `expired|cancelled`. Active goals pause on class obligations, approaching accepted appointments, meal urgency, required rest or a newer higher-priority goal. **An interrupted intention remains owned by the NPC** and can resume by re-routing from its *actual* current room.
+- The body prototype records `{hunger, fatigue}` **only for opted-in characters**. These are internal continuous causal state variables, not HUD bars or abstract character-attribute debuffs. Hunger rises with simulated time, is reduced only by a **validated physical `eat_meal` action** during service hours, and can interrupt a casual trip. An important mission can defer a meal, but strong hunger eventually overrides it. You cannot feed someone by claiming they ate.
+- Fatigue rises over waking ticks. It recovers **gradually over multiple ticks while physically at home during the sleeping period**, rather than from a one-time `rest_recorded` marker. The existing marker is still an attendance-like historical snapshot, *not* proof of eight hours' sleep. An exhausted actor can also seek an emergency daytime rest at home. Nighttime sleep interrupts an ordinary outing; only an important objective can justify delaying sleep for a while.
+- No food is magically produced by the physiology model. If the dinner service has ended, `chooseNeedOrIntention` does **not** invent an edible item or revive a closed kitchen. Later food and water should have material sources, location, availability, quality, sharing and exceptions such as packed meals / kitchens.
+- Existing timetables and consensual commitments retain their established schedule priority; all travel still executes through actual doors and one 10-minute tick per edge. Only an actual arrival completes `visit`, with no invisible teleport. The intention ledger and needs persist across V1 journals and V2 materialized checkpoints, correctly remapping destination entity IDs. Legacy checkpoints with no opt-in need or intention data remain readable. Corrupted modern checkpoints remain rejected rather than synthesizing fictitious histories.
+- There is a new CLI A/B demonstration, `npm run intentions-demo`, for both an interrupted library trip and an important trip delayed by a school lesson. Tests also cover deadlines, cancellation, higher-priority displacement, bedtime pause/recovery, save/replay, world isolation and the unchanged school baseline.
+
+**Explicit [GAME] constants for now:** 10-minute ticks, provisional hunger/fatigue increases and decreases, meal/wake windows and decision thresholds; these should be calibrated using days of real simulated behaviour. Neither need presently changes wand accuracy, knowledge, conversation comprehension or general health, and being at home at night is only a crude proxy for actual sleep. The goal queue presently executes **room-visit** intentions; spell-learning, investigations and social appointment decisions still use the prior specialised policies. Those are intentionally *not* described as unified goal planning.
+
+**Next stages:** connect real study/appointment/social goals to the same intention engine; model edible objects, water, meal portions, social opportunities and a real sleep action/interruptions; introduce qualitative tiredness and hunger effects grounded in validated activities; choose priorities by needs, personal values and context rather than universal arbitrary score modifiers.
+
 ## What next?
 
-Build a general-purpose interruptible intention queue and negotiated appointment times, then move to personal map knowledge, teacher-driven learning and long-term social outcomes across the school year.
+Link the new resumable intention ledger to study, social agreements and investigations; then add tangible food and sleeping actions, personal map knowledge and multiweek school-term continuity.
 
 The source of truth for design remains the main repository `docs/` directory. This code is a small executable [GAME] model, not a statement of canon.
