@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { createSimulation } from '../src/core/Simulation.ts';
 import { createPersistentSimulation, restoreCheckpoint, restoreSimulation } from '../src/core/persistence.ts';
 
-function promiseFixture(schoolFirst = false, persistent = false) {
-  const w=persistent?createPersistentSimulation():createSimulation();
+function promiseFixture(schoolFirst = false) {
+  const w=createPersistentSimulation();
   const common=w.room('common','Гостиная');
   const library=w.room('library','Библиотека');
   const classroom=w.room('classroom','Класс');
@@ -123,7 +123,7 @@ test('spell explanation requires the teacher physically present at teaching mome
 });
 
 test('personal promise memory and future choice persist through both save mechanisms',()=>{
-  const {w,remus,pupil,library}=promiseFixture(false,true);
+  const {w,remus,pupil,library}=promiseFixture(false);
   w.execute({type:'promise_meeting',actor:remus,listener:pupil,
     room:library,atMinute:540,purpose:'study'});
   for(let i=0;i<3;i++)w.step();
