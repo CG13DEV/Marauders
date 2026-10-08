@@ -180,7 +180,7 @@ export type CommandResult =
   | { ok: true; events: readonly WorldEvent[] }
   | { ok: false; reason: MoveRejection | BreakRejection | SocialRejection | DoorRejection | InspectRejection | QuestionRejection | SpellRejection | HelpRejection | DailyRejection | MeetingRejection | IntentionRejection | PointRejection | 'no_toilet_need' | 'wrong_toilet' |
       'not_urgent' | 'no_animal_signal' | 'not_partner' | 'no_sighting' |
-      'animal_cannot_speak'; events: readonly [] };
+      'animal_cannot_speak' | 'animal_action_unavailable'; events: readonly [] };
 
 export type DoorOptions = {
   door: { key: string; label: string; open: boolean };
@@ -742,6 +742,11 @@ export function createSimulation() {
     if (!hasComponent(ecs, command.actor, Character)) {
       return { ok: false, reason: 'not_character', events: [] };
     }
+    // Being represented by the Character ECS shell does not grant a cat
+    // human speech, spellcasting, institutional authority or door opening.
+    if(patrolPlans.get(command.actor)?.kind==='animal'&&
+       !['inspect_object','signal_incident','break_object'].includes(command.type))
+      return {ok:false,reason:'animal_action_unavailable',events:[]};
     if(command.type==='decide_house_points'){
       if(!pointAuthorities.has(command.actor))
         return {ok:false,reason:'no_point_authority',events:[]};
