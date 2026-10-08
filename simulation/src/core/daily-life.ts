@@ -22,6 +22,8 @@ export type DailyLifePlan = {
   commitmentPriority?: CommitmentPriority;
   /** Opt-in, world-scoped autonomous invitation & response policy. */
   socialInvitations?: boolean;
+  /** Opt-in intention: negotiate real tutoring only when personally lacking knowledge. */
+  learningAppointments?: boolean;
 };
 export type MealMemory = { day: number; kind: MealKind; minute: number };
 export type ConversationMemory = {

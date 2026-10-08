@@ -76,7 +76,7 @@ function remapCommand(command: Command, ids: Map<number, number>): Command {
       ...command,actor:at(command.actor),
       listener:at(command.listener),room:at(command.room)
     };
-    case 'answer_meeting': return {...command,actor:at(command.actor)};
+    case 'answer_meeting': case 'tutor_appointment': return {...command,actor:at(command.actor)};
     default: throw new Error('Unknown replay command');
   }
 }

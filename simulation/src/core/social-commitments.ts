@@ -3,6 +3,7 @@
  * The world resolves facts; observers only receive facts they personally
  * witnessed. A global expired state is NOT a private mental observation.
  */
+import type { SpellId } from './spellcraft.ts';
 export type MeetingPurpose = 'study' | 'explore';
 export type CommitmentPriority = 'school_first' | 'promise_first';
 export type MeetingStatus =
@@ -15,6 +16,10 @@ export type MeetingCommitment = {
   room: number;
   atMinute: number;
   purpose: MeetingPurpose;
+  /** Optional concrete learning goal; never a generic RPG experience reward. */
+  spell?: SpellId;
+  /** Actual guarded teaching action succeeded at the agreed meeting. */
+  taught?: boolean;
   status: MeetingStatus;
 };
 

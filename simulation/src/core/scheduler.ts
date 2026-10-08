@@ -155,6 +155,28 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       }
     }
 
+    // A purposeful study meeting needs a separate validated TEACH action.
+    // Co-location alone can fulfill a social promise but never grants knowledge.
+    for(const meeting of commitments){
+      if(meeting.status!=='pending' || !meeting.spell || meeting.taught ||
+         minute<meeting.atMinute || minute>=meeting.atMinute+20) continue;
+      const actor=meeting.beneficiary, learner=meeting.promisor;
+      if(has(actor,'manual') || has(learner,'manual') ||
+        occupiedBySchool.has(actor) || occupiedBySchool.has(learner) ||
+        decisions.some(d=>d.actor===actor || d.actor===learner)) continue;
+      if(currentRoom(actor)!==meeting.room || currentRoom(learner)!==meeting.room)
+        continue;
+      const action:Command={type:'tutor_appointment',actor,meetingId:meeting.id};
+      const result=execute(action);
+      decisions.push({actor,action,result});
+      if(result.ok){
+        socialParticipants.add(actor);
+        socialParticipants.add(learner);
+        occupiedBySchool.add(actor);
+        occupiedBySchool.add(learner);
+      }
+    }
+
     // Answer only invitations the actor actually heard. Both sides must still
     // be physically together, so neither can communicate at arbitrary range.
     for(const actor of actors('dailyLife')){
@@ -168,7 +190,13 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       if(!offer) continue;
       const appointmentClashes=(timetables.get(actor)?.records??[]).some(lesson=>
         lesson.startsAt<offer.atMinute+20 && lesson.endsAt>offer.atMinute-20);
-      const accept= !appointmentClashes &&
+      const academicHelp=!offer.spell || willingToTutor({
+        helpful:has(actor,'helpful'),
+        trustsRequester:trustOf(actor,offer.promisor),
+        knowsConcept:spellKnowledge.stage(actor,offer.spell)!=='unaware',
+        learnerNeedsConcept:spellKnowledge.stage(offer.promisor,offer.spell)==='unaware'
+      });
+      const accept= academicHelp && !appointmentClashes &&
         !personallyAvoids(commitmentMemories.get(actor)??[],offer.promisor) &&
         trustOf(actor,offer.promisor)!=='distrusted' &&
         !(plan.style==='reserved' && offer.purpose==='explore');
@@ -273,6 +301,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
     // A pupil knows their own concrete gap and notices people sharing a room.
     // They do NOT consult the bystander's hidden knowledge or private plans.
     for (const actor of actors('seeksHelp')) {
+      if (dailyPlans.get(actor)?.learningAppointments === true) continue;
       if (has(actor, 'manual') || occupiedBySchool.has(actor) || sleeping.has(actor) ||
           socialParticipants.has(actor) || decisions.some(d => d.actor === actor) ||
           pendingTutoring.has(actor) || !has(actor, 'hearing')) continue;
@@ -444,6 +473,44 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       if (result.ok) {
         socialParticipants.add(actor);
         socialParticipants.add(listener);
+      }
+    }
+
+    // Learning appointments arise from an actual personal knowledge gap.
+    // Learners only ask visible local people, not globally known teachers.
+    // Their invitations are requests, not proof the listener can help.
+    for(const actor of actors('seeksHelp')){
+      const plan=dailyPlans.get(actor);
+      if(!plan?.learningAppointments || !plan.socialInvitations ||
+        has(actor,'manual') || !has(actor,'hearing') ||
+        occupiedBySchool.has(actor) || socialParticipants.has(actor) ||
+        decisions.some(d=>d.actor===actor)) continue;
+      const room=currentRoom(actor);
+      if(room===null || !isLeisure(minute)) continue;
+      const gap=knowledgeGaps(actor)[0];
+      if(!gap) continue;
+      if(commitments.some(m=>m.promisor===actor && m.spell===gap &&
+        (m.status==='offered'||m.status==='pending'))) continue;
+      const attempted=attemptedTutors.get(actor)??new Set<string>();
+      const helper=occupants(room)
+        .filter(other=>other!==actor && has(other,'hearing') &&
+          !has(other,'manual') && !occupiedBySchool.has(other) &&
+          !socialParticipants.has(other) &&
+          !decisions.some(d=>d.actor===other) &&
+          trustOf(actor,other)!=='distrusted' &&
+          !personallyAvoids(commitmentMemories.get(actor)??[],other) &&
+          !attempted.has(`${other}:${gap}`))
+        .sort((a,b)=>a-b)[0];
+      if(helper===undefined) continue;
+      const targetRoom=plan.leisureRoom??plan.socialRoom??room;
+      const atMinute=(dayOf(minute)+1)*1440+19*60+40;
+      const action:Command={type:'offer_meeting',actor,listener:helper,
+        room:targetRoom,atMinute,purpose:'study',spell:gap};
+      const result=execute(action);
+      decisions.push({actor,action,result});
+      if(result.ok){
+        socialParticipants.add(actor);
+        socialParticipants.add(helper);
       }
     }
 

@@ -67,8 +67,9 @@ export type Command =
   | { type: 'promise_meeting'; actor: EntityId; listener: EntityId;
       room: EntityId; atMinute: number; purpose: MeetingPurpose }
   | { type: 'offer_meeting'; actor: EntityId; listener: EntityId;
-      room: EntityId; atMinute: number; purpose: MeetingPurpose }
-  | { type: 'answer_meeting'; actor: EntityId; meetingId: number; accept: boolean };
+      room: EntityId; atMinute: number; purpose: MeetingPurpose; spell?: SpellId }
+  | { type: 'answer_meeting'; actor: EntityId; meetingId: number; accept: boolean }
+  | { type: 'tutor_appointment'; actor: EntityId; meetingId: number };
 
 export type WorldEvent =
   | { type: 'entity_moved'; actor: EntityId; from: EntityId; to: EntityId }
@@ -92,7 +93,9 @@ export type WorldEvent =
   | { type: 'meeting_offered'; actor: EntityId; listener: EntityId;
       meetingId: number; room: EntityId; minute: number }
   | { type: 'meeting_answered'; actor: EntityId; listener: EntityId;
-      meetingId: number; room: EntityId; minute: number; accepted: boolean };
+      meetingId: number; room: EntityId; minute: number; accepted: boolean }
+  | { type: 'tutoring_appointment_completed'; actor: EntityId; listener: EntityId;
+      meetingId: number; room: EntityId; spell: SpellId; minute: number };
 
 /**
  * What a character is ALLOWED to know.
@@ -137,7 +140,8 @@ export type MeetingRejection =
   | 'invalid_partner' | 'invalid_meeting_room' | 'invalid_meeting_time'
   | 'invalid_purpose' | 'already_committed' | 'not_colocated'
   | 'listener_cannot_hear' | 'no_pending_offer' | 'not_invited'
-  | 'offer_timed_out';
+  | 'offer_timed_out' | 'not_study_meeting' | 'appointment_not_ready'
+  | 'appointment_already_taught' | 'not_missing_concept';
 
 export type CommandResult =
   | { ok: true; events: readonly WorldEvent[] }
@@ -376,6 +380,8 @@ export function createSimulation() {
     if (!isRoom(plan.homeRoom) || !isRoom(plan.diningRoom) ||
         (plan.socialRoom !== undefined && !isRoom(plan.socialRoom)) ||
         (plan.leisureRoom !== undefined && !isRoom(plan.leisureRoom)) ||
+        (plan.learningAppointments !== undefined &&
+          typeof plan.learningAppointments !== 'boolean') ||
         (plan.socialInvitations !== undefined &&
           typeof plan.socialInvitations !== 'boolean') ||
         (plan.commitmentPriority !== undefined &&
@@ -567,6 +573,10 @@ export function createSimulation() {
         return {ok:false,reason:'invalid_meeting_room',events:[]};
       if (!['study','explore'].includes(command.purpose))
         return {ok:false,reason:'invalid_purpose',events:[]};
+      if(command.spell !== undefined && (
+        command.purpose!=='study' || !isSpellId(command.spell) ||
+        !knowledgeGaps(command.actor).includes(command.spell)))
+        return {ok:false,reason:'not_missing_concept',events:[]};
       const now=schoolTime(tick).absoluteMinute;
       if (!validMeetingTime(now,command.atMinute))
         return {ok:false,reason:'invalid_meeting_time',events:[]};
@@ -581,9 +591,12 @@ export function createSimulation() {
       const offer:MeetingCommitment={
         id:commitments.length+1,promisor:command.actor,
         beneficiary:command.listener,room:command.room,
-        atMinute:command.atMinute,purpose:command.purpose,status:'offered'
+        atMinute:command.atMinute,purpose:command.purpose,
+        ...(command.spell===undefined?{}:{spell:command.spell}),status:'offered'
       };
       commitments.push(offer);
+      if(offer.spell!==undefined)
+        attemptedTutors.get(command.actor)!.add(`${command.listener}:${offer.spell}`);
       commitmentMemories.get(command.actor)!.push({
         meetingId:offer.id,partner:command.listener,kind:'offered',
         minute:now,room:offer.room,purpose:offer.purpose
@@ -637,6 +650,35 @@ export function createSimulation() {
       };
       emit(event);
       return {ok:true,events:[event]};
+    }
+    if(command.type==='tutor_appointment'){
+      const meeting=commitments.find(m=>m.id===command.meetingId);
+      if(!meeting || meeting.status!=='pending' || !meeting.spell)
+        return {ok:false,reason:'not_study_meeting',events:[]};
+      if(meeting.beneficiary!==command.actor)
+        return {ok:false,reason:'not_invited',events:[]};
+      if(meeting.taught)
+        return {ok:false,reason:'appointment_already_taught',events:[]};
+      const minute=schoolTime(tick).absoluteMinute;
+      if(minute<meeting.atMinute || minute>=meeting.atMinute+20 ||
+         currentRoom(meeting.promisor)!==meeting.room ||
+         currentRoom(meeting.beneficiary)!==meeting.room)
+        return {ok:false,reason:'appointment_not_ready',events:[]};
+      // Canonical teaching guard verifies actual teacher knowledge,
+      // learner's gap, both characters' hearing and physical co-location.
+      const taught=execute({type:'tutor_spell',actor:command.actor,
+        listener:meeting.promisor,spell:meeting.spell});
+      if(!taught.ok) return taught;
+      meeting.taught=true;
+      addComponent(ecs,meeting.promisor,HelpedBy(meeting.beneficiary));
+      assistanceHistory.get(meeting.promisor)!.push({
+        helper:meeting.beneficiary,spell:meeting.spell,minute
+      });
+      const event:WorldEvent={type:'tutoring_appointment_completed',
+        actor:meeting.beneficiary,listener:meeting.promisor,
+        meetingId:meeting.id,room:meeting.room,spell:meeting.spell,minute};
+      emit(event);
+      return {ok:true,events:[...taught.events,event]};
     }
     if (command.type === 'promise_meeting') {
       if (!isCharacter(command.listener) || command.listener === command.actor) {
