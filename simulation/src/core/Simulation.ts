@@ -620,10 +620,11 @@ export function createSimulation() {
         return {ok:false,reason:'already_committed',events:[]};
       offer.status=command.accept?'pending':'declined';
       const kind=command.accept?'accepted':'declined';
-      for(const [who,partner] of [
+      const participants: readonly (readonly [EntityId,EntityId])[]=[
         [offer.promisor,offer.beneficiary],
         [offer.beneficiary,offer.promisor]
-      ]){
+      ];
+      for(const [who,partner] of participants){
         commitmentMemories.get(who)!.push({
           meetingId:offer.id,partner,kind,minute:now,
           room:offer.room,purpose:offer.purpose
