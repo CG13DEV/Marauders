@@ -4,6 +4,7 @@
  * One ten-minute tick; all numbers are deliberately provisional test values.
  */
 import type { MealKind } from './daily-life.ts';
+import type { SpellId } from './spellcraft.ts';
 import { isSleepTime, mealAt } from './daily-life.ts';
 
 export type IntentionImportance='casual'|'important';
@@ -11,8 +12,12 @@ export type IntentionStatus='queued'|'active'|'paused'|'completed'|'expired'|'ca
 export type Interruption='lesson'|'promise'|'manual'|'hunger'|'fatigue'|'higher_priority';
 export type PersonalIntention={
   id:number;
-  kind:'visit';
+  kind:'visit'|'learn_concept'|'attend_meeting'|'investigate';
+  /** Visit destination; for other kinds, only a personally disclosed or physically perceived room. */
   destination:number;
+  spell?:SpellId;
+  meetingId?:number;
+  object?:number;
   importance:IntentionImportance;
   createdMinute:number;
   deadlineMinute?:number;
@@ -52,6 +57,7 @@ export type Choice=
   | {kind:'eat'; meal:MealKind; reason:'hunger'}
   | {kind:'rest'; reason:'fatigue'}
   | {kind:'visit'; intention:PersonalIntention}
+  | {kind:'pursue'; intention:PersonalIntention}
   | {kind:'idle'};
 
 export function chooseNeedOrIntention(
@@ -74,6 +80,6 @@ export function chooseNeedOrIntention(
       (goal?.importance!=='important'||needs.fatigue>=85)) ||
       needs.fatigue>=95)
     return {kind:'rest',reason:'fatigue'};
-  if(goal)return {kind:'visit',intention:goal};
+  if(goal)return {kind:goal.kind==='visit'?'visit':'pursue',intention:goal};
   return {kind:'idle'};
 }
