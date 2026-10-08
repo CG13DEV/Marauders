@@ -340,7 +340,7 @@ export function restoreSimulation(serialized: string | SavedSimulationV1 | Saved
       case 'setHelpful': restored.setHelpful(at(op.actor), op.enabled); break;
       case 'setExperimenter': restored.setExperimenter(at(op.actor), op.enabled); break;
       case 'setRoutine': restored.setRoutine(at(op.actor), op.destinations.map(at)); break;
-      case 'setTimetable': restored.setTimetable(at(op.actor), op.lessons.map(l => ({ ...l, room: at(l.room) })), op.priority); break;
+      case 'setTimetable': restored.setTimetable(at(op.actor), op.lessons.map(l => ({ ...l, room: at(l.room), ...(l.teacher === undefined ? {} : { teacher: at(l.teacher) }) })), op.priority); break;
       case 'setDailyLife': restored.setDailyLife(at(op.actor), op.plan
         ? { ...op.plan, homeRoom: at(op.plan.homeRoom), diningRoom: at(op.plan.diningRoom),
           ...(op.plan.socialRoom === undefined ? {} : { socialRoom: at(op.plan.socialRoom) }),

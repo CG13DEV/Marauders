@@ -9,10 +9,13 @@ export type Lesson = {
   id: string;
   subject: string;
   room: number;
-  startsAt: number; // minute of day, currently day one
+  startsAt: number; // absolute minute since day zero
   endsAt: number;
   /** Optional technique explicitly taught at startsAt + ten minutes. */
   spell?: SpellId;
+  /** Academic provenance: different groups share physical teaching spaces. */
+  groupId?: string;
+  teacher?: number;
 };
 export type AttendanceStatus = 'pending' | 'on_time' | 'late' | 'missed';
 export type AttendanceRecord = Lesson & {
