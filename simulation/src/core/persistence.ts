@@ -71,6 +71,8 @@ function remapCommand(command: Command, ids: Map<number, number>): Command {
       ...(command.guide === undefined ? {} : { guide: at(command.guide) }) };
     case 'cast_spell': return { ...command, actor: at(command.actor) };
     case 'eat_meal': return { ...command, actor: at(command.actor) };
+    case 'intend_visit': return {...command,actor:at(command.actor),destination:at(command.destination)};
+    case 'cancel_intention': return {...command,actor:at(command.actor)};
     case 'chat': return { ...command, actor: at(command.actor), listener: at(command.listener) };
     case 'promise_meeting': case 'offer_meeting': return {
       ...command,actor:at(command.actor),
@@ -131,6 +133,8 @@ function auditOf(world: Simulation, operations: readonly Operation[]): string {
       meals: world.mealHistory(c.id),
       conversations: world.conversationHistory(c.id),
       rests: world.restHistory(c.id),
+      ...(world.intentionHistory(c.id).length?{intentions:world.intentionHistory(c.id)}:{}),
+      ...(world.needsOf(c.id)===null?{}:{needs:world.needsOf(c.id)}),
       ...(world.promiseHistory(c.id).length
         ? { promises: world.promiseHistory(c.id) } : {})
     })),

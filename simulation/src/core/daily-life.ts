@@ -24,6 +24,8 @@ export type DailyLifePlan = {
   socialInvitations?: boolean;
   /** Opt-in intention: negotiate real tutoring only when personally lacking knowledge. */
   learningAppointments?: boolean;
+  /** Opt-in resumable goal queue with bodily needs (Experiment #18). */
+  intentionPlanning?: boolean;
 };
 export type MealMemory = { day: number; kind: MealKind; minute: number };
 export type ConversationMemory = {

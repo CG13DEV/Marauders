@@ -6,6 +6,7 @@ import type { TutoringRequest, AssistanceMemory } from './social-learning.ts';
 import type { AttendanceRecord, SchoolPriority } from './school-time.ts';
 import type { DailyLifePlan, MealMemory, ConversationMemory, RestMemory } from './daily-life.ts';
 import type { MeetingCommitment, CommitmentMemory } from './social-commitments.ts';
+import type { PersonalIntention, BodilyNeeds } from './intentions.ts';
 
 export type WitnessSearch = {
   object: EntityId;
@@ -40,6 +41,8 @@ export function createRuntimeStores() {
     conversations: new Map<EntityId, ConversationMemory[]>(),
     rests: new Map<EntityId, RestMemory[]>(),
     commitments: [] as MeetingCommitment[],
-    commitmentMemories: new Map<EntityId, CommitmentMemory[]>()
+    commitmentMemories: new Map<EntityId, CommitmentMemory[]>(),
+    intentions: new Map<EntityId,PersonalIntention[]>(),
+    bodilyNeeds: new Map<EntityId,BodilyNeeds>()
   };
 }

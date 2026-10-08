@@ -20,6 +20,9 @@ import {
   type MeetingPurpose, type MeetingCommitment, type CommitmentMemory
 } from './social-commitments.ts';
 import { runWorldStep, type StepDecision } from './scheduler.ts';
+import { INITIAL_NEEDS, afterMeal, isOpenIntention,
+  type BodilyNeeds,type PersonalIntention,type IntentionImportance,
+  type IntentionStatus,type Interruption } from './intentions.ts';
 import type { RuntimeSnapshot, StateFlags } from './runtime-snapshot.ts';
 import {
   mealAt, dayOf, localTime, ateMeal,
@@ -69,7 +72,10 @@ export type Command =
   | { type: 'offer_meeting'; actor: EntityId; listener: EntityId;
       room: EntityId; atMinute: number; purpose: MeetingPurpose; spell?: SpellId }
   | { type: 'answer_meeting'; actor: EntityId; meetingId: number; accept: boolean }
-  | { type: 'tutor_appointment'; actor: EntityId; meetingId: number };
+  | { type: 'tutor_appointment'; actor: EntityId; meetingId: number }
+  | { type: 'intend_visit'; actor: EntityId; destination:EntityId;
+      importance:IntentionImportance; deadlineMinute?:number }
+  | { type: 'cancel_intention'; actor:EntityId; intentionId:number };
 
 export type WorldEvent =
   | { type: 'entity_moved'; actor: EntityId; from: EntityId; to: EntityId }
@@ -95,7 +101,9 @@ export type WorldEvent =
   | { type: 'meeting_answered'; actor: EntityId; listener: EntityId;
       meetingId: number; room: EntityId; minute: number; accepted: boolean }
   | { type: 'tutoring_appointment_completed'; actor: EntityId; listener: EntityId;
-      meetingId: number; room: EntityId; spell: SpellId; minute: number };
+      meetingId: number; room: EntityId; spell: SpellId; minute: number }
+  | { type: 'intention_changed'; actor: EntityId; intentionId:number;
+      status:IntentionStatus; minute:number; interruptedBy?:Interruption };
 
 /**
  * What a character is ALLOWED to know.
@@ -143,9 +151,12 @@ export type MeetingRejection =
   | 'offer_timed_out' | 'not_study_meeting' | 'appointment_not_ready'
   | 'appointment_already_taught' | 'not_missing_concept';
 
+export type IntentionRejection='no_intention_planner'|'invalid_intention'|
+  'too_many_intentions'|'missing_intention'|'invalid_deadline'|'duplicate_intention';
+
 export type CommandResult =
   | { ok: true; events: readonly WorldEvent[] }
-  | { ok: false; reason: MoveRejection | BreakRejection | SocialRejection | DoorRejection | InspectRejection | QuestionRejection | SpellRejection | HelpRejection | DailyRejection | MeetingRejection; events: readonly [] };
+  | { ok: false; reason: MoveRejection | BreakRejection | SocialRejection | DoorRejection | InspectRejection | QuestionRejection | SpellRejection | HelpRejection | DailyRejection | MeetingRejection | IntentionRejection; events: readonly [] };
 
 export type DoorOptions = {
   door: { key: string; label: string; open: boolean };
@@ -189,7 +200,7 @@ export function createSimulation() {
     keys, doors, events, observationsByCharacter, beliefsByCharacter, roomDetails,
     spellKnowledge, pendingTutoring, attemptedTutors, assistanceHistory,
     searches, routines, timetables, dailyPlans, meals, conversations, rests,
-    commitments, commitmentMemories
+    commitments, commitmentMemories, intentions, bodilyNeeds
   } = createRuntimeStores();
   let tick = 0;
 
@@ -245,6 +256,7 @@ export function createSimulation() {
     conversations.set(eid, []);
     rests.set(eid, []);
     commitmentMemories.set(eid, []);
+    intentions.set(eid, []);
     return eid;
   }
 
@@ -373,6 +385,7 @@ export function createSimulation() {
   function setDailyLife(actor: EntityId, plan: DailyLifePlan | null): void {
     if (!isCharacter(actor)) throw new Error('Daily life requires a character');
     if (plan === null) {
+      bodilyNeeds.delete(actor);
       dailyPlans.delete(actor);
       removeComponent(ecs, actor, HasDailyLife);
       return;
@@ -380,6 +393,8 @@ export function createSimulation() {
     if (!isRoom(plan.homeRoom) || !isRoom(plan.diningRoom) ||
         (plan.socialRoom !== undefined && !isRoom(plan.socialRoom)) ||
         (plan.leisureRoom !== undefined && !isRoom(plan.leisureRoom)) ||
+        (plan.intentionPlanning !== undefined &&
+          typeof plan.intentionPlanning !== 'boolean') ||
         (plan.learningAppointments !== undefined &&
           typeof plan.learningAppointments !== 'boolean') ||
         (plan.socialInvitations !== undefined &&
@@ -391,7 +406,30 @@ export function createSimulation() {
       throw new Error('Invalid daily-life configuration');
     }
     dailyPlans.set(actor, { ...plan });
+    if(plan.intentionPlanning===true && !bodilyNeeds.has(actor))
+      bodilyNeeds.set(actor,{...INITIAL_NEEDS});
+    else if(plan.intentionPlanning!==true)bodilyNeeds.delete(actor);
     addComponent(ecs, actor, HasDailyLife);
+  }
+
+  function intentionHistory(actor:EntityId):PersonalIntention[]{
+    return (intentions.get(actor)??[]).map(goal=>({...goal}));
+  }
+  function needsOf(actor:EntityId):BodilyNeeds|null{
+    const v=bodilyNeeds.get(actor);return v?{...v}:null;
+  }
+  function transitionIntention(
+    actor:EntityId,goalId:number,status:IntentionStatus,
+    interruptedBy?:Interruption
+  ):void {
+    const goal=intentions.get(actor)?.find(g=>g.id===goalId);
+    if(!goal || (goal.status===status && goal.interruptedBy===interruptedBy))return;
+    goal.status=status;
+    if(interruptedBy!==undefined)goal.interruptedBy=interruptedBy;
+    else delete goal.interruptedBy;
+    emit({type:'intention_changed',actor,intentionId:goalId,status,
+      minute:schoolTime(tick).absoluteMinute,
+      ...(interruptedBy===undefined?{}:{interruptedBy})});
   }
 
   function mealHistory(actor: EntityId): MealMemory[] {
@@ -728,6 +766,42 @@ export function createSimulation() {
       emit(event);
       return {ok:true,events:[event]};
     }
+    if(command.type==='intend_visit'){
+      if(!isCharacter(command.actor)||!dailyPlans.get(command.actor)?.intentionPlanning)
+        return {ok:false,reason:'no_intention_planner',events:[]};
+      if(!isRoom(command.destination)||!['casual','important'].includes(command.importance))
+        return {ok:false,reason:'invalid_intention',events:[]};
+      const now=schoolTime(tick).absoluteMinute;
+      if(command.deadlineMinute!==undefined&&(
+        !Number.isSafeInteger(command.deadlineMinute) ||
+        command.deadlineMinute<now+10 ||
+        command.deadlineMinute>now+7*1440))
+        return {ok:false,reason:'invalid_deadline',events:[]};
+      const personal=intentions.get(command.actor)!;
+      if(personal.some(g=>isOpenIntention(g)&&g.destination===command.destination))
+        return {ok:false,reason:'duplicate_intention',events:[]};
+      if(personal.filter(isOpenIntention).length>=8)
+        return {ok:false,reason:'too_many_intentions',events:[]};
+      const id=(personal.at(-1)?.id??0)+1;
+      personal.push({id,kind:'visit',destination:command.destination,
+        importance:command.importance,createdMinute:now,
+        ...(command.deadlineMinute===undefined?{}:{deadlineMinute:command.deadlineMinute}),
+        status:'queued'});
+      const event:WorldEvent={type:'intention_changed',actor:command.actor,
+        intentionId:id,status:'queued',minute:now};
+      emit(event);return {ok:true,events:[event]};
+    }
+    if(command.type==='cancel_intention'){
+      if(!isCharacter(command.actor))
+        return {ok:false,reason:'no_intention_planner',events:[]};
+      const goal=intentions.get(command.actor)?.find(
+        g=>g.id===command.intentionId && isOpenIntention(g));
+      if(!goal)return {ok:false,reason:'missing_intention',events:[]};
+      transitionIntention(command.actor,goal.id,'cancelled');
+      const event=events.at(-1)!;
+      return {ok:true,events:[copyEvent(event)]};
+    }
+
     if (command.type === 'eat_meal') {
       const plan = dailyPlans.get(command.actor);
       if (!plan) return { ok: false, reason: 'no_daily_plan', events: [] };
@@ -743,6 +817,8 @@ export function createSimulation() {
         return { ok: false, reason: 'already_ate', events: [] };
       }
       personal.push({ day: dayOf(minute), kind: command.kind, minute });
+      const previous=bodilyNeeds.get(command.actor);
+      if(previous)bodilyNeeds.set(command.actor,afterMeal(previous));
       const event: WorldEvent = { type: 'meal_eaten', actor: command.actor, kind: command.kind, minute };
       emit(event);
       return { ok: true, events: [event] };
@@ -1140,7 +1216,8 @@ export function createSimulation() {
       execute, currentRoom, occupants, observations, assessment, trustOf, knowledgeGaps,
       pendingTutoring, attemptedTutors, searches, timetables, routines,
       dailyPlans, meals, conversations, rests,
-      commitments, commitmentMemories,
+      commitments, commitmentMemories, intentions, bodilyNeeds,
+      transitionIntention,
       resolveMeetings,
       spellKnowledge, beliefsByCharacter, setRoutine, emit,
       recordDailyRest
@@ -1212,6 +1289,12 @@ export function createSimulation() {
       meals: [...meals.entries()],
       conversations: [...conversations.entries()],
       rests: [...rests.entries()],
+      ...([...intentions.values()].some(goals=>goals.length)
+        ? {intentions:[...intentions.entries()].filter(([,goals])=>goals.length)
+            .map(([actor,goals])=>[actor,goals.map(g=>({...g}))]
+              as [number,PersonalIntention[]])}:{}),
+      ...(bodilyNeeds.size?{bodilyNeeds:[...bodilyNeeds.entries()]
+        .map(([actor,needs])=>[actor,{...needs}] as [number,BodilyNeeds])}:{}),
       ...(commitments.length ? { commitments: commitments.map(m=>({...m})) } : {}),
       ...([...commitmentMemories.values()].some(items=>items.length)
         ? { commitmentMemories: [...commitmentMemories.entries()]
@@ -1297,6 +1380,24 @@ export function createSimulation() {
     for (const [id, items] of state.conversations) conversations.set(id, items);
     rests.clear();
     for (const [id, items] of state.rests) rests.set(id, items);
+    intentions.clear();
+    for(const id of Array.from(query(ecs,[Character]))) intentions.set(id,[]);
+    for(const [actor,goals] of state.intentions??[]){
+      if(!isCharacter(actor)||goals.some(g=>!isRoom(g.destination)))
+        throw new Error('Invalid checkpoint intention owner or destination');
+      intentions.set(actor,goals.map(g=>({...g})));
+    }
+    bodilyNeeds.clear();
+    for(const [actor,needs] of state.bodilyNeeds??[]){
+      if(!isCharacter(actor)||!Number.isFinite(needs.hunger)||
+         !Number.isFinite(needs.fatigue)||needs.hunger<0||needs.hunger>100||
+         needs.fatigue<0||needs.fatigue>100)
+        throw new Error('Invalid checkpoint bodily needs');
+      bodilyNeeds.set(actor,{...needs});
+    }
+    for(const [actor,plan] of dailyPlans)
+      if(plan.intentionPlanning && !bodilyNeeds.has(actor))
+        bodilyNeeds.set(actor,{...INITIAL_NEEDS});
     commitments.splice(0,commitments.length,...(state.commitments ?? []).map(x=>({...x})));
     commitmentMemories.clear();
     for(const id of Array.from(query(ecs,[Character]))) commitmentMemories.set(id,[]);
@@ -1326,7 +1427,7 @@ export function createSimulation() {
     setTrust, trustOf, setInquisitive, setSocialInvestigator, setGuarded, setRoutine, assessment,
     setTimetable, setManualControl, attendance, learningDebt, knowledgeGaps,
     setDailyLife, mealHistory, conversationHistory, restHistory,
-    promiseHistory, meetingLedger,
+    promiseHistory, meetingLedger, intentionHistory, needsOf,
     setHelpSeeking, setHelpful, tutoringRequest, assistance, hasHelped,
     seedSpellKnowledge, spellStage, setExperimenter, isIlluminated,
     learningHistory: (actor: EntityId): LearningRecord[] => spellKnowledge.history(actor),

@@ -6,6 +6,7 @@ import type { AttendanceRecord, SchoolPriority } from './school-time.ts';
 import type { TutoringRequest, AssistanceMemory } from './social-learning.ts';
 import type { Trust } from './cognition.ts';
 import type { MeetingCommitment, CommitmentMemory } from './social-commitments.ts';
+import type { PersonalIntention, BodilyNeeds } from './intentions.ts';
 import type {
   DailyLifePlan, MealMemory, ConversationMemory, RestMemory
 } from './daily-life.ts';
@@ -38,6 +39,8 @@ export type RuntimeSnapshot = {
   rests: [number, RestMemory[]][];
   commitments?: MeetingCommitment[];
   commitmentMemories?: [number, CommitmentMemory[]][];
+  intentions?: [number,PersonalIntention[]][];
+  bodilyNeeds?: [number,BodilyNeeds][];
   routines: [number, number[]][];
   searches: [number, PersistedSearch][];
   requests: [number, TutoringRequest][];
@@ -59,7 +62,7 @@ function remapEvent(event: WorldEvent, at: (id: number) => number): WorldEvent {
       return { ...event, actor: at(event.actor) };
     case 'tutoring_requested': return { ...event, actor: at(event.actor), listener: at(event.listener) };
     case 'tutoring_answered': return { ...event, actor: at(event.actor), requester: at(event.requester) };
-    case 'meal_eaten': case 'rest_recorded':
+    case 'meal_eaten': case 'rest_recorded': case 'intention_changed':
       return { ...event, actor: at(event.actor) };
     case 'conversation_shared':
       return { ...event, actor: at(event.actor), listener: at(event.listener) };
@@ -135,6 +138,13 @@ export function remapRuntimeSnapshot(snapshot: RuntimeSnapshot, at: (id: number)
         at(id), memories.map(m => ({...m, partner:at(m.partner), room:at(m.room)}))
       ] as [number, CommitmentMemory[]])
     }),
+    ...(snapshot.intentions===undefined?{}:{intentions:snapshot.intentions.map(
+      ([actor,goals])=>[at(actor),goals.map(g=>({...g,destination:at(g.destination)}))]
+        as [number,PersonalIntention[]]
+    )}),
+    ...(snapshot.bodilyNeeds===undefined?{}:{bodilyNeeds:snapshot.bodilyNeeds.map(
+      ([actor,needs])=>[at(actor),{...needs}] as [number,BodilyNeeds]
+    )}),
     routines: snapshot.routines.map(([id, path]) => [at(id), path.map(at)]),
     searches: snapshot.searches.map(([id, search]) => [at(id), {
       object: at(search.object), asked: search.asked.map(at),
