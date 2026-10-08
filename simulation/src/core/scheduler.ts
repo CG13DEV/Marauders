@@ -119,8 +119,11 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
         }
         continue;
       }
-      if (shouldReturnHome(minute) && room !== plan.homeRoom) {
-        const next = nextRoomOnRoute(room, plan.homeRoom, exits);
+      // Leisure is spent in a shared hub, sleep in a private bedroom.
+      const destination = isLeisure(minute)
+        ? (plan.socialRoom ?? plan.homeRoom) : plan.homeRoom;
+      if (shouldReturnHome(minute) && room !== destination) {
+        const next = nextRoomOnRoute(room, destination, exits);
         if (next !== null) {
           const action = passageAction(actor, room, next);
           const result = execute(action);
@@ -306,7 +309,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
           decisions.some(d => d.actor === actor)) continue;
       const plan = dailyPlans.get(actor);
       const room = currentRoom(actor);
-      if (!plan || room === null || room !== plan.homeRoom ||
+      if (!plan || room === null || room !== (plan.socialRoom ?? plan.homeRoom) ||
           !has(actor, 'hearing') ||
           (plan.style === 'reserved' && !isWeekend(minute))) continue;
       const memories = conversations.get(actor) ?? [];

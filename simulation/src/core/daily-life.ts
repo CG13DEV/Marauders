@@ -8,6 +8,8 @@ export type SocialTopic = 'lessons' | 'castle' | 'hobbies';
 export type SocialStyle = 'outgoing' | 'reserved';
 export type DailyLifePlan = {
   homeRoom: number;
+  /** Social meeting space, distinct from private sleeping room. */
+  socialRoom?: number;
   diningRoom: number;
   style: SocialStyle;
   interest: SocialTopic;

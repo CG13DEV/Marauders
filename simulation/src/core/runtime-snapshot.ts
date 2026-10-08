@@ -107,7 +107,8 @@ export function remapRuntimeSnapshot(snapshot: RuntimeSnapshot, at: (id: number)
       records: value.records.map(record => ({ ...record, room: at(record.room) })), priority: value.priority
     }]),
     dailyPlans: snapshot.dailyPlans.map(([id, plan]) => [at(id), {
-      ...plan, homeRoom: at(plan.homeRoom), diningRoom: at(plan.diningRoom)
+      ...plan, homeRoom: at(plan.homeRoom), diningRoom: at(plan.diningRoom),
+      ...(plan.socialRoom === undefined ? {} : { socialRoom: at(plan.socialRoom) })
     }]),
     meals: snapshot.meals.map(([id, values]) => [at(id), values.map(v => ({ ...v }))]),
     conversations: snapshot.conversations.map(([id, values]) => [at(id),
