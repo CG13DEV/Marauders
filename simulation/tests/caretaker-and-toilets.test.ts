@@ -53,7 +53,9 @@ test('Norris cannot speak or send omniscient reports; she must meet Filch',()=>{
   const w=createPersistentSimulation();
   const office=w.room('office','Кабинет Филча');
   const hall=w.room('hall','Коридор');
-  w.connect(office,hall,{door:{key:'office_door',label:'Дверь',open:false}});
+  const vestibule=w.room('vestibule','Промежуточный коридор');
+  w.connect(office,vestibule);
+  w.connect(vestibule,hall);
   const filch=w.character('filch','Филч',office);
   const cat=w.character('norris','Норрис',hall);
   const pupil=w.character('pupil','Ученик',hall);
@@ -64,13 +66,14 @@ test('Norris cannot speak or send omniscient reports; she must meet Filch',()=>{
     {ok:false,reason:'not_partner',events:[]});
   // same room, but the cat has not perceived a wrong -> no alert yet.
   assert.equal(w.execute({type:'break_object',actor:pupil,target:object}).ok,true);
-  assert.equal(w.execute({type:'tell',actor:cat,listener:pupil,
-    claim:{kind:'broke_object',culprit:pupil,object}}).ok,false);
+  assert.deepEqual(w.execute({type:'tell',actor:cat,listener:pupil,
+    claim:{kind:'broke_object',culprit:pupil,object}}),
+    {ok:false,reason:'animal_action_unavailable',events:[]});
   assert.equal(w.observations(filch).some(x=>x.kind==='witnessed_breakage'),false);
   assert.equal(w.execute({type:'signal_incident',actor:cat,listener:filch}).ok,false);
   const steps1=w.step();
-  assert.ok(steps1.some(x=>x.actor===cat&&x.action.type==='open_door'));
-  assert.equal(w.currentRoom(cat),hall);
+  assert.ok(steps1.some(x=>x.actor===cat&&x.action.type==='move'));
+  assert.equal(w.currentRoom(cat),vestibule);
   const steps2=w.step();
   assert.ok(steps2.some(x=>x.actor===cat&&x.action.type==='move'));
   assert.equal(w.currentRoom(cat),office);
