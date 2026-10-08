@@ -5,11 +5,14 @@ import type { LearningRecord } from './spellcraft.ts';
 import type { AttendanceRecord, SchoolPriority } from './school-time.ts';
 import type { TutoringRequest, AssistanceMemory } from './social-learning.ts';
 import type { Trust } from './cognition.ts';
+import type {
+  DailyLifePlan, MealMemory, ConversationMemory, RestMemory
+} from './daily-life.ts';
 
 export type StateFlags = {
   vision: boolean; hearing: boolean; inquisitive: boolean;
   socialInvestigator: boolean; guarded: boolean; hasRoutine: boolean;
-  hasTimetable: boolean; manuallyControlled: boolean; experimental: boolean;
+  hasTimetable: boolean; hasDailyLife: boolean; manuallyControlled: boolean; experimental: boolean;
   illuminated: boolean; seeksHelp: boolean; helpful: boolean;
 };
 export type PersistedSearch = { object: number; asked: number[]; seenRooms: number[]; trail: number[] };
@@ -27,6 +30,10 @@ export type RuntimeSnapshot = {
   beliefs: [number, Belief[]][];
   learning: [number, LearningRecord[]][];
   schedules: [number, { records: AttendanceRecord[]; priority: SchoolPriority }][];
+  dailyPlans: [number, DailyLifePlan][];
+  meals: [number, MealMemory[]][];
+  conversations: [number, ConversationMemory[]][];
+  rests: [number, RestMemory[]][];
   routines: [number, number[]][];
   searches: [number, PersistedSearch][];
   requests: [number, TutoringRequest][];
@@ -48,6 +55,10 @@ function remapEvent(event: WorldEvent, at: (id: number) => number): WorldEvent {
       return { ...event, actor: at(event.actor) };
     case 'tutoring_requested': return { ...event, actor: at(event.actor), listener: at(event.listener) };
     case 'tutoring_answered': return { ...event, actor: at(event.actor), requester: at(event.requester) };
+    case 'meal_eaten': case 'rest_recorded':
+      return { ...event, actor: at(event.actor) };
+    case 'conversation_shared':
+      return { ...event, actor: at(event.actor), listener: at(event.listener) };
   }
 }
 
@@ -95,6 +106,13 @@ export function remapRuntimeSnapshot(snapshot: RuntimeSnapshot, at: (id: number)
     schedules: snapshot.schedules.map(([id, value]) => [at(id), {
       records: value.records.map(record => ({ ...record, room: at(record.room) })), priority: value.priority
     }]),
+    dailyPlans: snapshot.dailyPlans.map(([id, plan]) => [at(id), {
+      ...plan, homeRoom: at(plan.homeRoom), diningRoom: at(plan.diningRoom)
+    }]),
+    meals: snapshot.meals.map(([id, values]) => [at(id), values.map(v => ({ ...v }))]),
+    conversations: snapshot.conversations.map(([id, values]) => [at(id),
+      values.map(v => ({ ...v, partner: at(v.partner) }))]),
+    rests: snapshot.rests.map(([id, values]) => [at(id), values.map(v => ({ ...v }))]),
     routines: snapshot.routines.map(([id, path]) => [at(id), path.map(at)]),
     searches: snapshot.searches.map(([id, search]) => [at(id), {
       object: at(search.object), asked: search.asked.map(at),
