@@ -195,7 +195,10 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
         helpful:has(actor,'helpful'),
         trustsRequester:trustOf(actor,offer.promisor),
         knowsConcept:spellKnowledge.stage(actor,offer.spell)!=='unaware',
-        learnerNeedsConcept:spellKnowledge.stage(offer.promisor,offer.spell)==='unaware'
+        // The invitation is the learner's audible request, already validated
+        // against their personal gap when offered. Do not read their hidden mind.
+        // Actual teaching revalidates whether they still need the concept.
+        learnerNeedsConcept:true
       });
       const accept= academicHelp && !appointmentClashes &&
         !personallyAvoids(commitmentMemories.get(actor)??[],offer.promisor) &&
