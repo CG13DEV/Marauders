@@ -84,6 +84,9 @@ test('Norris cannot speak or send omniscient reports; she must meet Filch',()=>{
   assert.ok(w.observations(filch).some(x=>x.kind==='animal_alert'&&x.actor===cat));
   assert.equal(w.beliefs(filch).length,0);
   assert.equal(w.execute({type:'signal_incident',actor:cat,listener:filch}).ok,false);
+  // Inspecting the same object after witnessing it cannot create another alert.
+  for(let i=0;i<12;i++)w.step();
+  assert.equal(w.events().filter(x=>x.type==='animal_alerted').length,1);
   const checkpoint=restoreCheckpoint(w.checkpoint());
   const journal=restoreSimulation(w.snapshot());
   assert.deepEqual(checkpoint.captureRuntime(),w.captureRuntime());
