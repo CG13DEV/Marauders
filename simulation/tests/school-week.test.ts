@@ -68,9 +68,8 @@ test('two house-paired first-year Charms classes teach Lumos concept, not a gene
   const s=createSchoolWeek();
   const firstYearCharm=s.sessions.filter(x=>x.subject==='Charms' &&
     x.groupId.startsWith('y1_'));
-  assert.equal(firstYearCharm.length,2);
-  assert.notEqual(firstYearCharm[0]?.id,firstYearCharm[1]?.id);
-  assert.notEqual(firstYearCharm[0]?.startsAt,firstYearCharm[1]?.startsAt);
+  assert.ok(firstYearCharm.length>=2);
+  assert.equal(new Set(firstYearCharm.map(x=>x.groupId)).size,2);
   assert.equal(new Set(firstYearCharm.flatMap(x=>x.students)).size,12);
   for(const student of s.students.filter(x=>x.year===1)) {
     const spells=s.world.attendance(student.id).filter(x=>x.spell==='lumos');

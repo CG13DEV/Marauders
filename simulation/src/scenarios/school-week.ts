@@ -109,6 +109,7 @@ export function createSchoolWeek(world = createSimulation()) {
   );
   const sessions: TeachingSession[] = [];
   const reservations = new Set<string>();
+  const explainedLumosTo = new Set<string>();
   function addSession(
     id: string, subject: Subject, groupId: string,
     students: readonly number[], startsAt: number
@@ -132,10 +133,14 @@ export function createSchoolWeek(world = createSimulation()) {
       startsAt, endsAt, groupId, students: [...students] };
     sessions.push(session);
     const groupYear = teachingGroups.find(group => group.id === groupId)?.year;
+    // An additional Charms class does not replay the first introduction.
+    const introducesLumos = subject === 'Charms' && groupYear === 1 &&
+      !explainedLumosTo.has(groupId);
+    if (introducesLumos) explainedLumosTo.add(groupId);
     const lesson: Lesson = {
       id, subject: SUBJECT_LABELS[subject], room,
       startsAt, endsAt, groupId, teacher,
-      ...(subject === 'Charms' && groupYear === 1 ? { spell: 'lumos' as const } : {})
+      ...(introducesLumos ? { spell: 'lumos' as const } : {})
     };
     staffSchedule.get(teacher)!.push(lesson);
     for (const student of students) pupilSchedule.get(student)!.push(lesson);
