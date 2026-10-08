@@ -190,11 +190,13 @@ export function createSimulation() {
     if (!isCharacter(observer) || !isCharacter(source) || observer === source) {
       throw new Error('Trust requires two different characters');
     }
+    if (value !== 'trusted' && value !== 'neutral' && value !== 'distrusted') {
+      throw new Error('Unknown trust level');
+    }
     removeComponent(ecs, observer, Trusts(source));
     removeComponent(ecs, observer, Distrusts(source));
     if (value === 'trusted') addComponent(ecs, observer, Trusts(source));
-    else if (value === 'distrusted') addComponent(ecs, observer, Distrusts(source));
-    else if (value !== 'neutral') throw new Error('Unknown trust level');
+    if (value === 'distrusted') addComponent(ecs, observer, Distrusts(source));
   }
 
   function trustOf(observer: EntityId, source: EntityId): Trust {
