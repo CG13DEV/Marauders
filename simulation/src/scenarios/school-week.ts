@@ -81,6 +81,7 @@ export function createSchoolWeek(
     const id = world.character('prof_' + index,
       (expansion === 'expanded' ? NAMED_STAFF[subject] : undefined) ??
         'Преподаватель: ' + SUBJECT_LABELS[subject], staffRoom);
+    world.grantPointAuthority(id,'teacher');
     // Ghost Binns still holds the History timetable, but must NOT eat,
     // sleep or accumulate human physiological needs in expanded mode.
     if (expansion !== 'expanded' || subject !== 'History of Magic')
@@ -118,6 +119,7 @@ export function createSchoolWeek(
         const id = world.character(key,
           HOUSE_LABELS[house] + ', ' + year + ' курс, ученик ' + (index + 1),
           sleepingRoom);
+        world.registerHouse(id,house);
         const pair = Math.floor(HOUSES.indexOf(house) / 2);
         const group = teachingGroups[(year - 1) * 2 + pair]!;
         const electives = electiveChoices(year, house, index);

@@ -27,7 +27,8 @@
     "learning-purpose-demo": "node --experimental-strip-types src/cli/learning-purpose-demo.ts",
     "intentions-demo": "node --experimental-strip-types src/cli/intentions-demo.ts",
     "unified-intentions-demo": "node --experimental-strip-types src/cli/unified-intentions-demo.ts",
-    "rollout-demo": "node --experimental-strip-types src/cli/rollout-demo.ts"
+    "rollout-demo": "node --experimental-strip-types src/cli/rollout-demo.ts",
+    "points-demo": "node --experimental-strip-types src/cli/points-demo.ts"
   },
   "dependencies": {
     "bitecs": "0.4.0"
