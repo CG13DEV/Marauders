@@ -43,7 +43,10 @@ export type TeachingSession = {
   students: readonly number[];
 };
 
-export function createSchoolWeek(world = createSimulation()) {
+export function createSchoolWeek(
+  world = createSimulation(),
+  planning: 'adaptive' | 'legacy' = 'adaptive'
+) {
   const layout = createCastleLayout(world);
   const { hall, greatHall, staffRoom, library, courtyard, hospital,
     classrooms, electiveRooms } = layout;
@@ -56,7 +59,8 @@ export function createSchoolWeek(world = createSimulation()) {
     world.setDailyLife(id, {
       homeRoom: staffRoom, diningRoom: greatHall,
       style: index % 2 === 0 ? 'outgoing' : 'reserved',
-      interest: 'lessons'
+      interest: 'lessons',
+      ...(planning === 'adaptive' ? {schoolPlanning:'adaptive' as const} : {})
     });
     return { id, subject };
   });
@@ -95,7 +99,8 @@ export function createSchoolWeek(world = createSimulation()) {
           diningRoom: greatHall,
           leisureRoom: index === 0 ? library : index === 1 ? courtyard : dorms[house],
           style: index === 2 ? 'reserved' : 'outgoing',
-          interest: (['lessons', 'castle', 'hobbies'] as const)[index]!
+          interest: (['lessons', 'castle', 'hobbies'] as const)[index]!,
+          ...(planning === 'adaptive' ? {schoolPlanning:'adaptive' as const} : {})
         });
       }
     }

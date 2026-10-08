@@ -15,6 +15,8 @@ export type DailyLifePlan = {
   diningRoom: number;
   style: SocialStyle;
   interest: SocialTopic;
+  /** Opt-in distance-aware scheduling. Absent means legacy 20-minute lead. */
+  schoolPlanning?: 'adaptive';
 };
 export type MealMemory = { day: number; kind: MealKind; minute: number };
 export type ConversationMemory = {

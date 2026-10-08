@@ -4,6 +4,7 @@
  */
 import type { EntityId, Command, CommandResult, WorldEvent, Observation } from './Simulation.ts';
 import { currentLesson, registerAttendance } from './school-time.ts';
+import { nextSchoolJourney, feasibleMealJourney } from './school-planner.ts';
 import { nextRoomOnRoute } from './navigation.ts';
 import { decideInvestigation, type Assessment, type Trust } from './cognition.ts';
 import { spellDefinitions, type SpellId, type LearningRecord } from './spellcraft.ts';
@@ -85,10 +86,24 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       const room = currentRoom(actor);
       if (!timetable || room === null || timetable.priority !== 'lesson_first' ||
           has(actor, 'manual')) continue;
-      const lesson = currentLesson(timetable.records, minute);
-      if (!lesson) continue;
-      occupiedBySchool.add(actor);
-      travelTowardLesson(actor, room, lesson.room);
+      if (dailyPlans.get(actor)?.schoolPlanning === 'adaptive') {
+        const journey = nextSchoolJourney(timetable.records, minute, room, exits);
+        if (!journey || !journey.committed) continue;
+        const plan = dailyPlans.get(actor);
+        const meal = plan && !journey.inClass
+          ? feasibleMealJourney(minute, room, plan.diningRoom,
+              meals.get(actor) ?? [], journey.lesson, exits)
+          : null;
+        // A viable meal may precede class; the next pass executes the travel.
+        if (meal !== null) continue;
+        occupiedBySchool.add(actor);
+        travelTowardLesson(actor, room, journey.lesson.room);
+      } else {
+        const lesson = currentLesson(timetable.records, minute);
+        if (!lesson) continue;
+        occupiedBySchool.add(actor);
+        travelTowardLesson(actor, room, lesson.room);
+      }
     }
 
     // Basic daily needs have the same physical travel/action rules as classes.
@@ -106,7 +121,28 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       }
       const meal = mealAt(minute);
       const knownMeals = meals.get(actor) ?? [];
-      if (meal !== null && !ateMeal(knownMeals, dayOf(minute), meal)) {
+      if (plan.schoolPlanning === 'adaptive') {
+        const timeline = timetables.get(actor);
+        const journey = timeline
+          ? nextSchoolJourney(timeline.records, minute, room, exits) : null;
+        const opportunity = feasibleMealJourney(minute, room,
+          plan.diningRoom, knownMeals, journey?.lesson ?? null, exits);
+        if (opportunity) {
+          // We can walk before a meal window, but never eat before it starts.
+          const action: Command | null = room === plan.diningRoom
+            ? (meal === opportunity.kind
+              ? {type:'eat_meal',actor,kind:opportunity.kind} : null)
+            : (() => {
+                const next=nextRoomOnRoute(room,plan.diningRoom,exits);
+                return next === null ? null : passageAction(actor,room,next);
+              })();
+          if(action){
+            const result=execute(action);
+            decisions.push({actor,action,result});
+          }
+          continue;
+        }
+      } else if (meal !== null && !ateMeal(knownMeals, dayOf(minute), meal)) {
         const action: Command = room === plan.diningRoom
           ? { type: 'eat_meal', actor, kind: meal }
           : (() => {
