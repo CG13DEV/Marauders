@@ -18,6 +18,10 @@ import {
   schoolTime, validateTimetable, currentLesson, registerAttendance,
   type Lesson, type AttendanceRecord, type SchoolPriority
 } from './school-time.ts';
+import {
+  createSpellKnowledge, spellDefinitions, isSpellId,
+  type SpellId, type SpellStage, type LearningRecord
+} from './spellcraft.ts';
 
 export type EntityId = number;
 
@@ -27,7 +31,10 @@ export type Command =
   | { type: 'open_door'; actor: EntityId; door: EntityId }
   | { type: 'tell'; actor: EntityId; listener: EntityId; claim: Claim }
   | { type: 'inspect_object'; actor: EntityId; target: EntityId }
-  | { type: 'ask_about'; actor: EntityId; listener: EntityId; object: EntityId };
+  | { type: 'ask_about'; actor: EntityId; listener: EntityId; object: EntityId }
+  | { type: 'tutor_spell'; actor: EntityId; listener: EntityId; spell: SpellId }
+  | { type: 'practice_spell'; actor: EntityId; spell: SpellId; guide?: EntityId; intent: string; target: string; incantation: string }
+  | { type: 'cast_spell'; actor: EntityId; spell: SpellId; intent: string; target: string; incantation: string };
 
 export type WorldEvent =
   | { type: 'entity_moved'; actor: EntityId; from: EntityId; to: EntityId }
@@ -36,7 +43,9 @@ export type WorldEvent =
   | { type: 'testimony_delivered'; actor: EntityId; listener: EntityId; claim: Claim }
   | { type: 'object_inspected'; actor: EntityId; target: EntityId; broken: boolean }
   | { type: 'question_asked'; actor: EntityId; listener: EntityId; object: EntityId; answered: boolean }
-  | { type: 'lesson_attendance'; actor: EntityId; lessonId: string; status: 'on_time' | 'late' | 'missed'; minute: number };
+  | { type: 'lesson_attendance'; actor: EntityId; lessonId: string; status: 'on_time' | 'late' | 'missed'; minute: number }
+  | { type: 'spell_concept_learned'; actor: EntityId; spell: SpellId; source: 'lesson' | 'tutoring'; minute: number }
+  | { type: 'spell_executed'; actor: EntityId; spell: SpellId; mode: 'guided' | 'independent'; minute: number };
 
 /**
  * What a character is ALLOWED to know.
@@ -62,9 +71,14 @@ export type DoorRejection = 'unknown_door' | 'not_door' | 'not_near_door' | 'alr
 export type InspectRejection = 'cannot_see' | 'not_inspectable' | 'not_in_reach';
 export type QuestionRejection = 'listener_cannot_hear' | 'not_known' | 'cannot_hear' | 'not_colocated' | 'not_inspectable' | 'unknown_listener' | 'listener_not_character' | 'cannot_talk_to_self' | 'unknown_target';
 
+export type SpellRejection =
+  | 'unknown_spell' | 'not_understood' | 'guide_required'
+  | 'invalid_guide' | 'guide_unqualified' | 'pattern_mismatch' | 'not_practiced'
+  | 'speaker_cannot_hear' | 'student_cannot_hear' | 'already_understood';
+
 export type CommandResult =
   | { ok: true; events: readonly WorldEvent[] }
-  | { ok: false; reason: MoveRejection | BreakRejection | SocialRejection | DoorRejection | InspectRejection | QuestionRejection; events: readonly [] };
+  | { ok: false; reason: MoveRejection | BreakRejection | SocialRejection | DoorRejection | InspectRejection | QuestionRejection | SpellRejection; events: readonly [] };
 
 export type DoorOptions = {
   door: { key: string; label: string; open: boolean };
@@ -91,6 +105,8 @@ export function createSimulation() {
   const Guarded = {};
   const HasRoutine = {};
   const HasTimetable = {};
+  const Experimental = {};
+  const Illuminated = {};
   const Trusts = createRelation();
   const Distrusts = createRelation();
   const Name = { value: [] as string[] };
@@ -102,6 +118,7 @@ export function createSimulation() {
   const events: WorldEvent[] = [];
   const observationsByCharacter = new Map<EntityId, Observation[]>();
   const beliefsByCharacter = createBeliefStore();
+  const spellKnowledge = createSpellKnowledge();
   // Goals remember what has been attempted, not secret NPC locations.
   type Search = {
     object: EntityId;
@@ -147,6 +164,7 @@ export function createSimulation() {
     addComponent(ecs, eid, LocatedIn(initialRoom));
     observationsByCharacter.set(eid, []);
     beliefsByCharacter.register(eid);
+    spellKnowledge.register(eid);
     return eid;
   }
 
@@ -294,6 +312,40 @@ export function createSimulation() {
     return attendance(actor).filter(lesson => lesson.status === 'missed').length;
   }
 
+  /** Prior training is explicit scenario initialisation, never automatic from a claim. */
+  function seedSpellKnowledge(actor: EntityId, spell: SpellId, stage: Exclude<SpellStage, 'unaware'>): void {
+    if (tick > 0 || !isCharacter(actor) || !isSpellId(spell)) {
+      throw new Error('Prior learning must be configured before the first world tick');
+    }
+    spellKnowledge.learn(actor, spell, stage, { kind: 'prior_training' });
+  }
+
+  function setExperimenter(actor: EntityId, enabled: boolean): void {
+    if (!isCharacter(actor)) throw new Error('Experimenter must be a character');
+    if (enabled) addComponent(ecs, actor, Experimental);
+    else removeComponent(ecs, actor, Experimental);
+  }
+
+  function spellStage(actor: EntityId, spell: SpellId): SpellStage {
+    return spellKnowledge.stage(actor, spell);
+  }
+
+  function isIlluminated(actor: EntityId): boolean {
+    return isCharacter(actor) && hasComponent(ecs, actor, Illuminated);
+  }
+
+  function knowledgeGaps(actor: EntityId): SpellId[] {
+    if (!isCharacter(actor)) return [];
+    const lessons = timetables.get(actor)?.records ?? [];
+    const known = new Set<SpellId>();
+    for (const lesson of lessons) {
+      if (!lesson.spell || schoolTime(tick).absoluteMinute < lesson.startsAt + 10 ||
+          spellKnowledge.stage(actor, lesson.spell) !== 'unaware') continue;
+      known.add(lesson.spell);
+    }
+    return [...known];
+  }
+
   function assessment(observer: EntityId, object: EntityId): Assessment {
     if (!isCharacter(observer)) throw new Error('Assessment requires a character');
     return assessReports(object, beliefsByCharacter.read(observer),
@@ -359,6 +411,75 @@ export function createSimulation() {
     if (!hasComponent(ecs, command.actor, Character)) {
       return { ok: false, reason: 'not_character', events: [] };
     }
+    if (command.type === 'tutor_spell') {
+      if (!isSpellId(command.spell)) return { ok: false, reason: 'unknown_spell', events: [] };
+      if (!isCharacter(command.listener) || command.actor === command.listener) {
+        return { ok: false, reason: 'invalid_guide', events: [] };
+      }
+      if (currentRoom(command.actor) === null || currentRoom(command.actor) !== currentRoom(command.listener)) {
+        return { ok: false, reason: 'not_colocated', events: [] };
+      }
+      if (!hasComponent(ecs, command.actor, Hearing)) {
+        return { ok: false, reason: 'speaker_cannot_hear', events: [] };
+      }
+      if (!hasComponent(ecs, command.listener, Hearing)) {
+        return { ok: false, reason: 'student_cannot_hear', events: [] };
+      }
+      if (spellKnowledge.stage(command.actor, command.spell) === 'unaware') {
+        return { ok: false, reason: 'not_understood', events: [] };
+      }
+      if (spellKnowledge.stage(command.listener, command.spell) !== 'unaware') {
+        return { ok: false, reason: 'already_understood', events: [] };
+      }
+      spellKnowledge.learn(command.listener, command.spell, 'conceptual',
+        { kind: 'tutoring', teacher: command.actor, minute: schoolTime(tick).absoluteMinute });
+      const event: WorldEvent = {
+        type: 'spell_concept_learned', actor: command.listener,
+        spell: command.spell, source: 'tutoring', minute: schoolTime(tick).absoluteMinute
+      };
+      emit(event);
+      return { ok: true, events: [event] };
+    }
+
+    if (command.type === 'practice_spell' || command.type === 'cast_spell') {
+      if (!isSpellId(command.spell)) return { ok: false, reason: 'unknown_spell', events: [] };
+      const pattern = spellDefinitions[command.spell];
+      if (command.intent !== pattern.intent || command.target !== pattern.semanticTarget ||
+          command.incantation !== pattern.incantation) {
+        return { ok: false, reason: 'pattern_mismatch', events: [] };
+      }
+      const stage = spellKnowledge.stage(command.actor, command.spell);
+      if (stage === 'unaware') return { ok: false, reason: 'not_understood', events: [] };
+      if (command.type === 'cast_spell' && stage !== 'independent') {
+        return { ok: false, reason: 'not_practiced', events: [] };
+      }
+      if (command.type === 'practice_spell' && stage === 'conceptual') {
+        if (command.guide === undefined) return { ok: false, reason: 'guide_required', events: [] };
+        if (!isCharacter(command.guide) || command.guide === command.actor ||
+            currentRoom(command.actor) !== currentRoom(command.guide)) {
+          return { ok: false, reason: 'invalid_guide', events: [] };
+        }
+        if (spellKnowledge.stage(command.guide, command.spell) !== 'independent') {
+          return { ok: false, reason: 'guide_unqualified', events: [] };
+        }
+      }
+      if (pattern.operation === 'emit_light') addComponent(ecs, command.actor, Illuminated);
+      if (command.type === 'practice_spell' && stage === 'conceptual') {
+        spellKnowledge.learn(command.actor, command.spell, 'guided',
+          { kind: 'guided_practice', teacher: command.guide!, minute: schoolTime(tick).absoluteMinute });
+      } else if (command.type === 'practice_spell' && stage === 'guided') {
+        spellKnowledge.learn(command.actor, command.spell, 'independent',
+          { kind: 'independent_practice', minute: schoolTime(tick).absoluteMinute });
+      }
+      const event: WorldEvent = {
+        type: 'spell_executed', actor: command.actor, spell: command.spell,
+        mode: command.type === 'practice_spell' && stage === 'conceptual' ? 'guided' : 'independent',
+        minute: schoolTime(tick).absoluteMinute
+      };
+      emit(event);
+      return { ok: true, events: [event] };
+    }
+
     if (command.type === 'open_door') {
       if (!entityExists(ecs, command.door)) {
         return { ok: false, reason: 'unknown_door', events: [] };
@@ -638,6 +759,25 @@ export function createSimulation() {
       travelTowardLesson(actor, room, lesson.room);
     }
 
+    // A curious experimenter can apply a genuinely learned pattern.
+    // They must previously have performed guided practice; no secret unlock.
+    for (const actor of query(ecs, [Character, Experimental])) {
+      if (occupiedBySchool.has(actor) || decisions.some(d => d.actor === actor)) continue;
+      const ready = spellKnowledge.history(actor)
+        .filter(r => r.stage === 'guided')
+        .map(r => r.spell)
+        .find(spell => spellKnowledge.stage(actor, spell) === 'guided');
+      if (ready === undefined) continue;
+      const definition = spellDefinitions[ready];
+      const action: Command = {
+        type: 'practice_spell', actor, spell: ready,
+        intent: definition.intent, target: definition.semanticTarget,
+        incantation: definition.incantation
+      };
+      const result = execute(action);
+      decisions.push({ actor, action, result });
+    }
+
     // Independent routines produce movement from explicit destination goals.
     // They use the castle's public topology, never hidden character locations.
     for (const actor of query(ecs, [Character, HasRoutine])) {
@@ -666,11 +806,25 @@ export function createSimulation() {
       }
     }
     for (const [actor, timetable] of timetables) {
-      for (const record of registerAttendance(timetable.records, minute, currentRoom(actor))) {
+      // Register arrival before teaching. Being marked present at some point in
+      // the lesson is not enough: the pupil must be there at the teaching tick.
+      const presentRoom = currentRoom(actor);
+      for (const record of registerAttendance(timetable.records, minute, presentRoom)) {
         emit({
           type: 'lesson_attendance', actor, lessonId: record.id,
           status: record.status as 'on_time' | 'late' | 'missed',
           minute
+        });
+      }
+      for (const lesson of timetable.records) {
+        if (!lesson.spell || minute !== lesson.startsAt + 10 ||
+            presentRoom !== lesson.room || lesson.status === 'pending' ||
+            lesson.status === 'missed' ||
+            lesson.arrivedAt === undefined || lesson.arrivedAt > minute) continue;
+        const learned = spellKnowledge.learn(actor, lesson.spell, 'conceptual',
+          { kind: 'lesson', lessonId: lesson.id, minute });
+        if (learned) emit({
+          type: 'spell_concept_learned', actor, spell: lesson.spell, source: 'lesson', minute
         });
       }
     }
@@ -690,7 +844,9 @@ export function createSimulation() {
   return {
     room, character, fragileObject, connect, execute, step,
     setTrust, trustOf, setInquisitive, setSocialInvestigator, setGuarded, setRoutine, assessment,
-    setTimetable, attendance, learningDebt,
+    setTimetable, attendance, learningDebt, knowledgeGaps,
+    seedSpellKnowledge, spellStage, setExperimenter, isIlluminated,
+    learningHistory: (actor: EntityId): LearningRecord[] => spellKnowledge.history(actor),
     tick: () => tick,
     clock: () => schoolTime(tick),
     beliefs: (observer: EntityId): Belief[] => beliefsByCharacter.read(observer),
