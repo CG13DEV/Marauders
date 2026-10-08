@@ -98,7 +98,8 @@ test('a person can prioritize a promise over class, or consciously keep school f
   assert.equal(school.w.meetingLedger()[0]?.status,'expired');
   assert.equal(school.w.promiseHistory(school.pupil).at(-1)?.kind,'waited_alone');
   assert.equal(promise.w.meetingLedger()[0]?.status,'kept');
-  assert.equal(promise.w.attendance(promise.remus)[0]?.status,'missed');
+  assert.equal(promise.w.attendance(promise.remus)[0]?.status,'late');
+  assert.ok((promise.w.attendance(promise.remus)[0]?.arrivedAt ?? 0)>520);
 });
 
 test('spell explanation requires the teacher physically present at teaching moment',()=>{
