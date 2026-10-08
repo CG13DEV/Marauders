@@ -15,6 +15,7 @@ npm run social-demo
 npm run agency-demo
 npm run living-demo
 npm run school-day-demo
+npm run learning-demo
 npm start
 npm test
 npm run typecheck
@@ -97,8 +98,22 @@ Run `npm run school-day-demo`. The simulation advances **ten in-world minutes pe
 
 **[GAME] MVP boundaries:** attendance is recorded on first arrival inside a lesson window (or when the window ends without arrival). There is no teacher, lesson content, detention, knowledge acquisition, class participation, or early-departure penalty yet. The timetable covers **day one only** and does not repeat automatically on subsequent days. Ten-minute ticks can only distinguish arrival to that granularity. School priorities and subject choices are configured explicitly; they are not yet derived from evolving goals or emotions.
 
+## Experiment #7: learning is not spell mastery
+
+Run `npm run learning-demo`.
+
+- Optional `spell: 'lumos'` on a lesson provides **conceptual knowledge at the teaching tick** (`startsAt + 10 minutes`) only if the pupil is physically in class. Being recorded as late does **not** retroactively confer missed teaching.
+- `world.learningHistory(character)` records concrete stages and origins: `conceptual`, `guided`, `independent`. `world.knowledgeGaps(character)` identifies specific missed spell concepts, independent of the existing attendance-based `learningDebt`.
+- `tutor_spell` lets a physically present, knowledgeable pupil explain theory to a second pupil who can hear. The teacher must know the pattern; the learner receives concepts, **not the ability to cast**.
+- `practice_spell` validates an explicit spell pattern (`intent + semantic target + incantation`). A novice at the conceptual stage needs a nearby guide with independent execution experience. Successful guided practice yields `guided`.
+- An `Experimental` ECS trait allows a pupil with prior guided success to attempt the same pattern autonomously on a later eligible tick. Successful rehearsal advances to `independent`; only then is `cast_spell` permitted without the practice path.
+- The initial spell `Lumos` creates an `Illuminated` ECS state on the caster. This is a minimal physical effect; no illumination geometry, concentration costs, duration, failure probability, targeting physics or wand model yet.
+- Prior knowledge for a teacher can be seeded at scenario construction time via `seedSpellKnowledge`; NPCs never learn hidden information from the world event log.
+
+**[GAME]** This is an executable, deliberately constrained subset of the spell progression in `docs/game-design/progression.md` and semantic pattern model in `docs/lore/lore-and-magic.md`. Understanding, guided execution, and independent performance are distinct states, **not RPG experience levels**. Instruction currently occurs at one fixed lecture tick; tutor explanations are instant validated commands, and physical light is represented only as a marker.
+
 ## What next?
 
-The next meaningful step is lesson content and learned abilities: each scheduled class can expose concrete knowledge only to students actually present, making attendance consequential beyond a counter. After that we can model shared social plans, obligations and more convincing priority negotiation.
+Add teachable *principles* beyond named spells, actual practice conditions (focus, target, distance, fatigue) and a teacher/lesson activity system. Learning should influence NPC decisions and magical experiments without allowing AI to rewrite world truth.
 
 The source of truth for design remains the main repository `docs/` directory. This code is a small executable [GAME] model, not a statement of canon.
