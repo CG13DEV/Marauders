@@ -1064,13 +1064,13 @@ export function createSimulation() {
       };
       emit(event);
       // Ordinary conversations pass one known incident, not a global log.
-      const a=[...(pointNews.get(command.actor)??[])].reverse()
+      const learnedByActor=[...(pointNews.get(command.actor)??[])].reverse()
         .find(n=>!pointNews.get(command.listener)?.some(x=>x.decisionId===n.decisionId));
-      const b=[...(pointNews.get(command.listener)??[])].reverse()
+      const learnedByListener=[...(pointNews.get(command.listener)??[])].reverse()
         .find(n=>!pointNews.get(command.actor)?.some(x=>x.decisionId===n.decisionId));
-      const speaker=a?command.actor:b?command.listener:null;
-      const listener=a?command.listener:b?command.actor:null;
-      const known=a??b;
+      const speaker=learnedByActor?command.actor:learnedByListener?command.listener:null;
+      const listener=learnedByActor?command.listener:learnedByListener?command.actor:null;
+      const known=learnedByActor??learnedByListener;
       if(speaker!==null&&listener!==null&&known){
         const decision=pointLedger.find(d=>d.id===known.decisionId);
         if(decision){
