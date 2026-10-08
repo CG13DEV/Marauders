@@ -64,7 +64,9 @@ test('the week schedules dining travel, evenings and rest without missing lesson
   assert.ok(report.pupilConversations>=84);
   assert.ok(world.events().some(e=>e.type==='conversation_shared'));
   assert.ok(world.events().some(e=>e.type==='rest_recorded'));
-  assert.equal(world.currentRoom(first.id),scene.dorms[first.house]);
+  // At the end of 1008 ticks it is already 08:00 next Monday;
+  // this pupil may be travelling toward the following breakfast.
+  assert.equal(world.restHistory(first.id).length,7);
 });
 
 test('a complete daily-life checkpoint resumes with exact memories and decisions', () => {
