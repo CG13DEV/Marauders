@@ -298,6 +298,10 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
           transitionIntention(actor,goal.id,'active');
           const action=passageAction(actor,room,next);
           const result=execute(action);decisions.push({actor,action,result});
+          // Arrival is a physical fact of this tick, not a second action
+          // deferred until a subsequent decision window.
+          if(result.ok && action.type==='move' && next===goal.destination)
+            transitionIntention(actor,goal.id,'completed');
         }
         continue;
       }

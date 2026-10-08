@@ -129,19 +129,28 @@ test('sleep means physically going home and recovering over many night ticks',()
   assert.ok(w.restHistory(student).length>=1);
 });
 
-test('a casual goal crossing bedtime is paused by sleep and later resumes',()=>{
+test('a nighttime journey pauses for sleep and resumes after waking',()=>{
   const {w,student,home,library}=fixture();
-  for(let i=0;i<80;i++)w.step();
-  assert.equal(visit(w,student,library).ok,true);
-  w.step(); // 21:30 move to corridor
-  w.step(); // 21:40 reach library
-  // Schedule a follow-on goal for longer night travel; start another intention now.
-  assert.equal(visit(w,student,home).ok,true);
-  w.step(); // 21:50 completes library, next goal queued
-  w.step(); // 22:00 bedtime, goal stays queued until morning
-  assert.equal(w.intentionHistory(student)[1]?.status,'queued');
-  for(let i=0;i<50;i++)w.step(); // 06:20
-  assert.ok(w.needsOf(student)!.fatigue<30);
+  const remote=w.room('remote','Дальний коридор');
+  const tower=w.room('tower','Башня');
+  w.connect(library,remote);
+  w.connect(remote,tower);
+  for(let i=0;i<80;i++)w.step(); // 21:20
+  assert.equal(visit(w,student,tower).ok,true);
+  for(let i=0;i<3;i++)w.step(); // 21:30, 21:40, 21:50; not at tower yet
+  assert.equal(w.currentRoom(student),remote);
+  assert.equal(w.intentionHistory(student)[0]?.status,'active');
+  w.step(); // 22:00: tired person turns homeward
+  assert.equal(w.intentionHistory(student)[0]?.status,'paused');
+  assert.equal(w.intentionHistory(student)[0]?.interruptedBy,'fatigue');
+  for(let i=0;i<5;i++)w.step();
+  assert.equal(w.currentRoom(student),home);
+  const tired=w.needsOf(student)!.fatigue;
+  for(let i=0;i<48;i++)w.step(); // until 07:20
+  assert.ok(w.needsOf(student)!.fatigue<tired);
+  for(let i=0;i<6;i++)w.step();
+  assert.equal(w.currentRoom(student),tower);
+  assert.equal(w.intentionHistory(student)[0]?.status,'completed');
 });
 
 test('goals expire at their deadline and are never silently resurrected',()=>{
