@@ -1291,8 +1291,8 @@ export function createSimulation() {
       rests: [...rests.entries()],
       ...([...intentions.values()].some(goals=>goals.length)
         ? {intentions:[...intentions.entries()].filter(([,goals])=>goals.length)
-            .map(([actor,goals])=>[actor,goals.map(g=>({...g}))]
-              as [number,PersonalIntention[]])}:{}),
+            .map(([actor,goals])=>([actor,goals.map(g=>({...g}))]
+              as [number,PersonalIntention[]]))}:{}),
       ...(bodilyNeeds.size?{bodilyNeeds:[...bodilyNeeds.entries()]
         .map(([actor,needs])=>[actor,{...needs}] as [number,BodilyNeeds])}:{}),
       ...(commitments.length ? { commitments: commitments.map(m=>({...m})) } : {}),

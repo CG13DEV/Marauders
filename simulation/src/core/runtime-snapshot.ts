@@ -139,8 +139,8 @@ export function remapRuntimeSnapshot(snapshot: RuntimeSnapshot, at: (id: number)
       ] as [number, CommitmentMemory[]])
     }),
     ...(snapshot.intentions===undefined?{}:{intentions:snapshot.intentions.map(
-      ([actor,goals])=>[at(actor),goals.map(g=>({...g,destination:at(g.destination)}))]
-        as [number,PersonalIntention[]]
+      ([actor,goals])=>([at(actor),goals.map(g=>({...g,destination:at(g.destination)}))]
+        as [number,PersonalIntention[]])
     )}),
     ...(snapshot.bodilyNeeds===undefined?{}:{bodilyNeeds:snapshot.bodilyNeeds.map(
       ([actor,needs])=>[at(actor),{...needs}] as [number,BodilyNeeds]
