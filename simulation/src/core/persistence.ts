@@ -72,7 +72,8 @@ function remapCommand(command: Command, ids: Map<number, number>): Command {
     case 'cast_spell': return { ...command, actor: at(command.actor) };
     case 'eat_meal': return { ...command, actor: at(command.actor) };
     case 'intend_visit': return {...command,actor:at(command.actor),destination:at(command.destination)};
-    case 'cancel_intention': return {...command,actor:at(command.actor)};
+    case 'cancel_intention': case 'intend_study': return {...command,actor:at(command.actor)};
+    case 'intend_investigate': return {...command,actor:at(command.actor),object:at(command.object)};
     case 'chat': return { ...command, actor: at(command.actor), listener: at(command.listener) };
     case 'promise_meeting': case 'offer_meeting': return {
       ...command,actor:at(command.actor),

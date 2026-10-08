@@ -140,7 +140,10 @@ export function remapRuntimeSnapshot(snapshot: RuntimeSnapshot, at: (id: number)
     }),
     ...(snapshot.intentions===undefined?{}:{intentions:snapshot.intentions.map(
       ([actor,goals]):[number,PersonalIntention[]]=>[
-        at(actor),goals.map(g=>({...g,destination:at(g.destination)}))
+        at(actor),goals.map(g=>({
+          ...g,destination:at(g.destination),
+          ...(g.object===undefined?{}:{object:at(g.object)})
+        }))
       ]
     )}),
     ...(snapshot.bodilyNeeds===undefined?{}:{bodilyNeeds:snapshot.bodilyNeeds.map(
