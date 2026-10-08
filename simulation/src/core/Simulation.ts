@@ -1514,7 +1514,7 @@ export function createSimulation() {
       socialInvestigator: SociableInvestigator, experimental: Experimental,
       routine: HasRoutine, dailyLife: HasDailyLife
     };
-    return runWorldStep({
+    const decisions=runWorldStep({
       advanceClock: () => schoolTime(++tick).absoluteMinute,
       actors: trait => Array.from(query(ecs, [Character, agentComponents[trait]])),
       has: (actor, flag) => hasComponent(ecs, actor, flags[flag]),
@@ -1530,11 +1530,75 @@ export function createSimulation() {
       pendingTutoring, attemptedTutors, searches, timetables, routines,
       dailyPlans, meals, conversations, rests,
       commitments, commitmentMemories, intentions, bodilyNeeds,
-      transitionIntention,
+      toiletNeeds,transitionIntention,
       resolveMeetings,
       spellKnowledge, beliefsByCharacter, setRoutine, emit,
       recordDailyRest
     });
+    // One validated action per patroller per ten-minute tick. Observations
+    // are personal; nobody reads world.events() to discover a remote crime.
+    const passageAction=(actor:EntityId,room:EntityId,next:EntityId):Command=>{
+      const door=doors.get(pairKey(room,next));
+      return door!==undefined&&Door.open[door]===0
+        ?{type:'open_door',actor,door}:{type:'move',actor,destination:next};
+    };
+    for(const [actor,patrol] of patrolPlans){
+      if(hasComponent(ecs,actor,ManuallyControlled)||
+         decisions.some(d=>d.actor===actor))continue;
+      const room=currentRoom(actor);
+      if(room===null)continue;
+      const obs=observationsByCharacter.get(actor)??[];
+      const sightings=obs.filter(o=>o.kind==='witnessed_breakage'||
+        (o.kind==='inspected_object'&&o.broken)).length;
+      let action:Command|null=null;
+      if(patrol.kind==='animal'&&sightings>patrol.sentSignals){
+        if(room===currentRoom(patrol.partner!))
+          action={type:'signal_incident',actor,listener:patrol.partner!};
+        else if(room!==patrol.rendezvous){
+          const next=nextRoomOnRoute(room,patrol.rendezvous!,
+            place=>getRelationTargets(ecs,place,PassageTo));
+          if(next!==null)action=passageAction(actor,room,next);
+        }
+      }else if(patrol.kind==='caretaker'){
+        const claims=beliefsByCharacter.read(actor).filter(b=>
+          b.evidence.kind==='vision'&&b.claim.kind==='broke_object');
+        const teachers=occupants(room).filter(id=>id!==actor&&pointAuthorities.has(id));
+        outer:for(const claim of claims)for(const teacher of teachers){
+          const fingerprint=claim.claim.object+':'+teacher+':'+claim.claim.culprit;
+          if(patrol.reportedClaims.includes(fingerprint))continue;
+          const report:Command={type:'tell',actor,listener:teacher,claim:claim.claim};
+          const result=execute(report);
+          decisions.push({actor,action:report,result});
+          if(result.ok)patrol.reportedClaims.push(fingerprint);
+          break outer;
+        }
+      }
+      if(decisions.some(d=>d.actor===actor))continue;
+      if(!action&&patrol.kind==='animal'&&sightings>patrol.sentSignals&&
+         room===patrol.rendezvous)continue;
+      // Inspect first; even the broken flag isn't consulted until inspected.
+      if(!action)for(const object of query(ecs,[Fragile,LocatedIn(room)])){
+        if(!obs.some(o=>o.kind==='inspected_object'&&o.target===object)){
+          action={type:'inspect_object',actor,target:object};break;
+        }
+      }
+      if(!action){
+        const waypoint=patrol.waypoints[patrol.waypoint]!;
+        if(room===waypoint)
+          patrol.waypoint=(patrol.waypoint+1)%patrol.waypoints.length;
+        const goal=patrol.waypoints[patrol.waypoint]!;
+        if(room!==goal){
+          const next=nextRoomOnRoute(room,goal,
+            place=>getRelationTargets(ecs,place,PassageTo));
+          if(next!==null)action=passageAction(actor,room,next);
+        }
+      }
+      if(action){
+        const result=execute(action);
+        decisions.push({actor,action,result});
+      }
+    }
+    return decisions;
   }
 
   function occupants(place: EntityId): EntityId[] {
@@ -1609,6 +1673,10 @@ export function createSimulation() {
       conversations: [...conversations.entries()],
       rests: [...rests.entries()],
       ...(intentionEntries().length?{intentions:intentionEntries()}:{} ),
+      ...(toiletNeeds.size?{toiletNeeds:[...toiletNeeds.entries()]
+        .map(([actor])=>[actor,toiletState(actor)!] as [number,ToiletNeed])}:{}),
+      ...(patrolPlans.size?{patrolPlans:[...patrolPlans.entries()]
+        .map(([actor])=>[actor,patrolState(actor)!] as [number,PatrolPlan])}:{}),
       ...(bodilyNeeds.size?{bodilyNeeds:[...bodilyNeeds.entries()]
         .map(([actor,needs])=>[actor,{...needs}] as [number,BodilyNeeds])}:{}),
       ...(commitments.length ? { commitments: commitments.map(m=>({...m})) } : {}),
@@ -1696,6 +1764,28 @@ export function createSimulation() {
         throw new Error('Invalid saved house news');
       pointNews.set(id,items.map(n=>({...n})));
     }
+    toiletNeeds.clear();
+    for(const [actor,need] of state.toiletNeeds??[]){
+      if(!isCharacter(actor)||!need.bathrooms.length||
+        need.bathrooms.some(r=>!isRoom(r)||roomDetails.get(r)?.kind!=='bathroom')||
+        !Number.isFinite(need.urgency)||need.urgency<0||need.urgency>100||
+        !Number.isSafeInteger(need.visits)||need.visits<0)
+        throw new Error('Invalid saved toilet state');
+      toiletNeeds.set(actor,{...need,bathrooms:[...need.bathrooms]});
+    }
+    patrolPlans.clear();
+    for(const [actor,plan] of state.patrolPlans??[]){
+      if(!isCharacter(actor)||!['caretaker','animal'].includes(plan.kind)||
+        !plan.waypoints.length||plan.waypoints.some(r=>!isRoom(r))||
+        !Number.isSafeInteger(plan.waypoint)||plan.waypoint<0||
+        plan.waypoint>=plan.waypoints.length||
+        !Number.isSafeInteger(plan.sentSignals)||plan.sentSignals<0||
+        (plan.partner!==undefined&&!isCharacter(plan.partner))||
+        (plan.rendezvous!==undefined&&!isRoom(plan.rendezvous)))
+        throw new Error('Invalid saved patrol');
+      patrolPlans.set(actor,{...plan,waypoints:[...plan.waypoints],
+        reportedClaims:[...plan.reportedClaims]});
+    }
     const componentFlags = {
       vision: Vision, hearing: Hearing, inquisitive: Inquisitive,
       socialInvestigator: SociableInvestigator, guarded: Guarded,
@@ -1776,6 +1866,7 @@ export function createSimulation() {
 
   return {
     room, roomInfo, character, fragileObject, connect, execute, step,
+    configureToilet,toiletState,configurePatrol,patrolState,
     registerHouse, grantPointAuthority, houseOf, housePoints, pointHistory,
     knownPointNews, pointReactions,
     captureRuntime, hydrateRuntime,
