@@ -93,7 +93,7 @@ export function remapRuntimeSnapshot(snapshot: RuntimeSnapshot, at: (id: number)
     beliefs: snapshot.beliefs.map(([id, items]) => [at(id), items.map(x => remapBelief(x, at))]),
     learning: snapshot.learning.map(([id, items]) => [at(id), items.map(x => remapLearning(x, at))]),
     schedules: snapshot.schedules.map(([id, value]) => [at(id), {
-      priority: value.priority, records: value.records.map(record => ({ ...record, room: at(record.room) }))
+      records: value.records.map(record => ({ ...record, room: at(record.room) })), priority: value.priority
     }]),
     routines: snapshot.routines.map(([id, path]) => [at(id), path.map(at)]),
     searches: snapshot.searches.map(([id, search]) => [at(id), {
