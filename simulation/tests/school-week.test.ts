@@ -22,10 +22,10 @@ test('full population has seven cohorts, four houses and a noncolliding teacher 
 
 test('one simulated teaching week runs, advances time and records curricula for every cohort', () => {
   const s = createSchoolWeek();
-  for (let tick=0;tick<6*24*5;tick++) s.world.step();
+  for (let tick=0;tick<6*24*7;tick++) s.world.step();
   const result=reportSchoolWeek(s);
-  assert.equal(result.elapsedTicks,720);
-  assert.equal(result.elapsedDays,5);
+  assert.equal(result.elapsedTicks,1008);
+  assert.equal(result.elapsedDays,7);
   assert.equal(result.pupils,84);
   assert.equal(result.pupilLessonSlots,1260);
   assert.equal(result.teacherLessonSlots,105);

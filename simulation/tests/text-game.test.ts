@@ -4,7 +4,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createTextSession } from '../src/cli/text-game.ts';
-import { restoreSimulation, serializeSimulation } from '../src/core/persistence.ts';
+import { restoreSimulation, serializeCheckpoint, serializeSimulation } from '../src/core/persistence.ts';
 
 test('player stays player-controlled while pupils independently follow school routines', () => {
   const session = createTextSession();
@@ -46,13 +46,13 @@ test('a real disk JSON file loads into a fresh text client and keeps gameplay ca
     first.respond('go corridor');
     first.respond('go classroom');
     first.respond('wait 2');
-    await writeFile(filename, serializeSimulation(first.world()), 'utf8');
+    await writeFile(filename, serializeCheckpoint(first.world()), 'utf8');
     const second = createTextSession(restoreSimulation(await readFile(filename, 'utf8')));
-    assert.equal(second.world().snapshot().audit, first.world().snapshot().audit);
+    assert.deepEqual(second.world().captureRuntime(), first.world().captureRuntime());
     assert.equal(second.world().spellStage(second.world().id('james')!, 'lumos'), 'conceptual');
     first.respond('practice lumos professor');
     second.respond('practice lumos professor');
-    assert.equal(first.world().snapshot().audit, second.world().snapshot().audit);
+    assert.deepEqual(first.world().captureRuntime(), second.world().captureRuntime());
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

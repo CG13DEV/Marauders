@@ -1,7 +1,7 @@
 import { createInterface } from 'node:readline';
 import { readFile, writeFile } from 'node:fs/promises';
 import { createTextSession } from './text-game.ts';
-import { restoreSimulation, serializeSimulation } from '../core/persistence.ts';
+import { restoreSimulation, serializeCheckpoint } from '../core/persistence.ts';
 
 const session = createTextSession();
 
@@ -14,9 +14,9 @@ if (process.argv.includes('--demo')) {
     console.log('> ' + command);
     console.log(session.respond(command));
   }
-  const save = serializeSimulation(session.world());
+  const save = serializeCheckpoint(session.world());
   const resumed = restoreSimulation(save);
-  if (resumed.snapshot().audit !== session.world().snapshot().audit)
+  if (JSON.stringify(resumed.captureRuntime()) !== JSON.stringify(session.world().captureRuntime()))
     throw new Error('Save/load failed during text-game demo');
   session.replaceWorld(resumed);
   console.log('Сохранение восстановлено: ' + session.status());
@@ -35,7 +35,7 @@ if (process.argv.includes('--demo')) {
       if (command === 'save') {
         if (!path) console.log('Укажи путь: save my-school.json');
         else {
-          await writeFile(path, serializeSimulation(session.world()), 'utf8');
+          await writeFile(path, serializeCheckpoint(session.world()), 'utf8');
           console.log('Сохранено: ' + path);
         }
       } else if (command === 'load') {
