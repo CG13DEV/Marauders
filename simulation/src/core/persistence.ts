@@ -11,6 +11,7 @@ import type { DoorOptions } from './Simulation.ts';
 import type { Trust } from './cognition.ts';
 import type { SpellId, SpellStage } from './spellcraft.ts';
 import type { Lesson, SchoolPriority } from './school-time.ts';
+import { remapRuntimeSnapshot, type RuntimeSnapshot } from './runtime-snapshot.ts';
 
 type EntityCreation =
   | { kind: 'room'; key: string; label: string; id: number }
@@ -26,6 +27,15 @@ type Operation = EntityCreation
   | { kind: 'setRoutine'; actor: number; destinations: number[] }
   | { kind: 'setTimetable'; actor: number; lessons: Lesson[]; priority?: SchoolPriority }
   | { kind: 'seedSpellKnowledge'; actor: number; spell: SpellId; stage: Exclude<SpellStage, 'unaware'> };
+
+export type SavedCheckpointV2 = {
+  format: 'marauders.checkpoint';
+  version: 2;
+  /** Entity creation and topology only. No historical actions or ticks. */
+  setup: EntityCreation[];
+  /** Full materialized runtime, including personal memories and goals. */
+  runtime: RuntimeSnapshot;
+};
 
 export type SavedSimulationV1 = {
   format: 'marauders.headless';
@@ -121,6 +131,7 @@ function auditOf(world: Simulation, operations: readonly Operation[]): string {
 }
 
 function createFacade(world: Simulation, operations: Operation[]) {
+  let checkpointRooted = false;
   // All externally initiated mutations go through this boundary. Commands
   // initiated by world.step() stay internal, so nothing is double-recorded.
   const facade = {
@@ -199,7 +210,21 @@ function createFacade(world: Simulation, operations: Operation[]) {
       world.seedSpellKnowledge(actor, spell, stage);
       operations.push({ kind: 'seedSpellKnowledge', actor, spell, stage });
     },
+    /** Materialized checkpoint: never replays past ticks upon restoration. */
+    checkpoint(): SavedCheckpointV2 {
+      const setup = operations.filter((op): op is EntityCreation =>
+        op.kind === 'room' || op.kind === 'character' ||
+        op.kind === 'fragileObject' || op.kind === 'connect');
+      return {
+        format: 'marauders.checkpoint', version: 2,
+        setup: copy(setup), runtime: world.captureRuntime()
+      };
+    },
+    markCheckpointRooted() { checkpointRooted = true; },
+    isCheckpointRooted() { return checkpointRooted; },
     snapshot(): SavedSimulationV1 {
+      if (checkpointRooted) throw new Error(
+        'A materialized checkpoint has no complete replay journal; use checkpoint()');
       return { format: 'marauders.headless', version: 1, operations: copy(operations),
         audit: auditOf(world, operations) };
     }
@@ -214,12 +239,59 @@ export function createPersistentSimulation() {
 }
 
 /** JSON is portable: persist bytes using a caller-owned filesystem or DB. */
+export function serializeCheckpoint(world: PersistentSimulation): string {
+  return JSON.stringify(world.checkpoint());
+}
+
 export function serializeSimulation(world: PersistentSimulation): string {
-  return JSON.stringify(world.snapshot());
+  return world.isCheckpointRooted()
+    ? serializeCheckpoint(world) : JSON.stringify(world.snapshot());
+}
+
+/** Restore static entity graph then hydrate all mutable state; O(current world size). */
+export function restoreCheckpoint(serialized: string | SavedCheckpointV2): PersistentSimulation {
+  const save: SavedCheckpointV2 = typeof serialized === 'string' ? JSON.parse(serialized) : copy(serialized);
+  if (save?.format !== 'marauders.checkpoint' || save.version !== 2 ||
+      !Array.isArray(save.setup) || !save.runtime ||
+      !Array.isArray(save.runtime.entityKeys)) {
+    throw new Error('Unsupported or invalid checkpoint format');
+  }
+  const restored = createPersistentSimulation();
+  const ids = new Map<number, number>();
+  const at = (id: number) => remapId(id, ids);
+  for (const op of save.setup) {
+    switch (op.kind) {
+      case 'room': ids.set(op.id, restored.room(op.key, op.label)); break;
+      case 'character':
+        ids.set(op.id, restored.character(op.key, op.label, at(op.initialRoom), op.senses));
+        break;
+      case 'fragileObject':
+        ids.set(op.id, restored.fragileObject(op.key, op.label, at(op.initialRoom)));
+        break;
+      case 'connect': {
+        const newDoor = restored.connect(at(op.a), at(op.b), op.options);
+        if (op.doorId !== undefined) {
+          if (newDoor === undefined) throw new Error('Missing checkpoint door');
+          ids.set(op.doorId, newDoor);
+        }
+        break;
+      }
+      default: throw new Error('Checkpoint setup must contain only entity creation');
+    }
+  }
+  const state = remapRuntimeSnapshot(save.runtime, at);
+  restored.hydrateRuntime(state);
+  if (JSON.stringify(restored.captureRuntime()) !== JSON.stringify(state)) {
+    throw new Error('Materialized checkpoint diverged during hydration');
+  }
+  restored.markCheckpointRooted();
+  return restored;
 }
 
 export function restoreSimulation(serialized: string | SavedSimulationV1): PersistentSimulation {
   const save: SavedSimulationV1 = typeof serialized === 'string' ? JSON.parse(serialized) : copy(serialized);
+  if (save?.format === 'marauders.checkpoint' && save.version === 2)
+    return restoreCheckpoint(save as SavedCheckpointV2);
   if (save?.format !== 'marauders.headless' || save.version !== 1 ||
       !Array.isArray(save.operations) || typeof save.audit !== 'string') {
     throw new Error('Unsupported or invalid Marauders save format');
