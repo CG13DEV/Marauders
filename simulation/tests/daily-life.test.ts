@@ -113,6 +113,7 @@ test('legacy V1 journal replays meals and conversations without rewriting belief
 test('social history in text play is produced by the same validated world command', async () => {
   const { createTextSession } = await import('../src/cli/text-game.ts');
   const game=createTextSession();
+  game.world().setManualControl(game.world().id('peter')!,true);
   assert.match(game.respond('chat peter hobbies'),/Общая история сохранена/);
   assert.equal(game.world().conversationHistory(game.world().id('james')!).length,1);
   assert.match(game.respond('chat peter hobbies'),/already_chatted/);
