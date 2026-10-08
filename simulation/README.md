@@ -93,7 +93,7 @@ Run `npm run school-day-demo`. The simulation advances **ten in-world minutes pe
 - Movement and door-opening use the same validated ECS command pipeline as before; disconnected classrooms cannot be reached by teleportation.
 - `world.attendance(character)` reports `pending`, `on_time`, `late`, or `missed` for each class. The world emits exactly one `lesson_attendance` event per resolved lesson.
 - `world.learningDebt(character)` is the number of fully **missed** lessons, **not a complete skill or knowledge model**. Arriving late is tracked separately.
-- The sample day includes Lily attending her library study session and then Charms on time, James attending class, and Remus arriving late to Potions because his investigation takes priority.
+- The 08:00–16:00 demonstration simulates **48 world ticks** and timetables for Lily, James, Remus, and Peter. Lily visits the library, Charms, Herbology, and an afternoon study session. Remus arrives late to Potions because his investigation takes priority, then attends his later classes on time. James and Peter follow their own class schedules.
 
 **[GAME] MVP boundaries:** attendance is recorded on first arrival inside a lesson window (or when the window ends without arrival). There is no teacher, lesson content, detention, knowledge acquisition, class participation, or early-departure penalty yet. The timetable covers **day one only** and does not repeat automatically on subsequent days. Ten-minute ticks can only distinguish arrival to that granularity. School priorities and subject choices are configured explicitly; they are not yet derived from evolving goals or emotions.
 
