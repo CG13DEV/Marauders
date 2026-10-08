@@ -9,6 +9,7 @@ import { isActivePromise, personallyAvoids,
   type MeetingCommitment, type CommitmentMemory
 } from './social-commitments.ts';
 import { nextRoomOnRoute } from './navigation.ts';
+import { planStudyIntention } from './learning-intentions.ts';
 import { decideInvestigation, type Assessment, type Trust } from './cognition.ts';
 import { spellDefinitions, type SpellId, type LearningRecord } from './spellcraft.ts';
 import type { Belief } from './beliefs.ts';
@@ -487,30 +488,29 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
         decisions.some(d=>d.actor===actor)) continue;
       const room=currentRoom(actor);
       if(room===null || !isLeisure(minute)) continue;
-      const gap=knowledgeGaps(actor)[0];
-      if(!gap) continue;
-      if(commitments.some(m=>m.promisor===actor && m.spell===gap &&
-        (m.status==='offered'||m.status==='pending'))) continue;
-      const attempted=attemptedTutors.get(actor)??new Set<string>();
-      const helper=occupants(room)
-        .filter(other=>other!==actor && has(other,'hearing') &&
-          !has(other,'manual') && !occupiedBySchool.has(other) &&
-          !socialParticipants.has(other) &&
-          !decisions.some(d=>d.actor===other) &&
-          trustOf(actor,other)!=='distrusted' &&
-          !personallyAvoids(commitmentMemories.get(actor)??[],other) &&
-          !attempted.has(`${other}:${gap}`))
-        .sort((a,b)=>a-b)[0];
-      if(helper===undefined) continue;
-      const targetRoom=plan.leisureRoom??plan.socialRoom??room;
-      const atMinute=(dayOf(minute)+1)*1440+19*60+40;
-      const action:Command={type:'offer_meeting',actor,listener:helper,
-        room:targetRoom,atMinute,purpose:'study',spell:gap};
+      const gaps=knowledgeGaps(actor);
+      if(gaps.some(spell=>commitments.some(m=>m.promisor===actor &&
+        m.spell===spell && (m.status==='offered'||m.status==='pending'))))continue;
+      const intention=planStudyIntention({
+        learner:actor,gaps,room:plan.leisureRoom??plan.socialRoom??room,
+        candidates:occupants(room),
+        attempted:attemptedTutors.get(actor)??new Set<string>(),
+        memories:commitmentMemories.get(actor)??[],
+        trust:other=>trustOf(actor,other),
+        available:other=>has(other,'hearing') && !has(other,'manual') &&
+          !occupiedBySchool.has(other) && !socialParticipants.has(other) &&
+          !decisions.some(d=>d.actor===other),
+        minute
+      });
+      if(!intention)continue;
+      const action:Command={type:'offer_meeting',actor,
+        listener:intention.helper,room:intention.room,
+        atMinute:intention.atMinute,purpose:'study',spell:intention.spell};
       const result=execute(action);
       decisions.push({actor,action,result});
       if(result.ok){
         socialParticipants.add(actor);
-        socialParticipants.add(helper);
+        socialParticipants.add(intention.helper);
       }
     }
 
