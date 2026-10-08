@@ -164,6 +164,7 @@ test('help cannot occur across rooms after a student moves away; later reunion w
   world.execute({ type: 'move', actor: remus, destination: classroom });
   world.step(); // Remus asks
   world.execute({ type: 'move', actor: remus, destination: corridor });
+  world.setRoutine(remus, []); // the student's former arrival plan is complete
   assert.deepEqual(world.step(), []); // helper cannot teleport help
   assert.equal(world.spellStage(remus, 'lumos'), 'unaware');
   world.execute({ type: 'move', actor: remus, destination: classroom });
