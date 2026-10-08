@@ -215,6 +215,8 @@ export function reportSchoolWeek(scene: ReturnType<typeof createSchoolWeek>) {
     for (const record of world.attendance(student.id)) counts[record.status]++;
   }
   const active = students.filter(s => world.learningDebt(s.id) > 0);
+  const meetings = world.meetingLedger();
+  const answers = world.events().filter(e => e.type === 'meeting_answered');
   const houseByPerson = new Map(students.map(pupil => [pupil.id, pupil.house]));
   // Both participants remember each encounter, so divide the counts by two.
   const localEntries = students.flatMap(pupil =>
@@ -247,6 +249,12 @@ export function reportSchoolWeek(scene: ReturnType<typeof createSchoolWeek>) {
     pupilConversations: students.reduce((n, s) => n + world.conversationHistory(s.id).length, 0),
     withinHouseConversations: withinHouse,
     acrossHouseConversations: acrossHouses,
-    pupilRests: students.reduce((n, s) => n + world.restHistory(s.id).length, 0)
+    pupilRests: students.reduce((n, s) => n + world.restHistory(s.id).length, 0),
+    invitations: world.events().filter(e => e.type === 'meeting_offered').length,
+    acceptedInvitations: answers.filter(e => e.accepted).length,
+    declinedInvitations: answers.filter(e => !e.accepted).length,
+    fulfilledMeetings: meetings.filter(m => m.status === 'kept').length,
+    missedMeetings: meetings.filter(m => m.status === 'expired').length,
+    unansweredInvitations: meetings.filter(m => m.status === 'unanswered').length
   };
 }
