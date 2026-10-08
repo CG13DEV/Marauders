@@ -102,8 +102,12 @@ export function createSchoolWeek(
           style: index === 2 ? 'reserved' : 'outgoing',
           interest: (['lessons', 'castle', 'hobbies'] as const)[index]!,
           ...(social === 'autonomous' ? { socialInvitations: true } : {}),
+          ...(year === 1 ? { learningAppointments: true } : {}),
           ...(planning === 'adaptive' ? {schoolPlanning:'adaptive' as const} : {})
         });
+        // The first year notices their *own* gaps after a missed explanation.
+        // They only invite help if social invitations are enabled.
+        if(year===1)world.setHelpSeeking(id,true);
       }
     }
   }
