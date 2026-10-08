@@ -16,6 +16,7 @@ npm run agency-demo
 npm run living-demo
 npm run school-day-demo
 npm run learning-demo
+npm run help-demo
 npm start
 npm test
 npm run typecheck
@@ -112,8 +113,23 @@ Run `npm run learning-demo`.
 
 **[GAME]** This is an executable, deliberately constrained subset of the spell progression in `docs/game-design/progression.md` and semantic pattern model in `docs/lore/lore-and-magic.md`. Understanding, guided execution, and independent performance are distinct states, **not RPG experience levels**. Instruction currently occurs at one fixed lecture tick; tutor explanations are instant validated commands, and physical light is represented only as a marker.
 
+## Experiment #8: voluntary peer tutoring, relationship memories
+
+Run `npm run help-demo`. After setting up the school day, **no external commands steer the students**: ten-minute `world.step()` advances the simulation.
+
+- Remus prioritizes investigating contradictory reports and arrives in Charms **after the Lumos teaching tick**. Lily learns the theory in class; Remus has a named `lumos` knowledge gap.
+- The `SeeksHelp` ECS trait lets a pupil notice *only their own gap and locally present, audible people*. He does not peek into Lily's knowledge or see hidden whereabouts. Initially he distrusts the two students who gave him conflicting reports.
+- `ask_tutoring` is a validated request. It requires a known, still-missing lesson concept, physical co-location and hearing. The request itself transfers no knowledge. A character remembers whom they already asked and does not repeat rejected requests indefinitely.
+- The recipient autonomously chooses whether to respond according to the `Helpful` trait, **their own** knowledge and **their own** directional trust toward the requester. A learner cannot force a teacher to help.
+- `lesson_first` commitments reserve time. A busy helper postpones the conversation. The two participants consume a social action slot for the tick; they cannot tutor and move away in that same tick.
+- An accepted `answer_tutoring` delegates to the *existing validated* `tutor_spell` action. The learner receives the **concept**, not guided or independent execution. A refusal shares no secret information.
+- Successful help creates a directional `HelpedBy` ECS relationship and a structured `assistance(character)` record. We explicitly **do not** increment a relationship score or automatically flip a neutral relationship to trusted.
+- Requests, decisions and tutoring results are authoritative world events; personal learning and social memory remain in separate, world-local stores. Both memories are returned as defensive copies.
+
+**[GAME] Limitations:** these are opt-in, deterministic social dispositions and a tiny learning-help policy, **not** genuine autonomous desires or nuanced emotional bonds. Only locally present candidates are considered. Request scheduling does not include invitations, correspondence, travel to a known mentor, school rules about talking during lessons, or time-consuming tutoring spanning several ticks. The ten-minute action slot is a coarse approximation.
+
 ## What next?
 
-Add teachable *principles* beyond named spells, actual practice conditions (focus, target, distance, fatigue) and a teacher/lesson activity system. Learning should influence NPC decisions and magical experiments without allowing AI to rewrite world truth.
+Make favors influence *specific later decisions* instead of generic affinity; extend tutor communication to guided practice and mutual study plans. Eventually introduce teachers' own schedules, interruptions, context-sensitive helpfulness and observable social history.
 
 The source of truth for design remains the main repository `docs/` directory. This code is a small executable [GAME] model, not a statement of canon.

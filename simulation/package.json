@@ -1,6 +1,6 @@
 {
   "name": "marauders-simulation",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -16,7 +16,8 @@
     "agency-demo": "node --experimental-strip-types src/cli/agency-demo.ts",
     "living-demo": "node --experimental-strip-types src/cli/living-world-demo.ts",
     "school-day-demo": "node --experimental-strip-types src/cli/school-day-demo.ts",
-    "learning-demo": "node --experimental-strip-types src/cli/learning-demo.ts"
+    "learning-demo": "node --experimental-strip-types src/cli/learning-demo.ts",
+    "help-demo": "node --experimental-strip-types src/cli/help-demo.ts"
   },
   "dependencies": {
     "bitecs": "0.4.0"

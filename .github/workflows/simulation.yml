@@ -29,3 +29,4 @@ jobs:
       - run: npm run living-demo
       - run: npm run school-day-demo
       - run: npm run learning-demo
+      - run: npm run help-demo
