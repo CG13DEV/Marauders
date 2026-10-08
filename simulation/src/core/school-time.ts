@@ -1,6 +1,7 @@
 import { isSpellId, type SpellId } from './spellcraft.ts';
 
 /** Gameplay-only clock: ten simulated minutes per world step, starting at 08:00. */
+/** Absolute minutes allow lessons to be scheduled across multiple days. */
 export const SCHOOL_START_MINUTE = 8 * 60;
 export const MINUTES_PER_TICK = 10;
 
@@ -39,7 +40,7 @@ export function validateTimetable(lessons: readonly Lesson[]): void {
     const lesson = sorted[i]!;
     if (!lesson.id.trim() || !lesson.subject.trim() || ids.has(lesson.id) ||
         !Number.isInteger(lesson.startsAt) || !Number.isInteger(lesson.endsAt) ||
-        lesson.startsAt < SCHOOL_START_MINUTE || lesson.endsAt > 1440 ||
+        lesson.startsAt < SCHOOL_START_MINUTE ||
         lesson.startsAt >= lesson.endsAt ||
         (lesson.spell !== undefined && (
           !isSpellId(lesson.spell) ||
