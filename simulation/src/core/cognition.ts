@@ -31,10 +31,11 @@ export function assessReports(
       group = { culprit: entry.claim.culprit, speakers: [] };
       reports.push(group);
     }
-    if (!group.speakers.some(s => s.id === entry.evidence.speaker)) {
+    const speaker = entry.evidence.speaker;
+    if (!group.speakers.some(s => s.id === speaker)) {
       group.speakers.push({
-        id: entry.evidence.speaker,
-        trust: trustOf(entry.evidence.speaker)
+        id: speaker,
+        trust: trustOf(speaker)
       });
     }
   }
