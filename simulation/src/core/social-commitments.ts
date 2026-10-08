@@ -31,6 +31,7 @@ export type CommitmentMemory = {
   minute: number;
   room: number;
   purpose: MeetingPurpose;
+  spell?: SpellId;
 };
 
 /** A promise must be a future, tick-aligned meeting rather than a ghost event. */

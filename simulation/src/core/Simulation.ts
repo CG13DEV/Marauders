@@ -599,11 +599,13 @@ export function createSimulation() {
         attemptedTutors.get(command.actor)!.add(`${command.listener}:${offer.spell}`);
       commitmentMemories.get(command.actor)!.push({
         meetingId:offer.id,partner:command.listener,kind:'offered',
-        minute:now,room:offer.room,purpose:offer.purpose
+        minute:now,room:offer.room,purpose:offer.purpose,
+        ...(offer.spell===undefined?{}:{spell:offer.spell})
       });
       commitmentMemories.get(command.listener)!.push({
         meetingId:offer.id,partner:command.actor,kind:'invited',
-        minute:now,room:offer.room,purpose:offer.purpose
+        minute:now,room:offer.room,purpose:offer.purpose,
+        ...(offer.spell===undefined?{}:{spell:offer.spell})
       });
       const event:WorldEvent={
         type:'meeting_offered',actor:command.actor,listener:command.listener,
@@ -640,7 +642,8 @@ export function createSimulation() {
       for(const [who,partner] of participants){
         commitmentMemories.get(who)!.push({
           meetingId:offer.id,partner,kind,minute:now,
-          room:offer.room,purpose:offer.purpose
+          room:offer.room,purpose:offer.purpose,
+          ...(offer.spell===undefined?{}:{spell:offer.spell})
         });
       }
       const event:WorldEvent={
@@ -1083,7 +1086,8 @@ export function createSimulation() {
       const remember=(who:number,partner:number,kind:CommitmentMemory['kind'])=>{
         commitmentMemories.get(who)!.push({
           meetingId:meeting.id,partner,kind,minute,room:meeting.room,
-          purpose:meeting.purpose
+          purpose:meeting.purpose,
+          ...(meeting.spell===undefined?{}:{spell:meeting.spell})
         });
       };
       if(kept) {

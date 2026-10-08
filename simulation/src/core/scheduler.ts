@@ -129,6 +129,28 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       }
     }
 
+    // A purposeful study meeting needs a separate validated TEACH action.
+    // Co-location alone can fulfill a social promise but never grants knowledge.
+    for(const meeting of commitments){
+      if(meeting.status!=='pending' || !meeting.spell || meeting.taught ||
+         minute<meeting.atMinute || minute>=meeting.atMinute+20) continue;
+      const actor=meeting.beneficiary, learner=meeting.promisor;
+      if(has(actor,'manual') || has(learner,'manual') ||
+        occupiedBySchool.has(actor) || occupiedBySchool.has(learner) ||
+        decisions.some(d=>d.actor===actor || d.actor===learner)) continue;
+      if(currentRoom(actor)!==meeting.room || currentRoom(learner)!==meeting.room)
+        continue;
+      const action:Command={type:'tutor_appointment',actor,meetingId:meeting.id};
+      const result=execute(action);
+      decisions.push({actor,action,result});
+      if(result.ok){
+        socialParticipants.add(actor);
+        socialParticipants.add(learner);
+        occupiedBySchool.add(actor);
+        occupiedBySchool.add(learner);
+      }
+    }
+
     // A heard personal promise can override meals and leisure, but not a
     // scheduled lesson unless the actor explicitly prioritizes that promise.
     // Each actor considers only their own participation, not others' plans.
@@ -152,28 +174,6 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
         const result=execute(action);
         decisions.push({actor,action,result});
         occupiedBySchool.add(actor);
-      }
-    }
-
-    // A purposeful study meeting needs a separate validated TEACH action.
-    // Co-location alone can fulfill a social promise but never grants knowledge.
-    for(const meeting of commitments){
-      if(meeting.status!=='pending' || !meeting.spell || meeting.taught ||
-         minute<meeting.atMinute || minute>=meeting.atMinute+20) continue;
-      const actor=meeting.beneficiary, learner=meeting.promisor;
-      if(has(actor,'manual') || has(learner,'manual') ||
-        occupiedBySchool.has(actor) || occupiedBySchool.has(learner) ||
-        decisions.some(d=>d.actor===actor || d.actor===learner)) continue;
-      if(currentRoom(actor)!==meeting.room || currentRoom(learner)!==meeting.room)
-        continue;
-      const action:Command={type:'tutor_appointment',actor,meetingId:meeting.id};
-      const result=execute(action);
-      decisions.push({actor,action,result});
-      if(result.ok){
-        socialParticipants.add(actor);
-        socialParticipants.add(learner);
-        occupiedBySchool.add(actor);
-        occupiedBySchool.add(learner);
       }
     }
 
