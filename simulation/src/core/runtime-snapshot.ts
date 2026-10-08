@@ -5,6 +5,7 @@ import type { LearningRecord } from './spellcraft.ts';
 import type { AttendanceRecord, SchoolPriority } from './school-time.ts';
 import type { TutoringRequest, AssistanceMemory } from './social-learning.ts';
 import type { Trust } from './cognition.ts';
+import type { MeetingCommitment, CommitmentMemory } from './social-commitments.ts';
 import type {
   DailyLifePlan, MealMemory, ConversationMemory, RestMemory
 } from './daily-life.ts';
@@ -35,6 +36,8 @@ export type RuntimeSnapshot = {
   meals: [number, MealMemory[]][];
   conversations: [number, ConversationMemory[]][];
   rests: [number, RestMemory[]][];
+  commitments?: MeetingCommitment[];
+  commitmentMemories?: [number, CommitmentMemory[]][];
   routines: [number, number[]][];
   searches: [number, PersistedSearch][];
   requests: [number, TutoringRequest][];
@@ -60,6 +63,8 @@ function remapEvent(event: WorldEvent, at: (id: number) => number): WorldEvent {
       return { ...event, actor: at(event.actor) };
     case 'conversation_shared':
       return { ...event, actor: at(event.actor), listener: at(event.listener) };
+    case 'meeting_promised': case 'meeting_resolved':
+      return { ...event, actor: at(event.actor), listener: at(event.listener), room: at(event.room) };
   }
 }
 
@@ -119,6 +124,15 @@ export function remapRuntimeSnapshot(snapshot: RuntimeSnapshot, at: (id: number)
     conversations: snapshot.conversations.map(([id, values]) => [at(id),
       values.map(v => ({ ...v, partner: at(v.partner) }))]),
     rests: snapshot.rests.map(([id, values]) => [at(id), values.map(v => ({ ...v }))]),
+    ...(snapshot.commitments === undefined ? {} : {
+      commitments: snapshot.commitments.map(m => ({...m,
+        promisor: at(m.promisor), beneficiary: at(m.beneficiary), room: at(m.room)}))
+    }),
+    ...(snapshot.commitmentMemories === undefined ? {} : {
+      commitmentMemories: snapshot.commitmentMemories.map(([id, memories]) => [
+        at(id), memories.map(m => ({...m, partner:at(m.partner), room:at(m.room)}))
+      ] as [number, CommitmentMemory[]])
+    }),
     routines: snapshot.routines.map(([id, path]) => [at(id), path.map(at)]),
     searches: snapshot.searches.map(([id, search]) => [at(id), {
       object: at(search.object), asked: search.asked.map(at),

@@ -5,6 +5,7 @@ import type { EntityId, Observation, WorldEvent, RoomDescriptor } from './Simula
 import type { TutoringRequest, AssistanceMemory } from './social-learning.ts';
 import type { AttendanceRecord, SchoolPriority } from './school-time.ts';
 import type { DailyLifePlan, MealMemory, ConversationMemory, RestMemory } from './daily-life.ts';
+import type { MeetingCommitment, CommitmentMemory } from './social-commitments.ts';
 
 export type WitnessSearch = {
   object: EntityId;
@@ -37,6 +38,8 @@ export function createRuntimeStores() {
     dailyPlans: new Map<EntityId, DailyLifePlan>(),
     meals: new Map<EntityId, MealMemory[]>(),
     conversations: new Map<EntityId, ConversationMemory[]>(),
-    rests: new Map<EntityId, RestMemory[]>()
+    rests: new Map<EntityId, RestMemory[]>(),
+    commitments: [] as MeetingCommitment[],
+    commitmentMemories: new Map<EntityId, CommitmentMemory[]>()
   };
 }

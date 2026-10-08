@@ -3,6 +3,7 @@
  * Behaviour follows time, location and *personal* memories, not omniscience.
  * No fabricated social ties or numerical friendship meters.
  */
+import type { CommitmentPriority } from './social-commitments.ts';
 export type MealKind = 'breakfast' | 'lunch' | 'dinner';
 export type SocialTopic = 'lessons' | 'castle' | 'hobbies';
 export type SocialStyle = 'outgoing' | 'reserved';
@@ -17,6 +18,8 @@ export type DailyLifePlan = {
   interest: SocialTopic;
   /** Opt-in distance-aware scheduling. Absent means legacy 20-minute lead. */
   schoolPlanning?: 'adaptive';
+  /** Default protects academic commitments; alternative models character choice. */
+  commitmentPriority?: CommitmentPriority;
 };
 export type MealMemory = { day: number; kind: MealKind; minute: number };
 export type ConversationMemory = {
