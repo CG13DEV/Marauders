@@ -173,7 +173,8 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
     // Each actor considers only their own participation, not others' plans.
     for(const actor of actors('dailyLife')) {
       if(has(actor,'manual') || occupiedBySchool.has(actor) ||
-        decisions.some(d=>d.actor===actor)) continue;
+        decisions.some(d=>d.actor===actor) ||
+        dailyPlans.get(actor)?.intentionPlanning) continue;
       const promise=upcomingFor(actor);
       const room=currentRoom(actor);
       if(!promise || room===null) continue;
@@ -229,6 +230,33 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       }
     }
 
+    // The same personal queue now admits the *causes* behind learning and
+    // investigation. No goal is invented from someone else's private mind.
+    // Creating an intention is mental bookkeeping, not a physical action.
+    for(const actor of actors('dailyLife')){
+      const plan=dailyPlans.get(actor);
+      if(!plan?.intentionPlanning)continue;
+      if(plan.learningAppointments && plan.socialInvitations &&
+         actors('seeksHelp').includes(actor))
+        for(const spell of knowledgeGaps(actor))
+          if(!(intentions.get(actor)??[]).some(g=>isOpenIntention(g)&&
+            g.kind==='learn_concept'&&g.spell===spell))
+            execute({type:'intend_study',actor,spell});
+    }
+    for(const actor of actors('inquisitive')){
+      if(!dailyPlans.get(actor)?.intentionPlanning || !has(actor,'vision') ||
+        has(actor,'manual'))continue;
+      const room=currentRoom(actor);
+      if(room===null)continue;
+      const claims=[...new Set(beliefsByCharacter.read(actor).map(b=>b.claim.object))];
+      const inspected=new Set(observations(actor).filter(
+        o=>o.kind==='inspected_object').map(o=>o.target));
+      const target=decideInvestigation(
+        claims.map(object=>assessment(actor,object)),
+        visibleFragiles(room),inspected,true);
+      if(target!==null)execute({type:'intend_investigate',actor,object:target});
+    }
+
     // Opt-in intention arbitration. Scheduling, commitments and bodily needs
     // all compete through observed obligations, not a global RPG action score.
     // State transitions themselves do not consume an extra physical action.
@@ -241,6 +269,22 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
         if(isOpenIntention(goal) &&
           goal.deadlineMinute!==undefined && minute>goal.deadlineMinute)
           transitionIntention(actor,goal.id,'expired');
+      // Reconcile a goal only against personal knowledge or an accepted
+      // agreement the character actually participated in.
+      for(const goal of goals.filter(isOpenIntention)){
+        if(goal.kind==='learn_concept' && goal.spell &&
+           spellKnowledge.stage(actor,goal.spell)!=='unaware')
+          transitionIntention(actor,goal.id,'completed');
+        if(goal.kind==='attend_meeting'){
+          const meeting=commitments.find(m=>m.id===goal.meetingId &&
+            (m.promisor===actor||m.beneficiary===actor));
+          if(!meeting || meeting.status==='declined'||meeting.status==='unanswered')
+            transitionIntention(actor,goal.id,'cancelled');
+          else if(meeting.status==='kept'||meeting.status==='expired')
+            transitionIntention(actor,goal.id,
+              meeting.status==='kept'?'completed':'expired');
+        }
+      }
       const remaining=goals.filter(isOpenIntention);
       const promise=upcomingFor(actor);
       const blocked=has(actor,'manual')?'manual':
@@ -255,9 +299,26 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       }
       const room=currentRoom(actor);
       if(room===null)continue;
+      const eligible=remaining.filter(goal=>{
+        if(goal.kind==='learn_concept'){
+          return isLeisure(minute)&&!commitments.some(m=>
+            m.promisor===actor&&m.spell===goal.spell &&
+            (m.status==='offered'||m.status==='pending'));
+        }
+        if(goal.kind==='attend_meeting'){
+          const meeting=commitments.find(m=>m.id===goal.meetingId);
+          if(!meeting || meeting.status!=='pending')return false;
+          const hops=shortestHops(room,goal.destination,exits);
+          return hops!==null &&
+            minute>=meeting.atMinute-(hops+1)*10 &&
+            minute<meeting.atMinute+20;
+        }
+        return true;
+      });
       const choice=chooseNeedOrIntention(
-        needs,minute,remaining,kind=>ateMeal(meals.get(actor)??[],dayOf(minute),kind));
-      const target=choice.kind==='visit'?choice.intention:null;
+        needs,minute,eligible,kind=>ateMeal(meals.get(actor)??[],dayOf(minute),kind));
+      const target=choice.kind==='visit'||choice.kind==='pursue'
+        ?choice.intention:null;
       for(const goal of remaining){
         if(goal.id===target?.id)continue;
         if(goal.status==='active')
@@ -287,8 +348,63 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
         }
         continue;
       }
-      if(choice.kind==='visit'){
+      if(choice.kind==='visit'||choice.kind==='pursue'){
         const goal=choice.intention;
+        if(goal.kind==='learn_concept' && goal.spell){
+          const intention=planStudyIntention({
+            learner:actor,gaps:[goal.spell],
+            room:plan.leisureRoom??plan.socialRoom??room,
+            candidates:occupants(room),
+            attempted:attemptedTutors.get(actor)??new Set<string>(),
+            memories:commitmentMemories.get(actor)??[],
+            trust:other=>trustOf(actor,other),
+            available:other=>has(other,'hearing') && !has(other,'manual') &&
+              !occupiedBySchool.has(other) && !socialParticipants.has(other) &&
+              !decisions.some(d=>d.actor===other),
+            minute
+          });
+          if(intention){
+            const action:Command={type:'offer_meeting',actor,
+              listener:intention.helper,room:intention.room,
+              atMinute:intention.atMinute,purpose:'study',spell:intention.spell};
+            const result=execute(action);
+            decisions.push({actor,action,result});
+            if(result.ok){
+              transitionIntention(actor,goal.id,'active');
+              socialParticipants.add(actor);
+              socialParticipants.add(intention.helper);
+            }
+          }
+          continue;
+        }
+        if(goal.kind==='investigate' && goal.object!==undefined){
+          // The object's current position is *never* looked up to navigate:
+          // this goal exists only after a local perception/claim.
+          const action:Command={type:'inspect_object',actor,target:goal.object};
+          const result=execute(action);
+          decisions.push({actor,action,result});
+          if(!result.ok)transitionIntention(actor,goal.id,'cancelled');
+          continue;
+        }
+        if(goal.kind==='attend_meeting'){
+          const meeting=commitments.find(m=>m.id===goal.meetingId &&
+            (m.promisor===actor||m.beneficiary===actor));
+          if(!meeting || meeting.status!=='pending')continue;
+          if(room===goal.destination){
+            transitionIntention(actor,goal.id,'active');
+            occupiedBySchool.add(actor);
+            continue;
+          }
+          const next=nextRoomOnRoute(room,goal.destination,exits);
+          if(next!==null){
+            transitionIntention(actor,goal.id,'active');
+            const action=passageAction(actor,room,next);
+            const result=execute(action);
+            decisions.push({actor,action,result});
+            if(result.ok)occupiedBySchool.add(actor);
+          }
+          continue;
+        }
         if(room===goal.destination){
           transitionIntention(actor,goal.id,'completed');
           continue;
@@ -439,6 +555,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
     // The decision policy reads only the actor's beliefs and locally visible
     // objects. In particular it never reads authoritative broken-state or events.
     for (const actor of actors('inquisitive')) {
+      if (dailyPlans.get(actor)?.intentionPlanning) continue;
       if (has(actor, 'manual') || occupiedBySchool.has(actor) || sleeping.has(actor) ||
           socialParticipants.has(actor) || decisions.some(d => d.actor === actor)) continue;
       if (!has(actor, 'vision')) continue;
@@ -581,6 +698,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
     // Their invitations are requests, not proof the listener can help.
     for(const actor of actors('seeksHelp')){
       const plan=dailyPlans.get(actor);
+      if(plan?.intentionPlanning)continue; // the unified planner owns this need
       if(!plan?.learningAppointments || !plan.socialInvitations ||
         has(actor,'manual') || !has(actor,'hearing') ||
         occupiedBySchool.has(actor) || socialParticipants.has(actor) ||
