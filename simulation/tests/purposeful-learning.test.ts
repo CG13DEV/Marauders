@@ -56,8 +56,9 @@ test('accepted study appointment leads to actual tutoring, not an automatic meet
   for(let i=10;i<215;i++)w.step();
   assert.equal(w.meetingLedger()[0]?.status,'kept');
   assert.equal(w.meetingLedger()[0]?.taught,true);
-  assert.equal(w.currentRoom(learner),library);
-  assert.equal(w.currentRoom(helper),library);
+  const taught=w.events().find(x=>x.type==='tutoring_appointment_completed');
+  assert.equal(taught?.room,library);
+  assert.equal(taught?.minute,2620);
   assert.equal(w.spellStage(learner,'lumos'),'conceptual');
   assert.deepEqual(w.learningHistory(learner)[0]?.source,
     {kind:'tutoring',teacher:helper,minute:2620});
