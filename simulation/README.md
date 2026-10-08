@@ -191,8 +191,22 @@ This is a materialized-state milestone, not final persistence engineering: v2 st
 ### Scheduler extraction
 
 `src/core/scheduler.ts` owns the deterministic timestep ordering, while `src/core/runtime-stores.ts` creates isolated memory and routine stores, and `src/core/runtime-snapshot.ts` maps all entity references during hydration. `Simulation.ts` still owns the authoritative ECS graph, command validation and state capture. Command handlers remain a separate planned extraction.
+## Experiment #11 — the life between lessons
+
+The seven-cohort weekly school now has a **Great Hall**, individual home rooms, meals, free-time encounters and nightly rest. All 84 pupils and seven subject professors have explicit daily-life plans. Students walk from dormitories through corridors to the Great Hall, eat only while present at meal windows and return to their respective houses in the evening. Dinner does not teleport people home.
+
+- Repeated breakfast/lunch/dinner windows occur every day (including the weekend). `eat_meal` is a validated ECS command and writes an immutable-by-copy `mealHistory(actor)` record.
+- Students share common rooms after dinner and during weekend leisure. `chat` requires a real co-location and two hearing-capable characters; it writes **the same social occurrence into both autobiographical memories**, accessible with `conversationHistory(actor)`.
+- Peer choice is based on **people physically present**, the student's own directional trust and how often they have previously spoken. Topics are local interests: `lessons`, `castle`, `hobbies`. Reserved students usually converse during weekends; outgoing students can converse in the evenings. Both participants have a one-conversation-per-day limit; there is **no numeric friendship meter**.
+- Each pupil returns home to rest overnight. `restHistory(actor)` stores concrete nights spent at home; late wandering means the character may not rest until it returns. An occupied class always takes precedence over autonomous daily-life decisions.
+- State is correctly serialized by V2 checkpoints, including personal meal/rest histories, meetings, daily-life traits and plans. The legacy V1 replay format also records new external commands and configurations.
+- `npm run week-demo` reports attended lessons, meals, conversations, nights of rest, and one example of a student's accumulating encounter history. `npm run play` now accepts `chat peter hobbies`.
+
+**[GAME] Honest limits:** this is a deterministic social-*encounter* vertical slice, not genuine friendship formation, appetite physiology, fatigue penalties, complex relationships, autonomous clubs or homework. Subjects are representative, not a canonical historical teaching census. People do not know where distant friends are; interactions only happen when they are physically co-present. There is no need for LLM, 3D or Unreal to play these systems.
+
+Next: meetings that produce actual social obligations, preferences that update from memories, activities beyond casual chat, subject learning across the calendar, and a repeatable multiweek school year.
 ## What next?
 
-Extract the monolithic `Simulation.ts` into narrow state/systems modules, implement **materialized checkpoints** and versioned migrations, and add a seven-day calendar with a real population/school curriculum. Extend gameplay and NPC decision traces before expanding toward a fully simulated year.
+Extend the first week into a repeated calendar with meaningful student activities, ongoing commitments, lessons and social consequences; add checkpoint migrations, event compaction and deeper command modularization before whole-year validation.
 
 The source of truth for design remains the main repository `docs/` directory. This code is a small executable [GAME] model, not a statement of canon.

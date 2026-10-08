@@ -12,5 +12,14 @@ for(let day=0;day<7;day++){
 }
 const result=reportSchoolWeek(scene);
 console.log('Итог недели:',JSON.stringify(result));
-if(result.attendance.pending!==0 || result.pupilLessonSlots!==1260)
+const pupil=scene.students[0]!;
+const encounters=scene.world.conversationHistory(pupil.id).slice(0,4)
+  .map(memory => ({
+    with: scene.world.label(memory.partner),
+    topic: memory.topic,
+    day: Math.floor(memory.minute/1440)+1
+  }));
+console.log('Пример личной социальной истории:',JSON.stringify({student:pupil.key,encounters}));
+if(result.attendance.pending!==0 || result.pupilLessonSlots!==1260 ||
+    result.pupilConversations===0 || result.pupilMeals===0 || result.pupilRests===0)
   throw new Error('School-week validation failed');
