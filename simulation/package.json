@@ -1,6 +1,6 @@
 {
   "name": "marauders-simulation",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -9,6 +9,7 @@
   "scripts": {
     "start": "node --experimental-strip-types src/cli/main.ts",
     "demo": "node --experimental-strip-types src/cli/main.ts --demo",
+    "perception-demo": "node --experimental-strip-types src/cli/perception-demo.ts",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
     "typecheck": "tsc --noEmit"
   },

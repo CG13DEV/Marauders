@@ -27,3 +27,7 @@ test('a non-character cannot execute character movement', () => {
 test('an unknown room is rejected', () => {
   assert.equal(validateMovement({ ...valid, destinationExists: false }), 'unknown_destination');
 });
+
+test('a closed door rejects movement across an existing passage', () => {
+  assert.equal(validateMovement({ ...valid, passageOpen: false }), 'door_closed');
+});

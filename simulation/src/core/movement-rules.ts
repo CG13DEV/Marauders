@@ -6,7 +6,8 @@ export type MoveRejection =
   | 'not_room'
   | 'no_location'
   | 'already_there'
-  | 'no_passage';
+  | 'no_passage'
+  | 'door_closed';
 
 export interface MovementFacts {
   actorExists: boolean;
@@ -16,6 +17,8 @@ export interface MovementFacts {
   currentRoom: number | null;
   destination: number;
   hasPassage: boolean;
+  /** When omitted, the passage has no door and is considered open. */
+  passageOpen?: boolean;
 }
 
 export function validateMovement(facts: MovementFacts): MoveRejection | null {
@@ -26,5 +29,6 @@ export function validateMovement(facts: MovementFacts): MoveRejection | null {
   if (facts.currentRoom === null) return 'no_location';
   if (facts.currentRoom === facts.destination) return 'already_there';
   if (!facts.hasPassage) return 'no_passage';
+  if (facts.passageOpen === false) return 'door_closed';
   return null;
 }
