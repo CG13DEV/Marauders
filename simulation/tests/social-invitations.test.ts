@@ -63,7 +63,7 @@ test('a remote answer is rejected; an unheard answer cannot be telepathic',()=>{
 });
 
 test('the autonomous actor invites a past interlocutor, the addressee accepts, and both really meet',()=>{
-  const {w,a,b,lounge}=invitationFixture();
+  const {w,a,b,lounge}=invitationFixture('reserved','study');
   assert.equal(w.execute({type:'chat',actor:a,listener:b,topic:'lessons'}).ok,true);
   for(let i=0;i<67;i++)w.step(); // 19:10: first invitation, before the reply
   const records=w.meetingLedger();
