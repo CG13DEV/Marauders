@@ -72,5 +72,18 @@ export function createCastleResidents(
     return { id, key: spec.key, kind: spec.kind, home,
       ...(spec.house ? { house: spec.house } : {}) };
   });
+  const filch=people.find(x=>x.key==='caretaker_filch')!.id;
+  const norris=people.find(x=>x.key==='mrs_norris')!.id;
+  const office=layout.caretakerOffice;
+  // Shared known corridor network, not remote knowledge of the partner.
+  world.configurePatrol(filch,'caretaker',[
+    office,layout.landings[0].west,layout.landings[0].gallery,
+    layout.landings[1].west,layout.landings[2].gallery,
+    layout.landings[0].west,office
+  ]);
+  world.configurePatrol(norris,'animal',[
+    office,layout.landings[0].west,layout.landings[0].gallery,
+    layout.landings[2].gallery,layout.landings[0].west,office
+  ],filch,office);
   return { heads, ghostProfessor: binns, people };
 }
