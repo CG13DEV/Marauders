@@ -45,7 +45,7 @@ test('school duty blocks noncritical bathroom travel until there is time',()=>{
   w.step(); // 08:10 — until 08:50 school classroom is a commitment
   assert.equal(w.currentRoom(pupil),room);
   assert.equal(w.attendance(pupil)[0]?.status,'on_time');
-  for(let i=0;i<8;i++)w.step();
+  for(let i=0;i<11;i++)w.step();
   assert.equal(w.attendance(pupil)[0]?.status,'on_time');
   assert.ok(w.toiletState(pupil)!.visits>=1);
 });
