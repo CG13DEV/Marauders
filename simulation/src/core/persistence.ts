@@ -189,7 +189,7 @@ function createFacade(world: Simulation, operations: Operation[]) {
     },
     setTimetable(actor: number, lessons: readonly Lesson[], priority?: SchoolPriority) {
       world.setTimetable(actor, lessons, priority);
-      operations.push(copy({ kind: 'setTimetable', actor, lessons, priority }));
+      operations.push(copy({ kind: 'setTimetable', actor, lessons: [...lessons], priority }));
     },
     seedSpellKnowledge(actor: number, spell: SpellId, stage: Exclude<SpellStage, 'unaware'>) {
       world.seedSpellKnowledge(actor, spell, stage);
