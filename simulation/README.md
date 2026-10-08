@@ -13,6 +13,7 @@ npm run demo
 npm run perception-demo
 npm run social-demo
 npm run agency-demo
+npm run living-demo
 npm start
 npm test
 npm run typecheck
@@ -68,6 +69,19 @@ During `world.step()` the NPC policy:
 Trust uses qualitative `trusted / neutral / distrusted` relations in bitECS, rather than made-up probabilities. Trust is directional, can change, and remains scoped to one simulation world. Repeated testimony by the same witness does not count as multiple independent sources.
 
 **[GAME] Important simplifications:** trust and curiosity are initially configured by the designer, rather than emerging from relationships. This is a tiny deterministic policy, not a general AI planner. It deliberately does not resolve contradictory culprits through inspecting physical damage alone. Perception is still room-topological; within-room object visibility is assumed.
+
+## Experiment #5: an independently moving, social school day
+
+Run `npm run living-demo`. Unlike earlier hand-authored sequences, **each `world.step()` lets multiple NPCs take independent validated actions**:
+
+- Lily receives a finite routine `[corridor, library]`. She walks there over consecutive ticks using an explicit public room map (including opening closed doors when needed). Her whereabouts aren't exposed to the other NPCs as hidden coordinates.
+- Remus hears contradictory reports about the broken cup, inspects it, asks James what he knows, explores connected rooms, discovers Lily in the library and asks her as well.
+- Guarded James can withhold self-incriminating first-hand knowledge. The answer remains *silence*, not a magically fabricated excuse or an automatic admission.
+- Lily answers only using her own first-hand memory. Her response becomes Remus's **testimony with origin `vision`**, never Remus's own eyewitness fact. Retelling hearsay preserves `origin: { kind: 'testimony', speaker }` for the immediate prior hop.
+- Without a clue about the object, a character cannot query an arbitrary object ID for secrets. Searching for a source follows locally discovered exits, one command at a time; in unreachable areas the search eventually stops without teleportation.
+- `world.tick()` now advances once per `world.step()`. The tick is a deterministic simulation counter, not yet real-time school hours.
+
+**[GAME] Prototype constraints:** routines are finite waypoint itineraries assigned externally; they are not full class schedules or autonomous goals. Room navigation relies on knowledge of the castle's public topology. Witness search is bounded depth-first exploration, with no hidden NPC position lookup. This is a local policy, not an LLM planner; response honesty is currently based on explicit personality constraints. Asking and answering require co-location and hearing; no semantic free-form conversation. Source ancestry is one level deep; we have not yet modeled multi-generation rumor transmission, reputation dynamics, or autonomous social goals.
 
 ## What next?
 
