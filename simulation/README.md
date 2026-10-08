@@ -205,8 +205,37 @@ The seven-cohort weekly school now has a **Great Hall**, individual home rooms, 
 **[GAME] Honest limits:** this is a deterministic social-*encounter* vertical slice, not genuine friendship formation, appetite physiology, fatigue penalties, complex relationships, autonomous clubs or homework. Subjects are representative, not a canonical historical teaching census. People do not know where distant friends are; interactions only happen when they are physically co-present. There is no need for LLM, 3D or Unreal to play these systems.
 
 Next: meetings that produce actual social obligations, preferences that update from memories, activities beyond casual chat, subject learning across the calendar, and a repeatable multiweek school year.
+## Experiment #12 — branched multi-floor castle and organic house clustering
+
+The school-week world has a **stable, non-canonical multi-level spatial graph**, defined in `src/scenarios/castle-layout.ts`. The core owns each room's optional `{ floor, wing, kind, house }` metadata, which survives both the legacy V1 replay and V2 materialized checkpoints. Metadata tells the **world** where rooms belong; it does not magically reveal a map to NPCs.
+
+### Current physical graph (42 places)
+
+```text
+Floors: basement (-1), ground (0), first (1), second (2), third (3), fourth (4)
+
+  West staircase <- floor galleries / occasional bypasses -> East staircase
+       |                   |                              |
+  Gryffindor common    Great Hall (0)             Ravenclaw common
+      (4/W)            Courtyard (0)                (4/E)
+  Hufflepuff common    Hospital (1/W)             Slytherin common
+      (-1/W)           Library (2/E)                (-1/E)
+                Staff room (1/E), seven year-classrooms across floors 0–3
+
+Each house common room -> boys' bedroom
+                       -> girls' bedroom
+```
+
+- Two independent staircases connect all six levels. Some floors have alternative bypass edges; the courtyard has entrances from both ground wings. There are real possible routes **without passing through one universal hub**.
+- Each house has a central shared lounge, plus two *terminal* bedroom branches. Students have explicit prototype `dormGroup` assignments, with `homeRoom` = bedroom and `socialRoom` = lounge. These are test-population placeholders, not biographical facts about canonical pupils.
+- On weekends, pupils with a study interest may visit the **library**; those interested in exploring may visit the **courtyard**; others can remain in their house lounge. Social choices use only **co-present partners**, personal histories and trust, never hidden character positions.
+- The **hospital wing is a genuine reachable room** but does not yet provide health or recovery mechanics. Bedroom labels are spatial and do not yet implement access/house/gender permissions; the next access-control system must use world rules rather than GUI locks.
+- A deeper graph makes travel costs real. In the verified first weekly scenario, **834 class attendances were on time and 426 were late**, with zero fully missed classes. This is a real consequence of a deliberately coarse ten-minute travel model, **not a settled school-balance target**.
+- In that same seven-day run, **248 conversations occurred within houses and 32 between houses**. Existing conversation histories already measure that mix; no fabricated friendship meters or scripted house-by-house dialogue.
+
+Future spatial changes should extend the keyed topology and room semantics, not invalidate the distinction between factual world map, each character's partial knowledge of the map, and any later Marauders' Map. Room access restrictions and individual discovered routes are still upcoming.
 ## What next?
 
-Extend the first week into a repeated calendar with meaningful student activities, ongoing commitments, lessons and social consequences; add checkpoint migrations, event compaction and deeper command modularization before whole-year validation.
+Build individual route knowledge and access control atop the new multi-level graph; tune class travel time without teleportation, and expand the seven-day social simulation into a repeated calendar with obligations, lessons and long-term consequences.
 
 The source of truth for design remains the main repository `docs/` directory. This code is a small executable [GAME] model, not a statement of canon.
