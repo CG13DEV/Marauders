@@ -11,15 +11,16 @@ import {
 } from 'bitecs';
 import { validateMovement, type MoveRejection } from './movement-rules.ts';
 import { perceiveCrash } from './perception-rules.ts';
-import { createBeliefStore, copyClaim, type Claim, type Belief } from './beliefs.ts';
+import { copyClaim, type Claim, type Belief } from './beliefs.ts';
 import { assessReports, decideInvestigation, type Assessment, type Trust } from './cognition.ts';
 import { nextRoomOnRoute } from './navigation.ts';
+import { createRuntimeStores } from './runtime-stores.ts';
 import {
   schoolTime, validateTimetable, currentLesson, registerAttendance,
   type Lesson, type AttendanceRecord, type SchoolPriority
 } from './school-time.ts';
 import {
-  createSpellKnowledge, spellDefinitions, isSpellId,
+  spellDefinitions, isSpellId,
   type SpellId, type SpellStage, type LearningRecord
 } from './spellcraft.ts';
 import {
@@ -130,25 +131,11 @@ export function createSimulation() {
   const LocatedIn = createRelation({ exclusive: true });
   const PassageTo = createRelation();
 
-  const keys = new Map<string, EntityId>();
-  const doors = new Map<string, EntityId>();
-  const events: WorldEvent[] = [];
-  const observationsByCharacter = new Map<EntityId, Observation[]>();
-  const beliefsByCharacter = createBeliefStore();
-  const spellKnowledge = createSpellKnowledge();
-  const pendingTutoring = new Map<EntityId, TutoringRequest>();
-  const attemptedTutors = new Map<EntityId, Set<string>>();
-  const assistanceHistory = new Map<EntityId, AssistanceMemory[]>();
-  // Goals remember what has been attempted, not secret NPC locations.
-  type Search = {
-    object: EntityId;
-    asked: Set<EntityId>;
-    seenRooms: Set<EntityId>;
-    trail: EntityId[];
-  };
-  const searches = new Map<EntityId, Search>();
-  const routines = new Map<EntityId, EntityId[]>();
-  const timetables = new Map<EntityId, { records: AttendanceRecord[]; priority: SchoolPriority }>();
+  const {
+    keys, doors, events, observationsByCharacter, beliefsByCharacter,
+    spellKnowledge, pendingTutoring, attemptedTutors, assistanceHistory,
+    searches, routines, timetables
+  } = createRuntimeStores();
   let tick = 0;
 
   function addNamedEntity(key: string, label: string): EntityId {
