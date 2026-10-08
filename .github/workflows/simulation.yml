@@ -38,3 +38,4 @@ jobs:
       - run: npm run learning-purpose-demo
       - run: npm run intentions-demo
       - run: npm run unified-intentions-demo
+      - run: npm run rollout-demo
