@@ -155,6 +155,32 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       }
     }
 
+    // Answer only invitations the actor actually heard. Both sides must still
+    // be physically together, so neither can communicate at arbitrary range.
+    for(const actor of actors('dailyLife')){
+      if(has(actor,'manual') || occupiedBySchool.has(actor) ||
+         socialParticipants.has(actor) || decisions.some(d=>d.actor===actor)) continue;
+      const plan=dailyPlans.get(actor);
+      if(plan?.socialInvitations !== true || !has(actor,'hearing')) continue;
+      const offer=commitments.find(m=>m.status==='offered' &&
+        m.beneficiary===actor && minute<m.atMinute-20 &&
+        currentRoom(actor)===currentRoom(m.promisor));
+      if(!offer) continue;
+      const appointmentClashes=(timetables.get(actor)?.records??[]).some(lesson=>
+        lesson.startsAt<offer.atMinute+20 && lesson.endsAt>offer.atMinute-20);
+      const accept= !appointmentClashes &&
+        !personallyAvoids(commitmentMemories.get(actor)??[],offer.promisor) &&
+        trustOf(actor,offer.promisor)!=='distrusted' &&
+        !(plan.style==='reserved' && offer.purpose==='explore');
+      const action:Command={type:'answer_meeting',actor,meetingId:offer.id,accept};
+      const result=execute(action);
+      decisions.push({actor,action,result});
+      if(result.ok){
+        socialParticipants.add(actor);
+        socialParticipants.add(offer.promisor);
+      }
+    }
+
     // Basic daily needs have the same physical travel/action rules as classes.
     // No character has to know where any other character is to eat or go home.
     for (const actor of actors('dailyLife')) {
@@ -418,6 +444,43 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       if (result.ok) {
         socialParticipants.add(actor);
         socialParticipants.add(listener);
+      }
+    }
+
+    // Offer one future meeting per initiator-week, only to a person met
+    // previously in this actor's own autobiographical conversation history.
+    // This is opt-in and does not query the target's intentions or memories.
+    for(const actor of actors('dailyLife')){
+      const plan=dailyPlans.get(actor);
+      const room=currentRoom(actor);
+      if(!plan?.socialInvitations || plan.style!=='outgoing' ||
+        room===null || !isLeisure(minute) || dayOf(minute)>=5 ||
+        room!==leisureDestination(plan,minute) || !has(actor,'hearing') ||
+        has(actor,'manual') || occupiedBySchool.has(actor) ||
+        socialParticipants.has(actor) || sleeping.has(actor) ||
+        decisions.some(d=>d.actor===actor)) continue;
+      const ownHistory=commitmentMemories.get(actor)??[];
+      if(ownHistory.some(m=>m.kind==='offered')) continue;
+      const local=new Set(occupants(room));
+      const past=conversations.get(actor)??[];
+      const candidate=past.map(m=>m.partner).find(other=>
+        local.has(other) && other!==actor && has(other,'hearing') &&
+        !has(other,'manual') && !socialParticipants.has(other) &&
+        !occupiedBySchool.has(other) &&
+        !decisions.some(d=>d.actor===other) &&
+        trustOf(actor,other)!=='distrusted' &&
+        !personallyAvoids(ownHistory,other));
+      if(candidate===undefined) continue;
+      const atMinute=(dayOf(minute)+1)*1440 + 19*60+40;
+      const action:Command={
+        type:'offer_meeting',actor,listener:candidate,
+        room,atMinute,purpose:plan.interest==='lessons'?'study':'explore'
+      };
+      const result=execute(action);
+      if(result.ok){
+        decisions.push({actor,action,result});
+        socialParticipants.add(actor);
+        socialParticipants.add(candidate);
       }
     }
 
