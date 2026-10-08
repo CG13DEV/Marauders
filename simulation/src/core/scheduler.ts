@@ -10,6 +10,9 @@ import { isActivePromise, personallyAvoids,
 } from './social-commitments.ts';
 import { nextRoomOnRoute } from './navigation.ts';
 import { planStudyIntention } from './learning-intentions.ts';
+import { advanceNeeds,chooseNeedOrIntention,isOpenIntention,
+  type PersonalIntention,type BodilyNeeds,type IntentionStatus,type Interruption
+} from './intentions.ts';
 import { decideInvestigation, type Assessment, type Trust } from './cognition.ts';
 import { spellDefinitions, type SpellId, type LearningRecord } from './spellcraft.ts';
 import type { Belief } from './beliefs.ts';
@@ -50,6 +53,10 @@ export type SchedulerContext = {
   rests: Map<EntityId, RestMemory[]>;
   commitments: MeetingCommitment[];
   commitmentMemories: Map<EntityId, CommitmentMemory[]>;
+  intentions: Map<EntityId,PersonalIntention[]>;
+  bodilyNeeds: Map<EntityId,BodilyNeeds>;
+  transitionIntention(actor:EntityId,id:number,status:IntentionStatus,
+    interruptedBy?:Interruption):void;
   resolveMeetings(minute: number): void;
   recordDailyRest(minute: number): void;
   spellKnowledge: {
@@ -68,10 +75,19 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
     exits, execute, currentRoom, occupants, observations, assessment,
     trustOf, knowledgeGaps, pendingTutoring, attemptedTutors, searches,
     timetables, routines, dailyPlans, meals, conversations, rests,
-    commitments, commitmentMemories, resolveMeetings,
+    commitments, commitmentMemories, intentions, bodilyNeeds,
+    transitionIntention, resolveMeetings,
     spellKnowledge, beliefsByCharacter, setRoutine, emit, recordDailyRest
   } = ctx;
     const minute = advanceClock();
+    // Only opt-in characters have bodily state. Rest requires sustained
+    // physical presence at home during actual sleeping hours, not a marker.
+    for(const [actor,needs] of bodilyNeeds){
+      const plan=dailyPlans.get(actor);
+      if(!plan?.intentionPlanning) continue;
+      bodilyNeeds.set(actor,advanceNeeds(
+        needs,currentRoom(actor)===plan.homeRoom,minute));
+    }
     const decisions: { actor: EntityId; action: Command; result: CommandResult }[] = [];
     const occupiedBySchool = new Set<EntityId>();
     const socialParticipants = new Set<EntityId>();
@@ -213,6 +229,82 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       }
     }
 
+    // Opt-in intention arbitration. Scheduling, commitments and bodily needs
+    // all compete through observed obligations, not a global RPG action score.
+    // State transitions themselves do not consume an extra physical action.
+    for(const actor of actors('dailyLife')){
+      const plan=dailyPlans.get(actor);
+      const needs=bodilyNeeds.get(actor);
+      if(!plan?.intentionPlanning || !needs) continue;
+      const goals=intentions.get(actor)??[];
+      for(const goal of goals)
+        if(isOpenIntention(goal) &&
+          goal.deadlineMinute!==undefined && minute>goal.deadlineMinute)
+          transitionIntention(actor,goal.id,'expired');
+      const remaining=goals.filter(isOpenIntention);
+      const promise=upcomingFor(actor);
+      const blocked=has(actor,'manual')?'manual':
+        (occupiedBySchool.has(actor) ? (promise?'promise':'lesson') :
+        (decisions.some(d=>d.actor===actor) || socialParticipants.has(actor)
+          ? (promise?'promise':'lesson'):null));
+      if(blocked){
+        for(const goal of remaining)
+          if(goal.status==='active')
+            transitionIntention(actor,goal.id,'paused',blocked);
+        continue;
+      }
+      const room=currentRoom(actor);
+      if(room===null)continue;
+      const choice=chooseNeedOrIntention(
+        needs,minute,remaining,kind=>ateMeal(meals.get(actor)??[],dayOf(minute),kind));
+      const target=choice.kind==='visit'?choice.intention:null;
+      for(const goal of remaining){
+        if(goal.id===target?.id)continue;
+        if(goal.status==='active')
+          transitionIntention(actor,goal.id,'paused',
+            choice.kind==='eat'?'hunger':
+            choice.kind==='rest'?'fatigue':'higher_priority');
+      }
+      if(choice.kind==='eat'){
+        // Physical journey and legal meal command only during serving hours.
+        const next=room===plan.diningRoom?null:
+          nextRoomOnRoute(room,plan.diningRoom,exits);
+        const action:Command|null=room===plan.diningRoom
+          ? {type:'eat_meal',actor,kind:choice.meal}
+          : next===null?null:passageAction(actor,room,next);
+        if(action){
+          const result=execute(action);
+          decisions.push({actor,action,result});
+        }
+        continue;
+      }
+      if(choice.kind==='rest'){
+        if(room===plan.homeRoom){sleeping.add(actor);continue;}
+        const next=nextRoomOnRoute(room,plan.homeRoom,exits);
+        if(next!==null){
+          const action=passageAction(actor,room,next);
+          const result=execute(action);decisions.push({actor,action,result});
+        }
+        continue;
+      }
+      if(choice.kind==='visit'){
+        const goal=choice.intention;
+        if(room===goal.destination){
+          transitionIntention(actor,goal.id,'completed');
+          continue;
+        }
+        const next=nextRoomOnRoute(room,goal.destination,exits);
+        if(next!==null){
+          transitionIntention(actor,goal.id,'active');
+          const action=passageAction(actor,room,next);
+          const result=execute(action);decisions.push({actor,action,result});
+        }
+        continue;
+      }
+      // Idle characters can still chat and join invitations. No fake hunger
+      // meals, and no compulsory bed teleportation when their needs are low.
+    }
+
     // Basic daily needs have the same physical travel/action rules as classes.
     // No character has to know where any other character is to eat or go home.
     for (const actor of actors('dailyLife')) {
@@ -220,7 +312,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
           decisions.some(d => d.actor === actor)) continue;
       const plan = dailyPlans.get(actor);
       const room = currentRoom(actor);
-      if (!plan || room === null) continue;
+      if (!plan || room === null || plan.intentionPlanning) continue;
 
       if (isSleepTime(minute) && room === plan.homeRoom) {
         sleeping.add(actor);
