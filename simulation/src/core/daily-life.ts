@@ -10,6 +10,8 @@ export type DailyLifePlan = {
   homeRoom: number;
   /** Social meeting space, distinct from private sleeping room. */
   socialRoom?: number;
+  /** Optional weekend destination such as a library or the courtyard. */
+  leisureRoom?: number;
   diningRoom: number;
   style: SocialStyle;
   interest: SocialTopic;
@@ -43,6 +45,12 @@ export function isLeisure(minute: number): boolean {
   return (m >= 1150 && m < 1230) ||
     (isWeekend(minute) && m >= 540 && m < 690);
 }
+export function leisureDestination(plan: DailyLifePlan, minute: number): number {
+  return isWeekend(minute)
+    ? (plan.leisureRoom ?? plan.socialRoom ?? plan.homeRoom)
+    : (plan.socialRoom ?? plan.homeRoom);
+}
+
 export function shouldReturnHome(minute: number): boolean {
   const m = localTime(minute);
   return m >= 1140 || m < 420 ||

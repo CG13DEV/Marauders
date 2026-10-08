@@ -65,6 +65,7 @@ export function createSchoolWeek(world = createSimulation()) {
         students.push({ id, key, house, year, dormGroup });
         world.setDailyLife(id, {
           homeRoom: sleepingRoom, socialRoom: dorms[house], diningRoom: greatHall,
+          leisureRoom: index === 0 ? library : index === 1 ? courtyard : dorms[house],
           style: index === 2 ? 'reserved' : 'outgoing',
           interest: (['lessons', 'castle', 'hobbies'] as const)[index]!
         });

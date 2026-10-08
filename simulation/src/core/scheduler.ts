@@ -12,7 +12,7 @@ import { willingToTutor, type TutoringRequest } from './social-learning.ts';
 import type { WitnessSearch, TimetableState } from './runtime-stores.ts';
 import {
   mealAt, ateMeal, dayOf, isWeekend, isLeisure, isSleepTime,
-  shouldReturnHome, talkedToday, chooseLocalCompanion,
+  shouldReturnHome, talkedToday, chooseLocalCompanion, leisureDestination,
   type DailyLifePlan, type MealMemory, type ConversationMemory, type RestMemory
 } from './daily-life.ts';
 
@@ -121,7 +121,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       }
       // Leisure is spent in a shared hub, sleep in a private bedroom.
       const destination = isLeisure(minute)
-        ? (plan.socialRoom ?? plan.homeRoom) : plan.homeRoom;
+        ? leisureDestination(plan, minute) : plan.homeRoom;
       if (shouldReturnHome(minute) && room !== destination) {
         const next = nextRoomOnRoute(room, destination, exits);
         if (next !== null) {
@@ -309,7 +309,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
           decisions.some(d => d.actor === actor)) continue;
       const plan = dailyPlans.get(actor);
       const room = currentRoom(actor);
-      if (!plan || room === null || room !== (plan.socialRoom ?? plan.homeRoom) ||
+      if (!plan || room === null || room !== leisureDestination(plan, minute) ||
           !has(actor, 'hearing') ||
           (plan.style === 'reserved' && !isWeekend(minute))) continue;
       const memories = conversations.get(actor) ?? [];

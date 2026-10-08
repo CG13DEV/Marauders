@@ -329,6 +329,7 @@ export function createSimulation() {
     }
     if (!isRoom(plan.homeRoom) || !isRoom(plan.diningRoom) ||
         (plan.socialRoom !== undefined && !isRoom(plan.socialRoom)) ||
+        (plan.leisureRoom !== undefined && !isRoom(plan.leisureRoom)) ||
         !['outgoing', 'reserved'].includes(plan.style) ||
         !['lessons', 'castle', 'hobbies'].includes(plan.interest)) {
       throw new Error('Invalid daily-life configuration');

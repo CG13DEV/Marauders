@@ -342,7 +342,8 @@ export function restoreSimulation(serialized: string | SavedSimulationV1 | Saved
       case 'setTimetable': restored.setTimetable(at(op.actor), op.lessons.map(l => ({ ...l, room: at(l.room) })), op.priority); break;
       case 'setDailyLife': restored.setDailyLife(at(op.actor), op.plan
         ? { ...op.plan, homeRoom: at(op.plan.homeRoom), diningRoom: at(op.plan.diningRoom),
-          ...(op.plan.socialRoom === undefined ? {} : { socialRoom: at(op.plan.socialRoom) }) }
+          ...(op.plan.socialRoom === undefined ? {} : { socialRoom: at(op.plan.socialRoom) }),
+          ...(op.plan.leisureRoom === undefined ? {} : { leisureRoom: at(op.plan.leisureRoom) }) }
         : null); break;
       case 'seedSpellKnowledge': restored.seedSpellKnowledge(at(op.actor), op.spell, op.stage); break;
       default: throw new Error('Unsupported journal operation: ' + (op as Operation).kind);
