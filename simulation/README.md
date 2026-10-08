@@ -19,6 +19,7 @@ npm run learning-demo
 npm run help-demo
 npm run play-demo
 npm run week-demo
+npm run planner-demo
 npm run play
 npm start
 npm test
@@ -246,8 +247,36 @@ The castle is now **49 spatial locations**. Dedicated classrooms belong to **sub
 
 For explicit book-evidence grades and room table, see [Hogwarts Academic Model](../docs/technical/hogwarts-academic-model.md). Earlier experiment sections in this README document **historical prototypes** and are superseded where they describe course-owned classrooms or the original 42-room world.
 
+## Experiment #14 — time-aware school journeys and feasible meals
+
+**Purpose:** stop treating a ten-minute fixed pre-class lead as sufficient for an entire castle. The spatial topology and academic timetable are unchanged: only each student's departure decisions change.
+
+- Pure `school-planner.ts`: breadth-first shortest-hop estimate over the **public** room graph, with each edge currently costing one ten-minute action. A student with `schoolPlanning: 'adaptive'` starts toward the next lesson when its estimated travel time (plus one tick of slack) reaches the remaining time to class. The same authoritative movement and closed-door command rules still execute each hop.
+- Meal decisions consider both the dining hall's physical distance and the next lesson. Pupils may start walking to lunch or dinner *before* the serving window, but **cannot eat outside it**. If eating would jeopardize a feasible lesson arrival, lesson preparation wins. A pupil already in class remains there throughout the lesson.
+- Legacy twenty-minute lead remains the default for simpler scenarios and historical saves; the seven-cohort school enables adaptive plans by default. A/B scenarios can opt into `createSchoolWeek(world, 'legacy')`.
+- Meals, attendance, lesson material and social memories remain authoritative world events. Decisions use clock, curriculum, owned meal records and building topology, **not hidden positions or thoughts of other people**. Future work: route discovery; the current planner still has perfect knowledge of public corridor connections.
+- No teleportation, magic speed modifiers or arbitrary attendance fixes: each corridor edge still consumes a separate world step. Unreachable classrooms remain unreachable and genuine conflicts can still cause lateness or missed lessons.
+
+**Matched seven-day benchmark** (84 identical pupils, 49 rooms, 155 teaching sessions, 750 personal class attendances):
+
+| Outcome | Old planner | Distance-aware planner |
+|---|---:|---:|
+| On-time attendances | 298 | **684** |
+| Late attendances | 452 | **66** |
+| Completely missed | 0 | **0** |
+| Pupil meals | 846 | **1548** |
+| First-year pupils learning Lumos theory | 6 of 12 | **12 of 12** |
+| Pupil conversations | 280 | **280** |
+| Same-house conversations | 258 | **232** |
+| Cross-house conversations | 22 | **48** |
+| Nights rested | 588 | **588** |
+
+Note that increased inter-house contacts may be produced by different timing and crowding; the scheduler has not acquired a friendship generator. Food is still an attendance-like event, not a physiological metabolic model. **The base clock begins at 08:00**, so long morning routes and late departures still have unavoidable consequences with this granularity.
+
+Reproduce both worlds with `npm run planner-demo`; regression tests prove earlier departure without teleporting, correct meal windows, legacy behavior for unconfigured NPCs, and deterministic continuation through both journal replay and direct V2 checkpoint.
+
 ## What next?
 
-Improve advance-departure planning and travel-time costs, then expand subject curriculum, exercises and semester progression. Add personal map knowledge and access control before treating the world as a whole-year simulation.
+Add individual route knowledge and time-cost uncertainty, intentional choices to break school commitments, and richer subject learning. Then build a repeating term/year calendar, access constraints and long-term social obligations.
 
 The source of truth for design remains the main repository `docs/` directory. This code is a small executable [GAME] model, not a statement of canon.
