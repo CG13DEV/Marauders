@@ -82,6 +82,7 @@ export function createSimulation() {
   const Hearing = {};
   const Inquisitive = {};
   const SociableInvestigator = {};
+  const Guarded = {};
   const Trusts = createRelation();
   const Distrusts = createRelation();
   const Name = { value: [] as string[] };
@@ -233,6 +234,12 @@ export function createSimulation() {
     }
   }
 
+  function setGuarded(character: EntityId, enabled: boolean): void {
+    if (!isCharacter(character)) throw new Error('Guarded disposition requires a character');
+    if (enabled) addComponent(ecs, character, Guarded);
+    else removeComponent(ecs, character, Guarded);
+  }
+
   function assessment(observer: EntityId, object: EntityId): Assessment {
     if (!isCharacter(observer)) throw new Error('Assessment requires a character');
     return assessReports(object, beliefsByCharacter.read(observer),
@@ -372,12 +379,16 @@ export function createSimulation() {
       const memory = beliefsByCharacter.read(command.listener)
         .filter(b => b.claim.object === command.object);
       const statement = memory.find(b => b.evidence.kind === 'vision') ?? memory[0];
+      // A guarded student may withhold an incriminating memory. Silence does
+      // not forge a different claim, and the asker cannot learn the secret.
+      const withheld = statement?.claim.culprit === command.listener &&
+        hasComponent(ecs, command.listener, Guarded);
       const question: WorldEvent = {
         type: 'question_asked', actor: command.actor, listener: command.listener,
-        object: command.object, answered: statement !== undefined
+        object: command.object, answered: statement !== undefined && !withheld
       };
       emit(question);
-      if (!statement) return { ok: true, events: [copyEvent(question)] };
+      if (!statement || withheld) return { ok: true, events: [copyEvent(question)] };
 
       const response: WorldEvent = {
         type: 'testimony_delivered', actor: command.listener,
@@ -545,7 +556,7 @@ export function createSimulation() {
 
   return {
     room, character, fragileObject, connect, execute, step,
-    setTrust, trustOf, setInquisitive, setSocialInvestigator, assessment,
+    setTrust, trustOf, setInquisitive, setSocialInvestigator, setGuarded, assessment,
     beliefs: (observer: EntityId): Belief[] => beliefsByCharacter.read(observer),
     currentRoom, locationOf, occupants, observations,
     isBroken: (eid: EntityId) => hasComponent(ecs, eid, Fragile) && Fragile.broken[eid] === 1,
