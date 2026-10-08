@@ -15,6 +15,7 @@ import { copyClaim, type Claim, type Belief } from './beliefs.ts';
 import { assessReports, decideInvestigation, type Assessment, type Trust } from './cognition.ts';
 import { nextRoomOnRoute } from './navigation.ts';
 import { createRuntimeStores } from './runtime-stores.ts';
+import type { RuntimeSnapshot, StateFlags } from './runtime-snapshot.ts';
 import {
   schoolTime, validateTimetable, currentLesson, registerAttendance,
   type Lesson, type AttendanceRecord, type SchoolPriority
@@ -1030,8 +1031,138 @@ export function createSimulation() {
     return ledger ? ledger.map(record => ({ ...record })) : [];
   }
 
+  /**
+   * Authoritative materialization boundary. Never pass this object to NPCs.
+   * It includes the actual pending decisions, cognition and interaction memory.
+   */
+  function captureRuntime(): RuntimeSnapshot {
+    const characters = Array.from(query(ecs, [Character]));
+    const traitFlags = (actor: EntityId): StateFlags => ({
+      vision: hasComponent(ecs, actor, Vision),
+      hearing: hasComponent(ecs, actor, Hearing),
+      inquisitive: hasComponent(ecs, actor, Inquisitive),
+      socialInvestigator: hasComponent(ecs, actor, SociableInvestigator),
+      guarded: hasComponent(ecs, actor, Guarded),
+      hasRoutine: hasComponent(ecs, actor, HasRoutine),
+      hasTimetable: hasComponent(ecs, actor, HasTimetable),
+      manuallyControlled: hasComponent(ecs, actor, ManuallyControlled),
+      experimental: hasComponent(ecs, actor, Experimental),
+      illuminated: hasComponent(ecs, actor, Illuminated),
+      seeksHelp: hasComponent(ecs, actor, SeeksHelp),
+      helpful: hasComponent(ecs, actor, Helpful)
+    });
+    const trust: [number, number, Trust][] = [];
+    const helped: [number, number][] = [];
+    for (const receiver of characters) {
+      for (const other of characters) {
+        if (receiver === other) continue;
+        const relation = trustOf(receiver, other);
+        if (relation !== 'neutral') trust.push([receiver, other, relation]);
+        if (hasComponent(ecs, receiver, HelpedBy(other))) helped.push([receiver, other]);
+      }
+    }
+    const state: RuntimeSnapshot = {
+      tick,
+      entityKeys: [...keys.entries()],
+      locations: [...keys.values()].flatMap(id => {
+        const room = locationOf(id);
+        return room === null ? [] : [[id, room] as [number, number]];
+      }),
+      broken: Array.from(query(ecs, [Fragile])).map(id => [id, Fragile.broken[id] === 1]),
+      doors: Array.from(query(ecs, [Door])).map(id => [id, Door.open[id] === 1]),
+      flags: characters.map(id => [id, traitFlags(id)]),
+      trusts: trust,
+      helpedBy: helped,
+      observations: [...observationsByCharacter.entries()],
+      beliefs: characters.map(id => [id, beliefsByCharacter.read(id)]),
+      learning: characters.map(id => [id, spellKnowledge.history(id)]),
+      schedules: [...timetables.entries()],
+      routines: [...routines.entries()],
+      searches: [...searches.entries()].map(([id, value]) => [id, {
+        object: value.object, asked: [...value.asked], seenRooms: [...value.seenRooms], trail: [...value.trail]
+      }]),
+      requests: [...pendingTutoring.entries()],
+      attemptedTutors: [...attemptedTutors.entries()].map(([id, values]) => [id, [...values]]),
+      assistance: [...assistanceHistory.entries()],
+      events: events.map(copyEvent)
+    };
+    return JSON.parse(JSON.stringify(state)) as RuntimeSnapshot;
+  }
+
+  /**
+   * Internal checkpoint hydration: call only after recreating the *static*
+   * entity graph. State references must be pre-remapped to this ECS world.
+   */
+  function hydrateRuntime(input: RuntimeSnapshot): void {
+    const state = JSON.parse(JSON.stringify(input)) as RuntimeSnapshot;
+    if (!Number.isSafeInteger(state.tick) || state.tick < 0 ||
+        state.entityKeys.length !== keys.size ||
+        state.entityKeys.some(([key, id]) => keys.get(key) !== id))
+      throw new Error('Checkpoint topology or clock does not match constructed world');
+
+    for (const [id, destination] of state.locations) {
+      if (!entityExists(ecs, id) || !isRoom(destination))
+        throw new Error('Checkpoint contains invalid entity position');
+      const previous = locationOf(id);
+      if (previous !== null && previous !== destination) removeComponent(ecs, id, LocatedIn(previous));
+      if (previous !== destination) addComponent(ecs, id, LocatedIn(destination));
+    }
+    for (const [id, broken] of state.broken) {
+      if (!hasComponent(ecs, id, Fragile)) throw new Error('Checkpoint references missing fragile object');
+      Fragile.broken[id] = broken ? 1 : 0;
+    }
+    for (const [id, open] of state.doors) {
+      if (!hasComponent(ecs, id, Door)) throw new Error('Checkpoint references missing door');
+      Door.open[id] = open ? 1 : 0;
+    }
+    const componentFlags = {
+      vision: Vision, hearing: Hearing, inquisitive: Inquisitive,
+      socialInvestigator: SociableInvestigator, guarded: Guarded,
+      hasRoutine: HasRoutine, hasTimetable: HasTimetable,
+      manuallyControlled: ManuallyControlled, experimental: Experimental,
+      illuminated: Illuminated, seeksHelp: SeeksHelp, helpful: Helpful
+    };
+    for (const [id, flags] of state.flags) {
+      if (!isCharacter(id)) throw new Error('Checkpoint references missing character');
+      for (const name of Object.keys(componentFlags) as (keyof StateFlags)[]) {
+        const component = componentFlags[name];
+        if (flags[name]) addComponent(ecs, id, component);
+        else removeComponent(ecs, id, component);
+      }
+    }
+    for (const [observer, source, level] of state.trusts) setTrust(observer, source, level);
+    for (const [learner, helper] of state.helpedBy) {
+      if (!isCharacter(learner) || !isCharacter(helper)) throw new Error('Invalid assistance reference');
+      addComponent(ecs, learner, HelpedBy(helper));
+    }
+
+    observationsByCharacter.clear();
+    for (const [id, ledger] of state.observations) observationsByCharacter.set(id, ledger);
+    for (const [id, ledger] of state.beliefs) beliefsByCharacter.replace(id, ledger);
+    for (const [id, ledger] of state.learning) spellKnowledge.replace(id, ledger);
+
+    timetables.clear();
+    for (const [id, schedule] of state.schedules) timetables.set(id, schedule);
+    routines.clear();
+    for (const [id, route] of state.routines) routines.set(id, route);
+    searches.clear();
+    for (const [id, search] of state.searches) searches.set(id, {
+      object: search.object, asked: new Set(search.asked),
+      seenRooms: new Set(search.seenRooms), trail: search.trail
+    });
+    pendingTutoring.clear();
+    for (const [id, request] of state.requests) pendingTutoring.set(id, request);
+    attemptedTutors.clear();
+    for (const [id, attempted] of state.attemptedTutors) attemptedTutors.set(id, new Set(attempted));
+    assistanceHistory.clear();
+    for (const [id, memories] of state.assistance) assistanceHistory.set(id, memories);
+    events.splice(0, events.length, ...state.events);
+    tick = state.tick;
+  }
+
   return {
     room, character, fragileObject, connect, execute, step,
+    captureRuntime, hydrateRuntime,
     setTrust, trustOf, setInquisitive, setSocialInvestigator, setGuarded, setRoutine, assessment,
     setTimetable, setManualControl, attendance, learningDebt, knowledgeGaps,
     setHelpSeeking, setHelpful, tutoringRequest, assistance, hasHelped,
