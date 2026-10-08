@@ -18,6 +18,11 @@ import { createRuntimeStores } from './runtime-stores.ts';
 import { runWorldStep, type StepDecision } from './scheduler.ts';
 import type { RuntimeSnapshot, StateFlags } from './runtime-snapshot.ts';
 import {
+  mealAt, dayOf, isSleepTime, ateMeal,
+  type DailyLifePlan, type MealKind, type SocialTopic, type MealMemory,
+  type ConversationMemory, type RestMemory
+} from './daily-life.ts';
+import {
   schoolTime, validateTimetable,
   type Lesson, type AttendanceRecord, type SchoolPriority
 } from './school-time.ts';
@@ -43,7 +48,9 @@ export type Command =
   | { type: 'practice_spell'; actor: EntityId; spell: SpellId; guide?: EntityId; intent: string; target: string; incantation: string }
   | { type: 'cast_spell'; actor: EntityId; spell: SpellId; intent: string; target: string; incantation: string }
   | { type: 'ask_tutoring'; actor: EntityId; listener: EntityId; spell: SpellId }
-  | { type: 'answer_tutoring'; actor: EntityId; requester: EntityId; spell: SpellId; accept: boolean };
+  | { type: 'answer_tutoring'; actor: EntityId; requester: EntityId; spell: SpellId; accept: boolean }
+  | { type: 'eat_meal'; actor: EntityId; kind: MealKind }
+  | { type: 'chat'; actor: EntityId; listener: EntityId; topic: SocialTopic };
 
 export type WorldEvent =
   | { type: 'entity_moved'; actor: EntityId; from: EntityId; to: EntityId }
@@ -56,7 +63,10 @@ export type WorldEvent =
   | { type: 'spell_concept_learned'; actor: EntityId; spell: SpellId; source: 'lesson' | 'tutoring'; minute: number }
   | { type: 'spell_executed'; actor: EntityId; spell: SpellId; mode: 'guided' | 'independent'; minute: number }
   | { type: 'tutoring_requested'; actor: EntityId; listener: EntityId; spell: SpellId; minute: number }
-  | { type: 'tutoring_answered'; actor: EntityId; requester: EntityId; spell: SpellId; accepted: boolean; minute: number };
+  | { type: 'tutoring_answered'; actor: EntityId; requester: EntityId; spell: SpellId; accepted: boolean; minute: number }
+  | { type: 'meal_eaten'; actor: EntityId; kind: MealKind; minute: number }
+  | { type: 'conversation_shared'; actor: EntityId; listener: EntityId; topic: SocialTopic; minute: number }
+  | { type: 'rest_recorded'; actor: EntityId; minute: number };
 
 /**
  * What a character is ALLOWED to know.
@@ -92,9 +102,14 @@ export type HelpRejection =
   | 'not_colocated' | 'cannot_hear' | 'invalid_helper' | 'invalid_requester'
   | 'not_character';
 
+export type DailyRejection =
+  | 'no_daily_plan' | 'wrong_meal_time' | 'not_at_table' | 'already_ate'
+  | 'wrong_topic' | 'already_chatted' | 'cannot_chat_to_self'
+  | 'not_colocated' | 'listener_cannot_hear';
+
 export type CommandResult =
   | { ok: true; events: readonly WorldEvent[] }
-  | { ok: false; reason: MoveRejection | BreakRejection | SocialRejection | DoorRejection | InspectRejection | QuestionRejection | SpellRejection | HelpRejection; events: readonly [] };
+  | { ok: false; reason: MoveRejection | BreakRejection | SocialRejection | DoorRejection | InspectRejection | QuestionRejection | SpellRejection | HelpRejection | DailyRejection; events: readonly [] };
 
 export type DoorOptions = {
   door: { key: string; label: string; open: boolean };
@@ -126,6 +141,7 @@ export function createSimulation() {
   const Illuminated = {};
   const SeeksHelp = {};
   const Helpful = {};
+  const HasDailyLife = {};
   const HelpedBy = createRelation();
   const Trusts = createRelation();
   const Distrusts = createRelation();
@@ -136,7 +152,7 @@ export function createSimulation() {
   const {
     keys, doors, events, observationsByCharacter, beliefsByCharacter,
     spellKnowledge, pendingTutoring, attemptedTutors, assistanceHistory,
-    searches, routines, timetables
+    searches, routines, timetables, dailyPlans, meals, conversations, rests
   } = createRuntimeStores();
   let tick = 0;
 
@@ -176,6 +192,9 @@ export function createSimulation() {
     spellKnowledge.register(eid);
     attemptedTutors.set(eid, new Set());
     assistanceHistory.set(eid, []);
+    meals.set(eid, []);
+    conversations.set(eid, []);
+    rests.set(eid, []);
     return eid;
   }
 
@@ -299,6 +318,32 @@ export function createSimulation() {
       routines.delete(actor);
       removeComponent(ecs, actor, HasRoutine);
     }
+  }
+
+  function setDailyLife(actor: EntityId, plan: DailyLifePlan | null): void {
+    if (!isCharacter(actor)) throw new Error('Daily life requires a character');
+    if (plan === null) {
+      dailyPlans.delete(actor);
+      removeComponent(ecs, actor, HasDailyLife);
+      return;
+    }
+    if (!isRoom(plan.homeRoom) || !isRoom(plan.diningRoom) ||
+        !['outgoing', 'reserved'].includes(plan.style) ||
+        !['lessons', 'castle', 'hobbies'].includes(plan.interest)) {
+      throw new Error('Invalid daily-life configuration');
+    }
+    dailyPlans.set(actor, { ...plan });
+    addComponent(ecs, actor, HasDailyLife);
+  }
+
+  function mealHistory(actor: EntityId): MealMemory[] {
+    return (meals.get(actor) ?? []).map(m => ({ ...m }));
+  }
+  function conversationHistory(actor: EntityId): ConversationMemory[] {
+    return (conversations.get(actor) ?? []).map(m => ({ ...m }));
+  }
+  function restHistory(actor: EntityId): RestMemory[] {
+    return (rests.get(actor) ?? []).map(m => ({ ...m }));
   }
 
   function setTimetable(actor: EntityId, lessons: readonly Lesson[], priority: SchoolPriority = 'lesson_first'): void {
@@ -455,6 +500,60 @@ export function createSimulation() {
     if (!hasComponent(ecs, command.actor, Character)) {
       return { ok: false, reason: 'not_character', events: [] };
     }
+    if (command.type === 'eat_meal') {
+      const plan = dailyPlans.get(command.actor);
+      if (!plan) return { ok: false, reason: 'no_daily_plan', events: [] };
+      const minute = schoolTime(tick).absoluteMinute;
+      if (mealAt(minute) !== command.kind) {
+        return { ok: false, reason: 'wrong_meal_time', events: [] };
+      }
+      if (currentRoom(command.actor) !== plan.diningRoom) {
+        return { ok: false, reason: 'not_at_table', events: [] };
+      }
+      const personal = meals.get(command.actor)!;
+      if (ateMeal(personal, dayOf(minute), command.kind)) {
+        return { ok: false, reason: 'already_ate', events: [] };
+      }
+      personal.push({ day: dayOf(minute), kind: command.kind, minute });
+      const event: WorldEvent = { type: 'meal_eaten', actor: command.actor, kind: command.kind, minute };
+      emit(event);
+      return { ok: true, events: [event] };
+    }
+
+    if (command.type === 'chat') {
+      if (!isCharacter(command.listener) || command.actor === command.listener) {
+        return { ok: false, reason: 'cannot_chat_to_self', events: [] };
+      }
+      if (!['lessons', 'castle', 'hobbies'].includes(command.topic)) {
+        return { ok: false, reason: 'wrong_topic', events: [] };
+      }
+      const a = currentRoom(command.actor);
+      if (a === null || a !== currentRoom(command.listener)) {
+        return { ok: false, reason: 'not_colocated', events: [] };
+      }
+      if (!hasComponent(ecs, command.actor, Hearing) ||
+          !hasComponent(ecs, command.listener, Hearing)) {
+        return { ok: false, reason: 'listener_cannot_hear', events: [] };
+      }
+      const minute = schoolTime(tick).absoluteMinute;
+      const day = dayOf(minute);
+      const actorMemories = conversations.get(command.actor)!;
+      const listenerMemories = conversations.get(command.listener)!;
+      // Social interactions require one session per participant per day.
+      if (actorMemories.some(m => dayOf(m.minute) === day) ||
+          listenerMemories.some(m => dayOf(m.minute) === day)) {
+        return { ok: false, reason: 'already_chatted', events: [] };
+      }
+      actorMemories.push({ partner: command.listener, topic: command.topic, minute });
+      listenerMemories.push({ partner: command.actor, topic: command.topic, minute });
+      const event: WorldEvent = {
+        type: 'conversation_shared', actor: command.actor,
+        listener: command.listener, topic: command.topic, minute
+      };
+      emit(event);
+      return { ok: true, events: [event] };
+    }
+
     if (command.type === 'ask_tutoring') {
       if (!isSpellId(command.spell)) return { ok: false, reason: 'unknown_spell', events: [] };
       if (!isCharacter(command.listener) || command.actor === command.listener) {
@@ -743,6 +842,18 @@ export function createSimulation() {
     return { ok: true, events: [event] };
   }
 
+  function recordDailyRest(minute: number): void {
+    if (!isSleepTime(minute)) return;
+    const day = dayOf(minute);
+    for (const [actor, plan] of dailyPlans) {
+      if (currentRoom(actor) !== plan.homeRoom) continue;
+      const history = rests.get(actor)!;
+      if (history.some(r => r.day === day)) continue;
+      history.push({ day, minute });
+      emit({ type: 'rest_recorded', actor, minute });
+    }
+  }
+
   function step(): StepDecision[] {
     const flags = {
       manual: ManuallyControlled, vision: Vision, hearing: Hearing, helpful: Helpful
@@ -766,7 +877,9 @@ export function createSimulation() {
       exits: room => getRelationTargets(ecs, room, PassageTo),
       execute, currentRoom, occupants, observations, assessment, trustOf, knowledgeGaps,
       pendingTutoring, attemptedTutors, searches, timetables, routines,
-      spellKnowledge, beliefsByCharacter, setRoutine, emit
+      dailyPlans, meals, conversations, rests,
+      spellKnowledge, beliefsByCharacter, setRoutine, emit,
+      recordDailyRest
     });
   }
 
@@ -914,6 +1027,7 @@ export function createSimulation() {
     captureRuntime, hydrateRuntime,
     setTrust, trustOf, setInquisitive, setSocialInvestigator, setGuarded, setRoutine, assessment,
     setTimetable, setManualControl, attendance, learningDebt, knowledgeGaps,
+    setDailyLife, mealHistory, conversationHistory, restHistory,
     setHelpSeeking, setHelpful, tutoringRequest, assistance, hasHelped,
     seedSpellKnowledge, spellStage, setExperimenter, isIlluminated,
     learningHistory: (actor: EntityId): LearningRecord[] => spellKnowledge.history(actor),
