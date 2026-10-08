@@ -48,6 +48,13 @@ test('entire 96-person population runs one week without impossible movement',()=
   assert.ok(result.movementActions>0);
   assert.equal(result.tutoring,
     world.events().filter(e=>e.type==='tutoring_appointment_completed').length);
+  assert.ok(result.body!.meanHunger<80,
+    'whole school must not end the week severely hungry');
+  assert.ok(result.social.conversations>0,
+    'common-room interaction must not vanish during rollout');
+  assert.ok(result.social.invitations>0,
+    'personally initiated invitations must survive rollout');
+
 });
 
 test('staged school checkpoints and journal resume identical individual bodily and social state',()=>{
@@ -68,6 +75,24 @@ test('staged school checkpoints and journal resume identical individual bodily a
     assert.deepEqual(checkpoint.intentionHistory(checkpoint.id(key)!),
       world.intentionHistory(pupil.id));
   }
+});
+
+test('a controlled personal-goal challenge competes with class on 96 NPCs',()=>{
+  const world=createSimulation(),scene=createSchoolWeek(world,'adaptive','autonomous','96-all');
+  for(const pupil of scene.students.slice(0,24))
+    assert.equal(world.execute({type:'intend_visit',actor:pupil.id,
+      destination:scene.hospital,importance:'important',deadlineMinute:600}).ok,true);
+  for(let i=0;i<1008;i++)world.step();
+  const result=auditIntentionRollout(scene);
+  assert.deepEqual(result.invariants,{ok:true,errors:[]});
+  assert.equal(result.goals.byKind.visit,24);
+  assert.equal(result.goals.byStatus.completed+result.goals.byStatus.expired+
+    result.goals.byStatus.cancelled,24+result.goals.byKind.learn_concept+
+    result.goals.byKind.attend_meeting+result.goals.byKind.investigate);
+  assert.ok(result.goals.transitions>=24,'intention transitions must be observed');
+  assert.ok(result.social.conversations>0,'social life may change but must not disappear');
+  assert.ok(result.body!==null && result.body.meanHunger<80,
+    'school must not starve the opted-in population');
 });
 
 test('control stage preserves experiment 19 exact week baseline',()=>{
