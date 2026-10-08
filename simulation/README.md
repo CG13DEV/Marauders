@@ -24,6 +24,7 @@ npm run commitment-demo
 npm run invitations-demo
 npm run learning-purpose-demo
 npm run intentions-demo
+npm run unified-intentions-demo
 npm run play
 npm start
 npm test
@@ -338,8 +339,25 @@ Run `npm run commitment-demo` to see the same two characters choose the lesson-f
 
 **Next stages:** connect real study/appointment/social goals to the same intention engine; model edible objects, water, meal portions, social opportunities and a real sleep action/interruptions; introduce qualitative tiredness and hunger effects grounded in validated activities; choose priorities by needs, personal values and context rather than universal arbitrary score modifiers.
 
+## Experiment #19 — one shared intent ledger for study, meetings and evidence
+
+**Goal:** stop treating learning, agreements, investigations and ordinary visits as unrelated decision universes. The *opt-in* `intentionPlanning:true` policy now handles four meaningful types using **one persistent queue with importance, deadlines, interruption and resumption**:
+
+- `visit`: intentional travel to a room, completed by real arrival.
+- `learn_concept`: created only when a pupil actually has a personal knowledge gap (and is opted into learning appointments). During leisure, the shared arbiter may propose a real in-person study meeting, using the learner's prior personal interactions and **only locally observable potential helpers**. It waits for a response/appointment and completes **only after real instruction** or classroom learning, never merely by standing in a library.
+- `attend_meeting`: born for each **consenting** participant when an invitation is accepted. Both remember the *agreed room and clock time*, route physically only when the meeting approaches and resolve from real co-presence and world outcomes. An unanswered or declined invitation does not create these goals. A legacy unilateral `promise_meeting` can obligate its **speaker**, but does not conscript the listener into a new opted-in goal. The old non-opted-in rules remain unchanged.
+- `investigate`: created from the character's *own previously heard or seen* claim about a **currently visible local object**. The existing inquisitive policy derives goals only from personally contested evidence; the arbiter physically investigates by `inspect_object`. If interrupted, it can return to the **last personally known room**, but never queries the object's hidden current location to navigate. If the object has moved, inspection may fail and the intention is cancelled rather than magically corrected.
+
+All four kinds share `queued/active/paused/completed/expired/cancelled`, an event log for state transitions, proper prioritization with hunger, fatigue, timetable commitments and physically feasible routes, and both persistence formats. We still reserve **one physical action per tick**. Unqualified helpers can decline; a refused proposal does not count as a broken promise. When no helper is available, a learner may wait with its original goal still saved.
+
+**Important architectural boundary:** The new queue is used by explicitly opted-in characters only. Older expert investigation (testimony search), automatic conversation initiation and teacher/planner policies still have specialist execution paths. This is a meaningful *integration slice*, not a claim that absolutely every possible Hogwarts activity has been converted to a universal planner. Full-population activation belongs to Experiment #20, after confidence in calendars, bodily behaviour, and NPC interactions.
+
+**Verification:** `npm run unified-intentions-demo` exercises spontaneous concept learning and local investigation plus a full 84-pupil control week. New integrated tests cover consent, refusal, personal evidence, physical travel, unilateral promises, an interrupted investigation, replay, checkpoint identity remapping, and unchanged school metrics. The checkpoint integrity guard now compares semantic state sections rather than fragile JSON object insertion order while still failing closed on missing, extra or corrupted state.
+
+**Next:** enable the merged queue for progressively larger cohorts (12 → 24 → 84 pupils, then 12 teachers), measure emerging delays/meal skipping/meeting failures instead of requiring old exact behaviour, and retain objective invariants (no teleportation, no omniscient knowledge, deterministic restoration, lessons actually taught). Later: semantic food items, quality of sleep, map knowledge, long-lived social inquiry.
+
 ## What next?
 
-Link the new resumable intention ledger to study, social agreements and investigations; then add tangible food and sleeping actions, personal map knowledge and multiweek school-term continuity.
+Graduate the now-integrated intention queue to larger cohorts of pupils, then teachers; add tangible food, real sleep actions, personal route knowledge and multiweek continuity.
 
 The source of truth for design remains the main repository `docs/` directory. This code is a small executable [GAME] model, not a statement of canon.
