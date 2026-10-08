@@ -220,7 +220,7 @@ export function reportSchoolWeek(scene: ReturnType<typeof createSchoolWeek>) {
     professors: professors.length,
     houses: HOUSES.length,
     cohorts: 7,
-    subjects: SUBJECTS.length,
+    subjects: SUBJECTS.length + ELECTIVES.length,
     pupilLessonSlots: students.reduce((n, s) => n + world.attendance(s.id).length, 0),
     teacherLessonSlots: professors.reduce((n, p) => n + world.attendance(p.id).length, 0),
     teachingSessions: scene.sessions.length,

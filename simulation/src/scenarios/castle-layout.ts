@@ -131,7 +131,7 @@ export function createCastleLayout(world: Simulation) {
     0, 'west', 'greenhouse', 'CANON');
   world.connect(courtyard, greenhouse);
 
-  const corePlaces: readonly [CoreSubject, string, string, Floor, Wing][] = [
+  const corePlaces: readonly [CoreSubject, string, string, Floor, 'west' | 'east'][] = [
     ['Transfiguration', 'classroom_transfiguration', 'Кабинет трансфигурации', 1, 'east'],
     ['Defense Against the Dark Arts', 'classroom_defense', 'Кабинет ЗОТИ', 2, 'west'],
     ['History of Magic', 'classroom_history', 'Кабинет истории магии', 0, 'east']
@@ -153,7 +153,7 @@ export function createCastleLayout(world: Simulation) {
     const id = add(key, label, floor, wing, kind, { loreStatus: 'GAME' });
     electiveRooms[subject] = id;
     world.connect(subject === 'Care of Magical Creatures'
-      ? courtyard : landings[floor][wing], id);
+      ? courtyard : landings[floor][wing === 'central' ? 'gallery' : wing], id);
   }
   if (new Set(Object.values(classrooms)).size !== SUBJECTS.length ||
       new Set(Object.values(electiveRooms)).size !== ELECTIVES.length) {

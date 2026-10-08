@@ -24,7 +24,7 @@ const encounters=scene.world.conversationHistory(pupil.id).slice(0,4)
     day: Math.floor(memory.minute/1440)+1
   }));
 console.log('Пример личной социальной истории:',JSON.stringify({student:pupil.key,encounters}));
-if(result.attendance.pending!==0 || result.pupilLessonSlots!==1260 ||
+if(result.attendance.pending!==0 || result.pupilLessonSlots!==750 ||
     result.pupilConversations===0 || result.acrossHouseConversations===0 ||
     result.withinHouseConversations===0 || result.pupilMeals===0 || result.pupilRests===0)
   throw new Error('School-week validation failed');
