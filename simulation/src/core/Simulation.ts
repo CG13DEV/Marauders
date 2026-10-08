@@ -18,7 +18,7 @@ import { createRuntimeStores } from './runtime-stores.ts';
 import { runWorldStep, type StepDecision } from './scheduler.ts';
 import type { RuntimeSnapshot, StateFlags } from './runtime-snapshot.ts';
 import {
-  mealAt, dayOf, isSleepTime, ateMeal,
+  mealAt, dayOf, localTime, ateMeal,
   type DailyLifePlan, type MealKind, type SocialTopic, type MealMemory,
   type ConversationMemory, type RestMemory
 } from './daily-life.ts';
@@ -843,7 +843,7 @@ export function createSimulation() {
   }
 
   function recordDailyRest(minute: number): void {
-    if (!isSleepTime(minute)) return;
+    if (localTime(minute) < 1320) return;
     const day = dayOf(minute);
     for (const [actor, plan] of dailyPlans) {
       if (currentRoom(actor) !== plan.homeRoom) continue;
