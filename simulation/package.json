@@ -1,6 +1,6 @@
 {
   "name": "marauders-simulation",
-  "version": "0.16.0",
+  "version": "0.17.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -23,7 +23,8 @@
     "week-demo": "node --experimental-strip-types src/cli/week-demo.ts",
     "planner-demo": "node --experimental-strip-types src/cli/planner-demo.ts",
     "commitment-demo": "node --experimental-strip-types src/cli/commitment-demo.ts",
-    "invitations-demo": "node --experimental-strip-types src/cli/invitations-demo.ts"
+    "invitations-demo": "node --experimental-strip-types src/cli/invitations-demo.ts",
+    "learning-purpose-demo": "node --experimental-strip-types src/cli/learning-purpose-demo.ts"
   },
   "dependencies": {
     "bitecs": "0.4.0"

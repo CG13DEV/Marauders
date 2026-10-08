@@ -22,6 +22,7 @@ npm run week-demo
 npm run planner-demo
 npm run commitment-demo
 npm run invitations-demo
+npm run learning-purpose-demo
 npm run play
 npm start
 npm test
@@ -307,8 +308,22 @@ Run `npm run commitment-demo` to see the same two characters choose the lesson-f
 
 **Known limitations:** the prototype initiates invitations only between characters who previously exchanged a recorded chat, and picks a **test-fixture next-evening window** and the currently shared leisure room. The invitee's choice is deliberately deterministic and simplified. We still need richer time negotiations, proposals based on unsatisfied learning needs, rejection dialogue, apologies and rescheduling, more general personal agency, personal map knowledge and a multiweek population calendar.
 
+## Experiment #17 — actual learning needs motivate social arrangements
+
+**Purpose:** A learner who *really missed* the scheduled explanation of a spell can seek a tutor, propose an appointment, obtain the other's explicit consent, travel to the meeting, and learn **only when an actual qualified helper spends a separate action teaching**. Social co-presence by itself is **not** spell learning.
+
+- `src/core/learning-intentions.ts` is a pure, small intention planner. It takes the learner's `knowledgeGaps()`, locally observed candidate identities, own failed attempts, directional trust, own witnessed disappointments, and clock. **It never reads another NPC's private knowledge to decide whom to approach.** The accepted appointment, not the planner, is authoritative.
+- `learningAppointments: true` is an opt-in daily-life capability combined with `socialInvitations: true` and `setHelpSeeking`. The 12 synthetic first-years have this flag in the standard school-week setup; **healthy pupils with no missing concepts never fabricate a tutoring appointment**. Missed class or missed teacher explanation makes the genuine gap available to the individual.
+- A `study` invitation may name a specific spell. The world rejects invented or already learned gaps and stores a spell-bearing invitation and personal memories. The addressee may consent only when *they themselves* actually understand the spell, are willing to help, have no conflicting class, and are not refusing for social reasons. An unqualified candidate can decline, and the learner can approach a different locally available person.
+- At the agreed place and time, `tutor_appointment` is a **separate, guarded teaching action** by the named helper. Its canonical `tutor_spell` validation requires both people to be co-located, hearing-capable, a helper who truly knows the concept, and a learner who still lacks it. Knowledge is recorded as `LearningSource.kind='tutoring'`, and `assistanceHistory` records the actual helper. `taught: true` marks performed instruction; `kept` alone only means that two people met.
+- If both people physically meet but no teaching action happens, the appointment is `kept` but the spell remains unlearned. If the helper does not arrive, ordinary observed-only `waited_alone` and subsequent partner choices still apply. These are two different failures.
+- The V1 action journal and materialized V2 checkpoint reproduce proposals, consent, travel, successful teaching and learned provenance. New tests verify missed lessons, real instruction, incompetent helpers, alternative helpers, meeting-without-teaching, invalid/premature commands, deterministic continuation and unchanged school-week metrics.
+- Run `npm run learning-purpose-demo` for the **qualified vs. unqualified** comparison and a seven-day control. The ordinary 84-pupil adaptive school week already teaches all 12 first-years Lumos in class, so this new behaviour is exercised by **deliberately missed-lesson test fixtures**, not claimed as 12 new tutoring requests in the healthy control week.
+
+**Limitations:** a concrete intent is currently derived afresh from a knowledge gap; this is not yet a persistent general-purpose priority/goal queue. The next-day evening appointment and destination are simple [GAME] fixtures. The helper's willingness is deterministic, language is non-generative, and pupils still use a public map graph for navigation. Experiment #18 should own interruptions, resume semantics, motivational tradeoffs and richer negotiations across activities.
+
 ## What next?
 
-Model negotiation and rescheduling of appointments from personal educational needs, integrate teacher-driven instruction, and extend personal route knowledge and long-term social consequences across school terms.
+Build a general-purpose interruptible intention queue and negotiated appointment times, then move to personal map knowledge, teacher-driven learning and long-term social outcomes across the school year.
 
 The source of truth for design remains the main repository `docs/` directory. This code is a small executable [GAME] model, not a statement of canon.
