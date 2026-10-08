@@ -14,6 +14,10 @@ import { perceiveCrash } from './perception-rules.ts';
 import { createBeliefStore, copyClaim, type Claim, type Belief } from './beliefs.ts';
 import { assessReports, decideInvestigation, type Assessment, type Trust } from './cognition.ts';
 import { nextRoomOnRoute } from './navigation.ts';
+import {
+  schoolTime, validateTimetable, currentLesson, registerAttendance,
+  type Lesson, type AttendanceRecord, type SchoolPriority
+} from './school-time.ts';
 
 export type EntityId = number;
 
@@ -31,7 +35,8 @@ export type WorldEvent =
   | { type: 'door_opened'; actor: EntityId; door: EntityId }
   | { type: 'testimony_delivered'; actor: EntityId; listener: EntityId; claim: Claim }
   | { type: 'object_inspected'; actor: EntityId; target: EntityId; broken: boolean }
-  | { type: 'question_asked'; actor: EntityId; listener: EntityId; object: EntityId; answered: boolean };
+  | { type: 'question_asked'; actor: EntityId; listener: EntityId; object: EntityId; answered: boolean }
+  | { type: 'lesson_attendance'; actor: EntityId; lessonId: string; status: 'on_time' | 'late' | 'missed'; minute: number };
 
 /**
  * What a character is ALLOWED to know.
@@ -85,6 +90,7 @@ export function createSimulation() {
   const SociableInvestigator = {};
   const Guarded = {};
   const HasRoutine = {};
+  const HasTimetable = {};
   const Trusts = createRelation();
   const Distrusts = createRelation();
   const Name = { value: [] as string[] };
@@ -105,6 +111,7 @@ export function createSimulation() {
   };
   const searches = new Map<EntityId, Search>();
   const routines = new Map<EntityId, EntityId[]>();
+  const timetables = new Map<EntityId, { records: AttendanceRecord[]; priority: SchoolPriority }>();
   let tick = 0;
 
   function addNamedEntity(key: string, label: string): EntityId {
@@ -256,6 +263,35 @@ export function createSimulation() {
       routines.delete(actor);
       removeComponent(ecs, actor, HasRoutine);
     }
+  }
+
+  function setTimetable(actor: EntityId, lessons: readonly Lesson[], priority: SchoolPriority = 'lesson_first'): void {
+    if (!isCharacter(actor)) throw new Error('Timetable requires a character');
+    if (priority !== 'lesson_first' && priority !== 'inquiry_first') {
+      throw new Error('Invalid school priority');
+    }
+    validateTimetable(lessons);
+    if (lessons.some(lesson => !isRoom(lesson.room))) {
+      throw new Error('Timetable destinations must be rooms');
+    }
+    if (lessons.length === 0) {
+      timetables.delete(actor);
+      removeComponent(ecs, actor, HasTimetable);
+      return;
+    }
+    timetables.set(actor, {
+      records: lessons.map(lesson => ({ ...lesson, status: 'pending' as const })),
+      priority
+    });
+    addComponent(ecs, actor, HasTimetable);
+  }
+
+  function attendance(actor: EntityId): AttendanceRecord[] {
+    return (timetables.get(actor)?.records ?? []).map(lesson => ({ ...lesson }));
+  }
+
+  function learningDebt(actor: EntityId): number {
+    return attendance(actor).filter(lesson => lesson.status === 'missed').length;
   }
 
   function assessment(observer: EntityId, object: EntityId): Assessment {
@@ -468,10 +504,39 @@ export function createSimulation() {
 
   function step(): { actor: EntityId; action: Command; result: CommandResult }[] {
     tick += 1;
+    const minute = schoolTime(tick).absoluteMinute;
+    const decisions: { actor: EntityId; action: Command; result: CommandResult }[] = [];
+    const occupiedBySchool = new Set<EntityId>();
+
+    function travelTowardLesson(actor: EntityId, room: EntityId, goal: EntityId): void {
+      if (room === goal) return;
+      const next = nextRoomOnRoute(room, goal,
+        location => getRelationTargets(ecs, location, PassageTo));
+      if (next === null) return;
+      const door = doors.get(pairKey(room, next));
+      const action: Command = door !== undefined && Door.open[door] === 0
+        ? { type: 'open_door', actor, door }
+        : { type: 'move', actor, destination: next };
+      const result = execute(action);
+      decisions.push({ actor, action, result });
+    }
+
+    // Lesson-first pupils reserve the school period and prepare ahead of time.
+    // Other pupils may continue investigating, at the cost of late attendance.
+    for (const actor of query(ecs, [Character, HasTimetable])) {
+      const timetable = timetables.get(actor);
+      const room = currentRoom(actor);
+      if (!timetable || room === null || timetable.priority !== 'lesson_first') continue;
+      const lesson = currentLesson(timetable.records, minute);
+      if (!lesson) continue;
+      occupiedBySchool.add(actor);
+      travelTowardLesson(actor, room, lesson.room);
+    }
+
     // The decision policy reads only the actor's beliefs and locally visible
     // objects. In particular it never reads authoritative broken-state or events.
-    const decisions: { actor: EntityId; action: Command; result: CommandResult }[] = [];
     for (const actor of query(ecs, [Character, Inquisitive])) {
+      if (occupiedBySchool.has(actor)) continue;
       if (!hasComponent(ecs, actor, Vision)) continue;
       const room = currentRoom(actor);
       if (room === null) continue;
@@ -491,7 +556,7 @@ export function createSimulation() {
     // A separate opt-in social policy keeps the original inspection policy
     // independent. One physical/social action per NPC per tick.
     for (const actor of query(ecs, [Character, SociableInvestigator])) {
-      if (decisions.some(d => d.actor === actor)) continue;
+      if (occupiedBySchool.has(actor) || decisions.some(d => d.actor === actor)) continue;
       if (!hasComponent(ecs, actor, Hearing)) continue;
       const room = currentRoom(actor);
       if (room === null) continue;
@@ -560,10 +625,23 @@ export function createSimulation() {
         decisions.push({ actor, action, result });
       }
     }
+    // Inquiry-first pupils attend once they have no higher-priority action.
+    // Remaining within a lesson's room takes priority over leisure routines.
+    for (const actor of query(ecs, [Character, HasTimetable])) {
+      if (decisions.some(d => d.actor === actor)) continue;
+      const timetable = timetables.get(actor);
+      const room = currentRoom(actor);
+      if (!timetable || room === null || timetable.priority !== 'inquiry_first') continue;
+      const lesson = currentLesson(timetable.records, minute);
+      if (!lesson) continue;
+      occupiedBySchool.add(actor);
+      travelTowardLesson(actor, room, lesson.room);
+    }
+
     // Independent routines produce movement from explicit destination goals.
     // They use the castle's public topology, never hidden character locations.
     for (const actor of query(ecs, [Character, HasRoutine])) {
-      if (decisions.some(d => d.actor === actor)) continue;
+      if (occupiedBySchool.has(actor) || decisions.some(d => d.actor === actor)) continue;
       const pending = routines.get(actor);
       const room = currentRoom(actor);
       if (!pending || room === null) continue;
@@ -587,6 +665,15 @@ export function createSimulation() {
         if (pending.length === 0) setRoutine(actor, []);
       }
     }
+    for (const [actor, timetable] of timetables) {
+      for (const record of registerAttendance(timetable.records, minute, currentRoom(actor))) {
+        emit({
+          type: 'lesson_attendance', actor, lessonId: record.id,
+          status: record.status as 'on_time' | 'late' | 'missed',
+          minute
+        });
+      }
+    }
     return decisions;
   }
 
@@ -603,7 +690,9 @@ export function createSimulation() {
   return {
     room, character, fragileObject, connect, execute, step,
     setTrust, trustOf, setInquisitive, setSocialInvestigator, setGuarded, setRoutine, assessment,
+    setTimetable, attendance, learningDebt,
     tick: () => tick,
+    clock: () => schoolTime(tick),
     beliefs: (observer: EntityId): Belief[] => beliefsByCharacter.read(observer),
     currentRoom, locationOf, occupants, observations,
     isBroken: (eid: EntityId) => hasComponent(ecs, eid, Fragile) && Fragile.broken[eid] === 1,
