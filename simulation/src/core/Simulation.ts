@@ -75,7 +75,9 @@ export type Command =
   | { type: 'tutor_appointment'; actor: EntityId; meetingId: number }
   | { type: 'intend_visit'; actor: EntityId; destination:EntityId;
       importance:IntentionImportance; deadlineMinute?:number }
-  | { type: 'cancel_intention'; actor:EntityId; intentionId:number };
+  | { type: 'cancel_intention'; actor:EntityId; intentionId:number }
+  | { type: 'intend_study'; actor:EntityId; spell:SpellId }
+  | { type: 'intend_investigate'; actor:EntityId; object:EntityId };
 
 export type WorldEvent =
   | { type: 'entity_moved'; actor: EntityId; from: EntityId; to: EntityId }
@@ -152,7 +154,8 @@ export type MeetingRejection =
   | 'appointment_already_taught' | 'not_missing_concept';
 
 export type IntentionRejection='no_intention_planner'|'invalid_intention'|
-  'too_many_intentions'|'missing_intention'|'invalid_deadline'|'duplicate_intention';
+  'too_many_intentions'|'missing_intention'|'invalid_deadline'|'duplicate_intention'|
+  'no_personal_knowledge_gap'|'no_local_evidence';
 
 export type CommandResult =
   | { ok: true; events: readonly WorldEvent[] }
@@ -410,6 +413,38 @@ export function createSimulation() {
       bodilyNeeds.set(actor,{...INITIAL_NEEDS});
     else if(plan.intentionPlanning!==true)bodilyNeeds.delete(actor);
     addComponent(ecs, actor, HasDailyLife);
+  }
+
+  function queueIntention(actor:EntityId,
+    details:Pick<PersonalIntention,'kind'|'destination'|'importance'> &
+      Partial<Pick<PersonalIntention,'spell'|'meetingId'|'object'|'deadlineMinute'>>
+  ):PersonalIntention|null{
+    if(!dailyPlans.get(actor)?.intentionPlanning)return null;
+    const personal=intentions.get(actor)!;
+    const duplicate=personal.find(g=>isOpenIntention(g)&&g.kind===details.kind &&
+      (details.kind==='learn_concept'?g.spell===details.spell:
+       details.kind==='attend_meeting'?g.meetingId===details.meetingId:
+       details.kind==='investigate'?g.object===details.object:
+       g.destination===details.destination));
+    if(duplicate)return duplicate;
+    if(personal.filter(isOpenIntention).length>=8)return null;
+    const goal:PersonalIntention={
+      ...details,id:(personal.at(-1)?.id??0)+1,
+      createdMinute:schoolTime(tick).absoluteMinute,status:'queued'
+    };
+    personal.push(goal);
+    emit({type:'intention_changed',actor,intentionId:goal.id,status:'queued',
+      minute:schoolTime(tick).absoluteMinute});
+    return goal;
+  }
+  function queueMeetingIntents(meeting:MeetingCommitment):void{
+    for(const actor of [meeting.promisor,meeting.beneficiary]){
+      queueIntention(actor,{
+        kind:'attend_meeting',destination:meeting.room,
+        importance:'important',meetingId:meeting.id,
+        deadlineMinute:meeting.atMinute+20
+      });
+    }
   }
 
   function intentionHistory(actor:EntityId):PersonalIntention[]{
@@ -690,6 +725,7 @@ export function createSimulation() {
         accepted:command.accept
       };
       emit(event);
+      if(command.accept)queueMeetingIntents(offer);
       return {ok:true,events:[event]};
     }
     if(command.type==='tutor_appointment'){
@@ -764,7 +800,46 @@ export function createSimulation() {
         meetingId:meeting.id,room:meeting.room,minute:now
       };
       emit(event);
+      queueMeetingIntents(meeting);
       return {ok:true,events:[event]};
+    }
+    if(command.type==='intend_study'){
+      if(!isCharacter(command.actor) || !dailyPlans.get(command.actor)?.intentionPlanning)
+        return {ok:false,reason:'no_intention_planner',events:[]};
+      if(!isSpellId(command.spell)||
+         !knowledgeGaps(command.actor).includes(command.spell))
+        return {ok:false,reason:'no_personal_knowledge_gap',events:[]};
+      const existing=intentions.get(command.actor)!.find(g=>
+        isOpenIntention(g)&&g.kind==='learn_concept'&&g.spell===command.spell);
+      if(existing)return {ok:false,reason:'duplicate_intention',events:[]};
+      const goal=queueIntention(command.actor,{
+        kind:'learn_concept',destination:currentRoom(command.actor)!,
+        importance:'important',spell:command.spell
+      });
+      if(!goal)return {ok:false,reason:'too_many_intentions',events:[]};
+      return {ok:true,events:[copyEvent(events.at(-1)!)]};
+    }
+    if(command.type==='intend_investigate'){
+      if(!isCharacter(command.actor) || !dailyPlans.get(command.actor)?.intentionPlanning)
+        return {ok:false,reason:'no_intention_planner',events:[]};
+      const room=currentRoom(command.actor);
+      const known=beliefsByCharacter.read(command.actor).some(
+        b=>b.claim.object===command.object);
+      if(room===null || !known || !hasComponent(ecs,command.actor,Vision) ||
+         !hasComponent(ecs,command.object,Fragile) ||
+         locationOf(command.object)!==room ||
+         observations(command.actor).some(
+           o=>o.kind==='inspected_object'&&o.target===command.object))
+        return {ok:false,reason:'no_local_evidence',events:[]};
+      if(intentions.get(command.actor)!.some(g=>
+        isOpenIntention(g)&&g.kind==='investigate'&&g.object===command.object))
+        return {ok:false,reason:'duplicate_intention',events:[]};
+      const goal=queueIntention(command.actor,{
+        kind:'investigate',destination:room,importance:'casual',
+        object:command.object
+      });
+      if(!goal)return {ok:false,reason:'too_many_intentions',events:[]};
+      return {ok:true,events:[copyEvent(events.at(-1)!)]};
     }
     if(command.type==='intend_visit'){
       if(!isCharacter(command.actor)||!dailyPlans.get(command.actor)?.intentionPlanning)
@@ -1123,6 +1198,9 @@ export function createSimulation() {
       observationsByCharacter.get(command.actor)!.push({
         kind: 'inspected_object', source: 'vision', target: command.target, broken
       });
+      for(const goal of intentions.get(command.actor)??[])
+        if(isOpenIntention(goal)&&goal.kind==='investigate'&&goal.object===command.target)
+          transitionIntention(command.actor,goal.id,'completed');
       return { ok: true, events: [copyEvent(event)] };
     }
 
@@ -1177,6 +1255,11 @@ export function createSimulation() {
       emit({type:'meeting_resolved',actor:meeting.promisor,
         listener:meeting.beneficiary,meetingId:meeting.id,
         room:meeting.room,minute,outcome:meeting.status});
+      for(const actor of [meeting.promisor,meeting.beneficiary])
+        for(const goal of intentions.get(actor)??[])
+          if(isOpenIntention(goal)&&goal.kind==='attend_meeting' &&
+             goal.meetingId===meeting.id)
+            transitionIntention(actor,goal.id,kept?'completed':'expired');
     }
   }
 
