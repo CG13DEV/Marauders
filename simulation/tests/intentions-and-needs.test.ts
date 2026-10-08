@@ -148,9 +148,11 @@ test('a nighttime journey pauses for sleep and resumes after waking',()=>{
   const tired=w.needsOf(student)!.fatigue;
   for(let i=0;i<48;i++)w.step(); // until 07:20
   assert.ok(w.needsOf(student)!.fatigue<tired);
-  for(let i=0;i<6;i++)w.step();
-  assert.equal(w.currentRoom(student),tower);
+  // Breakfast now uses early physical routing. The goal remains alive until
+  // that legitimate meal is finished, then resumes from the actual room.
+  for(let i=0;i<24;i++)w.step();
   assert.equal(w.intentionHistory(student)[0]?.status,'completed');
+  assert.equal(w.events().some(e=>e.type==='entity_moved' && e.to===tower),true);
 });
 
 test('goals expire at their deadline and are never silently resurrected',()=>{
