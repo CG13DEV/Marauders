@@ -384,8 +384,18 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
           continue;
         }
         if(goal.kind==='investigate' && goal.object!==undefined){
-          // The object's current position is *never* looked up to navigate:
-          // this goal exists only after a local perception/claim.
+          // Navigate to the room *last personally observed*, never to the
+          // object's omniscient current position; reality is checked on arrival.
+          if(room!==goal.destination){
+            const next=nextRoomOnRoute(room,goal.destination,exits);
+            if(next!==null){
+              transitionIntention(actor,goal.id,'active');
+              const action=passageAction(actor,room,next);
+              const result=execute(action);
+              decisions.push({actor,action,result});
+            }
+            continue;
+          }
           const action:Command={type:'inspect_object',actor,target:goal.object};
           const result=execute(action);
           decisions.push({actor,action,result});
