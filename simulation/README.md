@@ -21,6 +21,7 @@ npm run play-demo
 npm run week-demo
 npm run planner-demo
 npm run commitment-demo
+npm run invitations-demo
 npm run play
 npm start
 npm test
@@ -291,8 +292,21 @@ Run `npm run commitment-demo` to see the same two characters choose the lesson-f
 
 **Important boundaries:** this experiment uses an explicit promise action invoked by a scenario/player; the full 84-pupil week is not yet creating promises of its own. Autonomous negotiation, invitations, consent, apology and reconciliation, true lesson exercises and teacher pedagogical intent remain future work. It is **not** yet a generalized social planner that chooses among arbitrary personal desires. Future chapters should make social promises emerge from private needs and evidence of actual relationships.
 
+## Experiment #16 — autonomous social invitations and actual consent
+
+**Goal:** make appointments arise *without a scripted encounter*, from repeated physical co-presence and the NPC's own conversation memory. An invitation is explicitly **not yet a promise**.
+
+- New validated commands `offer_meeting` and `answer_meeting` extend the experiment #15 personal-commitment mechanism. The inviter must be in the same room as a hearing-capable invitee; the reply must also be given face-to-face. The recipient can explicitly **accept or reject** the proposed time, room and purpose. Only an accepted proposal becomes a scheduled meeting; rejected/unanswered offers carry no invented betrayal penalty.
+- World-owned offer lifecycle: `offered` → `pending` (accepted), `declined` (rejected) or `unanswered` (no answer before cutoff). Existing accepted meetings still resolve to `kept` or `expired` **solely through the two characters' actual positions**.
+- Each person receives only personally accessible memories (`offered`, `invited`, `accepted`, `declined`, `met`, `waited_alone`). Acceptance/decline requires a fresh audible encounter; nobody is informed remotely or reads hidden NPC desires.
+- `socialInvitations: true` opts a daily-life NPC into the autonomous policy. Outgoing characters who already have a real conversation memory of a nearby person may propose **one appointment per rolling week** during leisure, for the following day's evening; they never search global character locations. The invitee weighs their own school timetable, trust, witnessed disappointments and social disposition before responding. A reserved student may refuse an exploration appointment. No numerical friendship score or fake chance roll.
+- The standard 84-pupil school scenario enables invitations by default. The old control run remains available as `createSchoolWeek(world, 'adaptive', 'off')`. `npm run invitations-demo` compares both complete seven-day worlds and reports offers, acceptances, refusals, fulfilled meetings, attendance, meals, learned spells and conversations.
+- New regression tests verify local consent, refusal, no telepathic acceptance, never inventing strangers' conversation memories, unanswered offers, both persistence formats and entire-week spontaneous encounters. Older `promise_meeting` intentionally remains a **unilateral declaration of personal commitment** for backward compatibility; it is not a mutually negotiated meeting.
+
+**Known limitations:** the prototype initiates invitations only between characters who previously exchanged a recorded chat, and picks a **test-fixture next-evening window** and the currently shared leisure room. The invitee's choice is deliberately deterministic and simplified. We still need richer time negotiations, proposals based on unsatisfied learning needs, rejection dialogue, apologies and rescheduling, more general personal agency, personal map knowledge and a multiweek population calendar.
+
 ## What next?
 
-Make promises arise from repeated encounters and personal learning needs with explicit invitations and consent; then support apologies and rescheduling, personal route knowledge, real teacher-driven subject learning and multiweek school terms.
+Model negotiation and rescheduling of appointments from personal educational needs, integrate teacher-driven instruction, and extend personal route knowledge and long-term social consequences across school terms.
 
 The source of truth for design remains the main repository `docs/` directory. This code is a small executable [GAME] model, not a statement of canon.
