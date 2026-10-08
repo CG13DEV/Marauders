@@ -454,13 +454,14 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       const plan=dailyPlans.get(actor);
       const room=currentRoom(actor);
       if(!plan?.socialInvitations || plan.style!=='outgoing' ||
-        room===null || !isLeisure(minute) || dayOf(minute)>=5 ||
+        room===null || !isLeisure(minute) || dayOf(minute)%7>=5 ||
         room!==leisureDestination(plan,minute) || !has(actor,'hearing') ||
         has(actor,'manual') || occupiedBySchool.has(actor) ||
         socialParticipants.has(actor) || sleeping.has(actor) ||
         decisions.some(d=>d.actor===actor)) continue;
       const ownHistory=commitmentMemories.get(actor)??[];
-      if(ownHistory.some(m=>m.kind==='offered')) continue;
+      if(ownHistory.some(m=>m.kind==='offered' &&
+        dayOf(m.minute)>=dayOf(minute)-6)) continue;
       const local=new Set(occupants(room));
       const past=conversations.get(actor)??[];
       const candidate=past.map(m=>m.partner).find(other=>
