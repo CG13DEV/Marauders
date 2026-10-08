@@ -389,7 +389,9 @@ At the end of the full-week model the opted-in population's **mean internal hung
 
 **Safety gates:** no teleporting (every world move must have a real graph passage), no missing attendance records, no invalid body state, real action/knowledge provenance and consent, correct headcount for every stage, healthy mean hunger and nonzero conversations/invitations in the full 96-person week, and deterministic continuation from both V1 action journals and V2 checkpoints. Result changes are assessed as possible *consequences*; failures of these world invariants are bugs.
 
-**Limitations:** these baseline weeks have few intrinsic goal conflicts because classroom timetables already work well; the test injects obligations separately to verify interruptions. All 96 participants now have the shared arbiter and bodily state, but **ordinary school inhabitants do not yet generate rich independent exploration goals just because they are enabled**. Full organic school-year variation, food objects, complete sleep actions, local map knowledge and richer staff goal-generation belong to later experiments.
+**Stress outcome (24 externally injected important visits at the start of the 96-person week):** all 24 goals **expired at their 10:00 deadline**; the classroom attendance and consent/social data remained intact. The stress trial measured **0 paused goals**, so it establishes meaningful deadline failure, **not** that there are spontaneous interruptions in the full population. Interrupted/resumed goals are verified separately by the smaller causal fixtures from Experiment #18.
+
+**Limitations:** these baseline weeks have few intrinsic goal conflicts because classroom timetables already work well; the test injects obligations separately to probe deadlines and competing demands. All 96 participants now have the shared arbiter and bodily state, but **ordinary school inhabitants do not yet generate rich independent exploration goals just because they are enabled**. Full organic school-year variation, food objects, complete sleep actions, local map knowledge and richer staff goal-generation belong to later experiments.
 
 ## What next?
 

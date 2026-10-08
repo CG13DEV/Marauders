@@ -30,6 +30,10 @@ export function auditIntentionRollout(scene:SchoolWeekScene){
   // factual movement stream against physical passages in the castle topology.
   if(movements.some(e=>!world.exits(e.from).includes(e.to)))
     errors.push('impossible movement');
+  if(states.length && states.reduce((n,body)=>n+body.hunger,0)/states.length>=80)
+    errors.push('mass chronic hunger after weekly rollout');
+  if(population.pupils===84 && report.pupilConversations===0)
+    errors.push('social life collapsed under full population rollout');
   if(report.attendance.on_time+report.attendance.late+
       report.attendance.missed+report.attendance.pending!==750)
     errors.push('lost pupil timetable record');

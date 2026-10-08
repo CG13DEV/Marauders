@@ -90,6 +90,8 @@ test('a controlled personal-goal challenge competes with class on 96 NPCs',()=>{
     result.goals.byStatus.cancelled,24+result.goals.byKind.learn_concept+
     result.goals.byKind.attend_meeting+result.goals.byKind.investigate);
   assert.ok(result.goals.transitions>=24,'intention transitions must be observed');
+  assert.ok(result.goals.byStatus.expired>0,
+    'some personal goals should genuinely miss a challenging deadline');
   assert.ok(result.social.conversations>0,'social life may change but must not disappear');
   assert.ok(result.body!==null && result.body.meanHunger<80,
     'school must not starve the opted-in population');
