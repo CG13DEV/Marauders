@@ -37,14 +37,22 @@ export function auditIntentionRollout(scene:SchoolWeekScene){
   if(report.attendance.pending>0 && world.tick()>=1008)
     errors.push('unresolved pupil attendance after week');
   const orderedEvents=events.filter(e=>e.type==='intention_changed');
-  const byKind=Object.fromEntries(
-    ['visit','learn_concept','attend_meeting','investigate'].map(kind=>[
-      kind,goals.filter(g=>g.kind===kind).length
-    ]));
-  const byStatus=Object.fromEntries(
-    ['queued','active','paused','completed','expired','cancelled'].map(status=>[
-      status,goals.filter(g=>g.status===status).length
-    ]));
+  // Explicit keys preserve compile-time integrity: tests cannot silently
+  // interpret an omitted category as an undefined value.
+  const byKind={
+    visit:goals.filter(g=>g.kind==='visit').length,
+    learn_concept:goals.filter(g=>g.kind==='learn_concept').length,
+    attend_meeting:goals.filter(g=>g.kind==='attend_meeting').length,
+    investigate:goals.filter(g=>g.kind==='investigate').length
+  };
+  const byStatus={
+    queued:goals.filter(g=>g.status==='queued').length,
+    active:goals.filter(g=>g.status==='active').length,
+    paused:goals.filter(g=>g.status==='paused').length,
+    completed:goals.filter(g=>g.status==='completed').length,
+    expired:goals.filter(g=>g.status==='expired').length,
+    cancelled:goals.filter(g=>g.status==='cancelled').length
+  };
   const sum=(values:readonly number[])=>values.reduce((a,b)=>a+b,0);
   const round=(value:number)=>Math.round(value*10)/10;
   return {
