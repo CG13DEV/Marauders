@@ -405,3 +405,20 @@ The source of truth for design remains the main repository `docs/` directory. Th
 `createSchoolWeek(world, planning, social, rollout, 'expanded')` opts in the named Hogwarts population and offices while retaining the original 84-pupil + 12-professor timetable rollout. It adds **9 static non-timetable residents**, reuses the History of Magic lecturer as ghost Professor Binns (timetable intact, no hunger/sleep), and assigns four house heads to existing subject professors. New rooms include paired bathrooms on every modelled level (−1…7), Filch's office, Dumbledore's office, and an **unconnected** Room of Requirement. The latter is deliberately absent from `world.exits()` until a proper conditional-entry system is implemented. `room-of-requirement.ts` only validates the prerequisites for a future reveal; it does not open a door or teleport anyone. Expanded residents have stable keys but **no simulated ghost/animal physiology or autonomous patrols yet**.
 
 `createSchoolWeek()` without the fifth argument remains the experiment #20 baseline for reproducible seven-day comparisons. Run `npm test` and `npm run typecheck` to check both worlds.
+
+
+## Experiment #21 — House points, evidence, and local school news
+
+Run `npm run points-demo` to see a **false allegation** cause a real Gryffindor penalty. **[GAME]** House points are institutional ledger records, not a proof of factual wrongdoing. This is an opt-in vertical slice: ordinary `createSchoolWeek()` begins at 0 for each house and reproduces the former 7-day baseline (no synthetic auto-awards).
+
+New school setup functions: `registerHouse(pupil, house)` and `grantPointAuthority(staff, 'teacher' | 'headmaster')`. Both are journalled in persistent worlds. All 84 pupils receive house membership, the 12 lecturer slots staff authority; in expanded mode Dumbledore additionally receives headmaster authority, whereas Filch, Mrs Norris and the ghosts **do not**. Binns' pre-existing teaching slot remains a lecturer.
+
+Authoritative commands:
+- `decide_house_points` requires an authorised school official, an enrolled pupil, a signed delta in the GAME range ±1..50, a reason, and an explicit basis. Negative decisions on damaged objects require a matching entry in the decision-maker's **own belief ledger**; that belief might be eyewitness evidence or a false report. Positive merit currently needs visual ability and staff/pupil co-location; it is a discretionary observation fixture, **not** an automatically detected achievement.
+- `share_house_points` requires actual co-location, hearing, and first-hand **knowledge of the announcement or earlier gossip**. Ordinary `chat` now spreads at most one personally known point decision between participants.
+- A changed score is an authoritative `house_points_changed` event, while local listeners get `heard_house_points` observations and `knownPointNews()`. A person elsewhere cannot read the school's private ledger. `pointReactions()` returns bounded causal response memory (own house: pride, embarrassment, resentment), not a universal relationship score or autonomous revenge.
+- `housePoints()` and `pointHistory()` are world-facing **debug/administration** accessors only; do not feed them directly to NPC cognition.
+
+V1 operation replay and V2 materialized checkpoint preserve role assignment, immutable grounds/source of a point decision, ledger order and personal rumor provenance. Earlier saves lacking the optional point state continue to restore. `simulation/tests/house-points.test.ts` covers false allegations, authority & evidence gates, merits, rumor transfer, snapshots, expanded school and isolated worlds.
+
+**Deliberate limits:** no automatic autonomous sanctions yet, no correction/appeal mechanism, no House Cup ceremony/season reset, no Filch patrol reporting, and no long-term emergent intent generated from resentment. Those are separate stages, not things the `pointReactions` accessor pretends to simulate.
