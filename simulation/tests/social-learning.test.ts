@@ -219,7 +219,7 @@ test('competing duties cause late arrival and later voluntary help without steer
   const james = world.character('james', 'Джеймс', corridor);
   const peter = world.character('peter', 'Питер', corridor);
   const cup = world.fragileObject('cup', 'Чашка', corridor);
-  for (const [source, claimed] of [[james, james], [peter, peter]]) {
+  for (const [source, claimed] of [[james, james], [peter, peter]] as const) {
     const result = world.execute({
       type: 'tell', actor: source, listener: remus,
       claim: { kind: 'broke_object', culprit: claimed, object: cup }
