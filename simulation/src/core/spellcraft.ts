@@ -67,5 +67,12 @@ export function createSpellKnowledge() {
       spell: r.spell, stage: r.stage, source: cloneSource(r.source)
     }));
   }
-  return { register, stage, learn, history };
+  function replace(actor: number, records: readonly LearningRecord[]): void {
+    if (!memory.has(actor)) throw new Error('Unknown spell-knowledge owner');
+    memory.set(actor, records.map(record => ({
+      spell: record.spell, stage: record.stage, source: cloneSource(record.source)
+    })));
+  }
+
+  return { register, stage, learn, history, replace };
 }

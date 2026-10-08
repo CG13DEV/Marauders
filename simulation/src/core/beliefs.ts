@@ -50,5 +50,12 @@ export function createBeliefStore() {
     })) : [];
   }
 
-  return { register, remember, read };
+  function replace(character: number, history: readonly Belief[]): void {
+    if (!records.has(character)) throw new Error('Unregistered belief owner');
+    records.set(character, history.map(entry => ({
+      claim: copyClaim(entry.claim), evidence: cloneEvidence(entry.evidence)
+    })));
+  }
+
+  return { register, remember, read, replace };
 }
