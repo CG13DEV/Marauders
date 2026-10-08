@@ -714,6 +714,16 @@ export function createSimulation() {
     }
   }
 
+  /** One broken object is one incident, even if the cat later inspects it. */
+  function incidentSightings(actor:EntityId):number{
+    const objects=new Set<EntityId>();
+    for(const obs of observationsByCharacter.get(actor)??[]){
+      if(obs.kind==='witnessed_breakage')objects.add(obs.target);
+      if(obs.kind==='inspected_object'&&obs.broken)objects.add(obs.target);
+    }
+    return objects.size;
+  }
+
   function execute(command: Command): CommandResult {
     if (command.type === 'move') {
       const from = currentRoom(command.actor);
@@ -840,9 +850,7 @@ export function createSimulation() {
          currentRoom(command.actor)!==currentRoom(command.listener)||
          !hasComponent(ecs,command.listener,Hearing))
         return {ok:false,reason:'not_partner',events:[]};
-      const sightings=(observationsByCharacter.get(command.actor)??[])
-        .filter(o=>o.kind==='witnessed_breakage'||
-          (o.kind==='inspected_object'&&o.broken)).length;
+      const sightings=incidentSightings(command.actor);
       if(sightings<=plan.sentSignals)
         return {ok:false,reason:'no_sighting',events:[]};
       plan.sentSignals=sightings;
@@ -1553,8 +1561,7 @@ export function createSimulation() {
       const room=currentRoom(actor);
       if(room===null)continue;
       const obs=observationsByCharacter.get(actor)??[];
-      const sightings=obs.filter(o=>o.kind==='witnessed_breakage'||
-        (o.kind==='inspected_object'&&o.broken)).length;
+      const sightings=incidentSightings(actor);
       let action:Command|null=null;
       if(patrol.kind==='animal'&&sightings>patrol.sentSignals){
         if(room===currentRoom(patrol.partner!))
