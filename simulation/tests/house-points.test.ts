@@ -122,3 +122,42 @@ test('independent worlds do not leak house scores or disciplinary news',()=>{
   assert.equal(b.w.housePoints().gryffindor,0);
   assert.deepEqual(b.w.pointHistory(),[]);
 });
+
+test('experiment 21 runs a real disciplinary event during a 96-person school week',()=>{
+  const world=createSimulation();
+  const scene=createSchoolWeek(world,'adaptive','autonomous','96-all','expanded');
+  let trigger:{teacher:number;pupil:number;room:number}|null=null;
+  let ticks=0;
+  for(;ticks<1008 && !trigger;ticks++){
+    world.step();
+    for(const session of scene.sessions){
+      if(!session.students.length)continue;
+      const pupil=session.students[0]!;
+      const room=world.currentRoom(pupil);
+      if(room!==null&&room===world.currentRoom(session.teacher) &&
+         room===session.room){
+        trigger={teacher:session.teacher,pupil,room};
+        break;
+      }
+    }
+  }
+  assert.ok(trigger,'a scheduled professor and student must physically meet');
+  if(!trigger) return;
+  const vase=world.fragileObject('experiment_21_vase','Учебная ваза',trigger.room);
+  assert.equal(world.execute({type:'break_object',actor:trigger.pupil,target:vase}).ok,true);
+  const penalty=world.execute({type:'decide_house_points',actor:trigger.teacher,
+    pupil:trigger.pupil,delta:-7,reason:'Разбитый учебный предмет',
+    basis:{kind:'breakage_claim',object:vase}});
+  assert.equal(penalty.ok,true);
+  assert.equal(world.pointHistory()[0]?.evidence.kind,'vision');
+  const house=world.houseOf(trigger.pupil)!;
+  assert.equal(world.housePoints()[house],-7);
+  assert.equal(world.knownPointNews(trigger.pupil).length,1);
+  while(ticks<1008){world.step();ticks++;}
+  assert.equal(world.housePoints()[house],-7);
+  const records=scene.students.flatMap(p=>world.attendance(p.id));
+  assert.equal(records.length,750);
+  assert.equal(records.filter(r=>r.status==='pending').length,0);
+  assert.ok(world.events().some(e=>e.type==='conversation_shared'));
+  assert.equal(world.events().filter(e=>e.type==='house_points_changed').length,1);
+});
