@@ -22,7 +22,7 @@ type Operation = EntityCreation
   | { kind: 'execute'; command: Command }
   | { kind: 'step' }
   | { kind: 'setTrust'; observer: number; source: number; value: Trust }
-  | { kind: 'setInquisitive' | 'setSocialInvestigator' | 'setGuarded' | 'setHelpSeeking' | 'setHelpful' | 'setExperimenter'; actor: number; enabled: boolean }
+  | { kind: 'setInquisitive' | 'setSocialInvestigator' | 'setGuarded' | 'setHelpSeeking' | 'setHelpful' | 'setExperimenter' | 'setManualControl'; actor: number; enabled: boolean }
   | { kind: 'setRoutine'; actor: number; destinations: number[] }
   | { kind: 'setTimetable'; actor: number; lessons: Lesson[]; priority?: SchoolPriority }
   | { kind: 'seedSpellKnowledge'; actor: number; spell: SpellId; stage: Exclude<SpellStage, 'unaware'> };
@@ -66,7 +66,7 @@ function remapCommand(command: Command, ids: Map<number, number>): Command {
 function canonicalize(value: unknown, idToKey: Map<number, string>): unknown {
   const entityFields = new Set([
     'actor', 'listener', 'requester', 'helper', 'teacher', 'culprit', 'object',
-    'target', 'door', 'from', 'to', 'room', 'destination', 'source'
+    'target', 'door', 'from', 'to', 'room', 'destination', 'source', 'observer'
   ]);
   function recur(input: unknown, parent?: string): unknown {
     if (Array.isArray(input)) return input.map(x => recur(x));
@@ -159,6 +159,10 @@ function createFacade(world: Simulation, operations: Operation[]) {
       world.setTrust(observer, source, value);
       operations.push({ kind: 'setTrust', observer, source, value });
     },
+    setManualControl(actor: number, enabled: boolean) {
+      world.setManualControl(actor, enabled);
+      operations.push({ kind: 'setManualControl', actor, enabled });
+    },
     setInquisitive(actor: number, enabled: boolean) {
       world.setInquisitive(actor, enabled);
       operations.push({ kind: 'setInquisitive', actor, enabled });
@@ -244,6 +248,7 @@ export function restoreSimulation(serialized: string | SavedSimulationV1): Persi
       }
       case 'step': restored.step(); break;
       case 'setTrust': restored.setTrust(at(op.observer), at(op.source), op.value); break;
+      case 'setManualControl': restored.setManualControl(at(op.actor), op.enabled); break;
       case 'setInquisitive': restored.setInquisitive(at(op.actor), op.enabled); break;
       case 'setSocialInvestigator': restored.setSocialInvestigator(at(op.actor), op.enabled); break;
       case 'setGuarded': restored.setGuarded(at(op.actor), op.enabled); break;
