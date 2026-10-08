@@ -10,8 +10,13 @@ import { spellDefinitions, type SpellId, type LearningRecord } from './spellcraf
 import type { Belief } from './beliefs.ts';
 import { willingToTutor, type TutoringRequest } from './social-learning.ts';
 import type { WitnessSearch, TimetableState } from './runtime-stores.ts';
+import {
+  mealAt, ateMeal, dayOf, isWeekend, isLeisure, isSleepTime,
+  shouldReturnHome, talkedToday, chooseLocalCompanion,
+  type DailyLifePlan, type MealMemory, type ConversationMemory, type RestMemory
+} from './daily-life.ts';
 
-export type AgentTrait = 'timetable' | 'seeksHelp' | 'inquisitive' | 'socialInvestigator' | 'experimental' | 'routine';
+export type AgentTrait = 'timetable' | 'seeksHelp' | 'inquisitive' | 'socialInvestigator' | 'experimental' | 'routine' | 'dailyLife';
 export type ActorFlag = 'manual' | 'vision' | 'hearing' | 'helpful';
 export type StepDecision = { actor: EntityId; action: Command; result: CommandResult };
 
@@ -34,6 +39,11 @@ export type SchedulerContext = {
   searches: Map<EntityId, WitnessSearch>;
   timetables: Map<EntityId, TimetableState>;
   routines: Map<EntityId, EntityId[]>;
+  dailyPlans: Map<EntityId, DailyLifePlan>;
+  meals: Map<EntityId, MealMemory[]>;
+  conversations: Map<EntityId, ConversationMemory[]>;
+  rests: Map<EntityId, RestMemory[]>;
+  recordDailyRest(minute: number): void;
   spellKnowledge: {
     history(actor: number): LearningRecord[];
     stage(actor: number, spell: SpellId): import('./spellcraft.ts').SpellStage;
@@ -49,12 +59,14 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
     advanceClock, actors, has, visibleFragiles, passageAction,
     exits, execute, currentRoom, occupants, observations, assessment,
     trustOf, knowledgeGaps, pendingTutoring, attemptedTutors, searches,
-    timetables, routines, spellKnowledge, beliefsByCharacter, setRoutine, emit
+    timetables, routines, dailyPlans, meals, conversations, rests,
+    spellKnowledge, beliefsByCharacter, setRoutine, emit, recordDailyRest
   } = ctx;
     const minute = advanceClock();
     const decisions: { actor: EntityId; action: Command; result: CommandResult }[] = [];
     const occupiedBySchool = new Set<EntityId>();
     const socialParticipants = new Set<EntityId>();
+    const sleeping = new Set<EntityId>();
 
     function travelTowardLesson(actor: EntityId, room: EntityId, goal: EntityId): void {
       if (room === goal) return;
@@ -79,12 +91,50 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       travelTowardLesson(actor, room, lesson.room);
     }
 
+    // Basic daily needs have the same physical travel/action rules as classes.
+    // No character has to know where any other character is to eat or go home.
+    for (const actor of actors('dailyLife')) {
+      if (has(actor, 'manual') || occupiedBySchool.has(actor) ||
+          decisions.some(d => d.actor === actor)) continue;
+      const plan = dailyPlans.get(actor);
+      const room = currentRoom(actor);
+      if (!plan || room === null) continue;
+
+      if (isSleepTime(minute) && room === plan.homeRoom) {
+        sleeping.add(actor);
+        continue;
+      }
+      const meal = mealAt(minute);
+      const knownMeals = meals.get(actor) ?? [];
+      if (meal !== null && !ateMeal(knownMeals, dayOf(minute), meal)) {
+        const action: Command = room === plan.diningRoom
+          ? { type: 'eat_meal', actor, kind: meal }
+          : (() => {
+              const next = nextRoomOnRoute(room, plan.diningRoom, exits);
+              return next === null ? null : passageAction(actor, room, next);
+            })()!;
+        if (action) {
+          const result = execute(action);
+          decisions.push({ actor, action, result });
+        }
+        continue;
+      }
+      if (shouldReturnHome(minute) && room !== plan.homeRoom) {
+        const next = nextRoomOnRoute(room, plan.homeRoom, exits);
+        if (next !== null) {
+          const action = passageAction(actor, room, next);
+          const result = execute(action);
+          decisions.push({ actor, action, result });
+        }
+      }
+    }
+
     // First, helpers respond to requests they actually heard earlier. Being
     // busy with a scheduled lesson defers help; no involuntary class skipping.
     // One response consumes one NPC action this tick.
     for (const request of [...pendingTutoring.values()]) {
       const helper = request.helper;
-      if (has(helper, 'manual') || occupiedBySchool.has(helper) ||
+      if (has(helper, 'manual') || occupiedBySchool.has(helper) || sleeping.has(helper) ||
           decisions.some(d => d.actor === helper)) continue;
       if (currentRoom(helper) === null ||
           currentRoom(helper) !== currentRoom(request.requester)) continue;
@@ -109,7 +159,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
     // A pupil knows their own concrete gap and notices people sharing a room.
     // They do NOT consult the bystander's hidden knowledge or private plans.
     for (const actor of actors('seeksHelp')) {
-      if (has(actor, 'manual') || occupiedBySchool.has(actor) ||
+      if (has(actor, 'manual') || occupiedBySchool.has(actor) || sleeping.has(actor) ||
           socialParticipants.has(actor) || decisions.some(d => d.actor === actor) ||
           pendingTutoring.has(actor) || !has(actor, 'hearing')) continue;
       const room = currentRoom(actor);
@@ -125,7 +175,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       });
       const candidates = ranked.filter(other =>
         trustOf(actor, other) !== 'distrusted' &&
-        !occupiedBySchool.has(other) && !socialParticipants.has(other));
+        !occupiedBySchool.has(other) && !sleeping.has(other) && !socialParticipants.has(other));
       const target = gaps
         .flatMap(spell => candidates
           .filter(other => !attempted.has(`${other}:${spell}`))
@@ -146,8 +196,8 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
     // The decision policy reads only the actor's beliefs and locally visible
     // objects. In particular it never reads authoritative broken-state or events.
     for (const actor of actors('inquisitive')) {
-      if (has(actor, 'manual') || occupiedBySchool.has(actor) ||
-          socialParticipants.has(actor)) continue;
+      if (has(actor, 'manual') || occupiedBySchool.has(actor) || sleeping.has(actor) ||
+          socialParticipants.has(actor) || decisions.some(d => d.actor === actor)) continue;
       if (!has(actor, 'vision')) continue;
       const room = currentRoom(actor);
       if (room === null) continue;
@@ -167,7 +217,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
     // A separate opt-in social policy keeps the original inspection policy
     // independent. One physical/social action per NPC per tick.
     for (const actor of actors('socialInvestigator')) {
-      if (has(actor, 'manual') || occupiedBySchool.has(actor) ||
+      if (has(actor, 'manual') || occupiedBySchool.has(actor) || sleeping.has(actor) ||
           socialParticipants.has(actor) || decisions.some(d => d.actor === actor)) continue;
       if (!has(actor, 'hearing')) continue;
       const room = currentRoom(actor);
@@ -237,7 +287,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
     // Inquiry-first pupils attend once they have no higher-priority action.
     // Remaining within a lesson's room takes priority over leisure routines.
     for (const actor of actors('timetable')) {
-      if (has(actor, 'manual') || socialParticipants.has(actor) ||
+      if (has(actor, 'manual') || socialParticipants.has(actor) || sleeping.has(actor) ||
           decisions.some(d => d.actor === actor)) continue;
       const timetable = timetables.get(actor);
       const room = currentRoom(actor);
@@ -248,10 +298,43 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       travelTowardLesson(actor, room, lesson.room);
     }
 
+    // Actual conversation is a shared, local event. It consumes a tick for
+    // both people and writes autobiographical memories to both ledgers.
+    for (const actor of actors('dailyLife')) {
+      if (!isLeisure(minute) || has(actor, 'manual') || sleeping.has(actor) ||
+          occupiedBySchool.has(actor) || socialParticipants.has(actor) ||
+          decisions.some(d => d.actor === actor)) continue;
+      const plan = dailyPlans.get(actor);
+      const room = currentRoom(actor);
+      if (!plan || room === null || room !== plan.homeRoom ||
+          !has(actor, 'hearing') ||
+          (plan.style === 'reserved' && !isWeekend(minute))) continue;
+      const memories = conversations.get(actor) ?? [];
+      if (talkedToday(memories, dayOf(minute))) continue;
+      const available = occupants(room).filter(other =>
+        dailyPlans.has(other) && has(other, 'hearing') &&
+        !has(other, 'manual') && !sleeping.has(other) &&
+        !occupiedBySchool.has(other) && !socialParticipants.has(other) &&
+        !decisions.some(d => d.actor === other) &&
+        !talkedToday(conversations.get(other) ?? [], dayOf(minute)));
+      const listener = chooseLocalCompanion(actor, available, memories,
+        dayOf(minute), other => trustOf(actor, other));
+      if (listener === null) continue;
+      const action: Command = {
+        type: 'chat', actor, listener, topic: plan.interest
+      };
+      const result = execute(action);
+      decisions.push({ actor, action, result });
+      if (result.ok) {
+        socialParticipants.add(actor);
+        socialParticipants.add(listener);
+      }
+    }
+
     // A curious experimenter can apply a genuinely learned pattern.
     // They must previously have performed guided practice; no secret unlock.
     for (const actor of actors('experimental')) {
-      if (has(actor, 'manual') || occupiedBySchool.has(actor) ||
+      if (has(actor, 'manual') || occupiedBySchool.has(actor) || sleeping.has(actor) ||
           socialParticipants.has(actor) || decisions.some(d => d.actor === actor)) continue;
       const ready = spellKnowledge.history(actor)
         .filter(r => r.stage === 'guided')
@@ -316,6 +399,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
         });
       }
     }
+    recordDailyRest(minute);
     return decisions;
   }
 
