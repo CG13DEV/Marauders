@@ -53,7 +53,7 @@ test('Norris cannot speak or send omniscient reports; she must meet Filch',()=>{
   const w=createPersistentSimulation();
   const office=w.room('office','Кабинет Филча');
   const hall=w.room('hall','Коридор');
-  w.connect(office,hall);
+  w.connect(office,hall,{door:{key:'office_door',label:'Дверь',open:false}});
   const filch=w.character('filch','Филч',office);
   const cat=w.character('norris','Норрис',hall);
   const pupil=w.character('pupil','Ученик',hall);
@@ -69,10 +69,13 @@ test('Norris cannot speak or send omniscient reports; she must meet Filch',()=>{
   assert.equal(w.observations(filch).some(x=>x.kind==='witnessed_breakage'),false);
   assert.equal(w.execute({type:'signal_incident',actor:cat,listener:filch}).ok,false);
   const steps1=w.step();
-  assert.ok(steps1.some(x=>x.actor===cat&&x.action.type==='move'));
-  assert.equal(w.currentRoom(cat),office);
+  assert.ok(steps1.some(x=>x.actor===cat&&x.action.type==='open_door'));
+  assert.equal(w.currentRoom(cat),hall);
   const steps2=w.step();
-  assert.ok(steps2.some(x=>x.actor===cat&&x.action.type==='signal_incident'));
+  assert.ok(steps2.some(x=>x.actor===cat&&x.action.type==='move'));
+  assert.equal(w.currentRoom(cat),office);
+  const steps3=w.step();
+  assert.ok(steps3.some(x=>x.actor===cat&&x.action.type==='signal_incident'));
   const alerts=w.events().filter(x=>x.type==='animal_alerted');
   assert.equal(alerts.length,1);
   assert.ok(w.observations(filch).some(x=>x.kind==='animal_alert'&&x.actor===cat));
@@ -87,7 +90,7 @@ test('Filch may personally witness wrongdoing and report to a co-located profess
   const w=createPersistentSimulation();
   const hall=w.room('hall','Коридор');
   const office=w.room('office','Кабинет');
-  w.connect(hall,office);
+  w.connect(hall,office,{door:{key:'office_door',label:'Дверь',open:false}});
   const filch=w.character('filch','Филч',hall);
   const teacher=w.character('teacher','Профессор',office);
   const pupil=w.character('pupil','Ученик',hall);
