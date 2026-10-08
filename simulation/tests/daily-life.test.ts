@@ -93,3 +93,28 @@ test('separate worlds never share social history, sleep or meal records', () => 
   assert.equal(a.mealHistory(a1).length,1);
   assert.deepEqual(b.mealHistory(b1),[]);
 });
+
+test('legacy V1 journal replays meals and conversations without rewriting beliefs', () => {
+  const w=createPersistentSimulation();
+  const great=w.room('great','Большой зал');
+  const alice=w.character('alice','Алиса',great);
+  const bob=w.character('bob','Боб',great);
+  w.setDailyLife(alice,{homeRoom:great,diningRoom:great,style:'outgoing',interest:'lessons'});
+  w.setDailyLife(bob,{homeRoom:great,diningRoom:great,style:'reserved',interest:'hobbies'});
+  assert.equal(w.execute({type:'eat_meal',actor:alice,kind:'breakfast'}).ok,true);
+  assert.equal(w.execute({type:'chat',actor:alice,listener:bob,topic:'lessons'}).ok,true);
+  const before=w.snapshot();
+  const revived=restoreSimulation(before);
+  assert.equal(revived.snapshot().audit,before.audit);
+  assert.deepEqual(revived.conversationHistory(revived.id('bob')!),
+    [{partner:revived.id('alice')!,topic:'lessons',minute:480}]);
+});
+
+test('social history in text play is produced by the same validated world command', async () => {
+  const { createTextSession } = await import('../src/cli/text-game.ts');
+  const game=createTextSession();
+  assert.match(game.respond('chat peter hobbies'),/Общая история сохранена/);
+  assert.equal(game.world().conversationHistory(game.world().id('james')!).length,1);
+  assert.match(game.respond('chat peter hobbies'),/already_chatted/);
+  assert.equal(game.world().conversationHistory(game.world().id('peter')!).length,1);
+});
