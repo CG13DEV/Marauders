@@ -31,3 +31,4 @@ jobs:
       - run: npm run learning-demo
       - run: npm run help-demo
       - run: npm run play-demo
+      - run: npm run week-demo

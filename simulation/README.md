@@ -18,6 +18,7 @@ npm run school-day-demo
 npm run learning-demo
 npm run help-demo
 npm run play-demo
+npm run week-demo
 npm run play
 npm start
 npm test
@@ -170,6 +171,26 @@ The text client persists an actual file through Node's filesystem; the core rema
 
 Unreal may later implement rendering and detailed spatial physics, but it must not become the source of truth for school time, knowledge, personalities, history or the rules of magic. See `docs/technical/simulation-status-and-roadmap.md`.
 
+## Experiment #10 — checkpointable seven-cohort school week
+
+The test school contains **84 pupils** (7 academic years × 4 houses × 3 pupils), **7 subject professors**, **7 year-classrooms**, house common rooms and a central corridor. Each professor teaches a single class in each daily time slot, with a deterministic rotating curriculum of seven subjects. Students each have 15 lesson appointments: three per teaching day, five days a week. Saturday and Sunday pass on the same world clock, giving **7×24×6 = 1,008 ten-minute ticks** in one weekly run.
+
+- `npm run week-demo` reports each day and the complete first-week attendance ledger.
+- Lesson windows now accept **absolute minutes**, so school attendance persists across day boundaries. The first year receives the `Lumos` conceptual lesson in its first Charms period.
+- **Scope**: this is population scheduling and teaching continuity, **not yet social life across every cohort**. Students share rooms and existing character systems, but no automatic meals, clubs, friendships or weekend activities are implemented for this school population. Professors are subject-assigned representative teachers rather than the canonical list of 1970s staff.
+- The school generator and scheduler are separate modules; dynamic data stores are world-local and isolated from command validation.
+
+### Materialized checkpoint v2
+
+`world.checkpoint()` includes static creation blueprint plus **current ECS flags, relations, positions, class records, beliefs, observations, spell knowledge, pending goals, memories and event history**. `serializeCheckpoint(world)` and `restoreCheckpoint(data)` recreate the static topology, then **hydrate current state directly** — they do **not replay every historical tick**.
+
+`npm run play` now writes these v2 checkpoints to disk. Older operation-journal saves (`version: 1`) remain readable with `restoreSimulation()`. New v2 checkpoints can be saved again after restoration and forked into independent futures.
+
+This is a materialized-state milestone, not final persistence engineering: v2 still serializes the complete event history, does not compact old observations, has no schema migrations and does not prove performance at whole-year scale. Do not expose the privileged checkpoint state to NPC cognition.
+
+### Scheduler extraction
+
+`src/core/scheduler.ts` owns the deterministic timestep ordering, while `src/core/runtime-stores.ts` creates isolated memory and routine stores, and `src/core/runtime-snapshot.ts` maps all entity references during hydration. `Simulation.ts` still owns the authoritative ECS graph, command validation and state capture. Command handlers remain a separate planned extraction.
 ## What next?
 
 Extract the monolithic `Simulation.ts` into narrow state/systems modules, implement **materialized checkpoints** and versioned migrations, and add a seven-day calendar with a real population/school curriculum. Extend gameplay and NPC decision traces before expanding toward a fully simulated year.
