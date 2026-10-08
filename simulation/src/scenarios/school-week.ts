@@ -5,6 +5,7 @@
  */
 import { createSimulation } from '../core/Simulation.ts';
 import type { Lesson } from '../core/school-time.ts';
+import { createCastleLayout } from './castle-layout.ts';
 
 export const HOUSES = ['gryffindor', 'ravenclaw', 'hufflepuff', 'slytherin'] as const;
 export const SUBJECTS = [
@@ -20,6 +21,7 @@ type Student = {
   key: string;
   house: typeof HOUSES[number];
   year: number;
+  dormGroup: 'girls' | 'boys';
 };
 type Teacher = { id: number; subject: typeof SUBJECTS[number] };
 
@@ -35,24 +37,10 @@ const readableSubject: Record<typeof SUBJECTS[number], string> = {
 };
 
 export function createSchoolWeek(world = createSimulation()) {
-  const hall = world.room('hall', 'Центральный коридор');
-  const staffRoom = world.room('staff_room', 'Учительская');
-  world.connect(hall, staffRoom);
-  const greatHall = world.room('great_hall', 'Большой зал');
-  world.connect(hall, greatHall);
-
-  const dorms = Object.fromEntries(HOUSES.map(house => {
-    const room = world.room('dorm_' + house, 'Гостиная факультета ' + readableHouse[house]);
-    world.connect(hall, room);
-    return [house, room];
-  })) as Record<typeof HOUSES[number], number>;
-
-  const classrooms: number[] = [];
-  for (let year = 1; year <= 7; year++) {
-    const room = world.room('classroom_y' + year, 'Учебный кабинет ' + year + '-го курса');
-    world.connect(hall, room);
-    classrooms.push(room);
-  }
+  const layout = createCastleLayout(world);
+  const { hall, greatHall, staffRoom, library, courtyard, hospital, classrooms } = layout;
+  const dorms = Object.fromEntries(HOUSES.map(house =>
+    [house, layout.dorms[house].common])) as Record<typeof HOUSES[number], number>;
 
   const professors: Teacher[] = SUBJECTS.map((subject, index) => {
     const id = world.character('prof_' + index, 'Преподаватель: ' + readableSubject[subject], staffRoom);
@@ -69,11 +57,14 @@ export function createSchoolWeek(world = createSimulation()) {
     for (const house of HOUSES) {
       for (let index = 0; index < PUPILS_PER_HOUSE_PER_YEAR; index++) {
         const key = 'student_y' + year + '_' + house + '_' + (index + 1);
+        // Placeholder cohort assignment, NOT historical claims about characters.
+        const dormGroup = (year + index) % 2 === 0 ? 'girls' : 'boys';
+        const sleepingRoom = layout.dorms[house][dormGroup];
         const id = world.character(key,
-          readableHouse[house] + ', ' + year + ' курс, ученик ' + (index + 1), dorms[house]);
-        students.push({ id, key, house, year });
+          readableHouse[house] + ', ' + year + ' курс, ученик ' + (index + 1), sleepingRoom);
+        students.push({ id, key, house, year, dormGroup });
         world.setDailyLife(id, {
-          homeRoom: dorms[house], diningRoom: greatHall,
+          homeRoom: sleepingRoom, socialRoom: dorms[house], diningRoom: greatHall,
           style: index === 2 ? 'reserved' : 'outgoing',
           interest: (['lessons', 'castle', 'hobbies'] as const)[index]!
         });
@@ -111,7 +102,8 @@ export function createSchoolWeek(world = createSimulation()) {
   for (const [id, lessons] of pupilSchedule) world.setTimetable(id, lessons, 'lesson_first');
   for (const [id, lessons] of staffSchedule) world.setTimetable(id, lessons, 'lesson_first');
   return {
-    world, hall, staffRoom, greatHall, dorms, classrooms,
+    world, layout, hall, staffRoom, greatHall, library, courtyard, hospital,
+    dorms, classrooms,
     professors, students, pupilSchedule, staffSchedule
   };
 }
