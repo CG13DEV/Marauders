@@ -160,3 +160,21 @@ test('the 105-resident week has school attendance, real toilets and patrol trave
     return n.urgency>=0&&n.urgency<=100;
   }));
 });
+
+test('live expanded school V1 and V2 continue the same patrol and toilet histories',()=>{
+  const world=createPersistentSimulation();
+  const school=createSchoolWeek(world,'adaptive','autonomous','96-all','expanded');
+  for(let i=0;i<55;i++)world.step();
+  assert.ok(school.students.some(s=>world.toiletState(s.id)!.visits>0));
+  const norris=world.id('mrs_norris')!;
+  const filch=world.id('caretaker_filch')!;
+  assert.ok(world.patrolState(norris));
+  assert.ok(world.patrolState(filch));
+  const cp=restoreCheckpoint(world.checkpoint());
+  const jr=restoreSimulation(world.snapshot());
+  assert.deepEqual(cp.captureRuntime(),world.captureRuntime());
+  assert.deepEqual(jr.captureRuntime(),world.captureRuntime());
+  for(let i=0;i<20;i++){world.step();cp.step();jr.step();}
+  assert.deepEqual(cp.captureRuntime(),world.captureRuntime());
+  assert.deepEqual(jr.captureRuntime(),world.captureRuntime());
+});
