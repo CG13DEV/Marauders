@@ -4,6 +4,7 @@ import { createSpellKnowledge } from './spellcraft.ts';
 import type { EntityId, Observation, WorldEvent } from './Simulation.ts';
 import type { TutoringRequest, AssistanceMemory } from './social-learning.ts';
 import type { AttendanceRecord, SchoolPriority } from './school-time.ts';
+import type { DailyLifePlan, MealMemory, ConversationMemory, RestMemory } from './daily-life.ts';
 
 export type WitnessSearch = {
   object: EntityId;
@@ -31,6 +32,10 @@ export function createRuntimeStores() {
     assistanceHistory: new Map<EntityId, AssistanceMemory[]>(),
     searches: new Map<EntityId, WitnessSearch>(),
     routines: new Map<EntityId, EntityId[]>(),
-    timetables: new Map<EntityId, TimetableState>()
+    timetables: new Map<EntityId, TimetableState>(),
+    dailyPlans: new Map<EntityId, DailyLifePlan>(),
+    meals: new Map<EntityId, MealMemory[]>(),
+    conversations: new Map<EntityId, ConversationMemory[]>(),
+    rests: new Map<EntityId, RestMemory[]>()
   };
 }
