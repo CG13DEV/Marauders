@@ -71,7 +71,8 @@ export function createTextSession(initial = createStarterSchool()) {
       'Знания: Lumos = ' + world.spellStage(player(), 'lumos'),
       'Занятия: ' + (lessons.join('; ') || 'пока нет'),
       'Пробелы: ' + (world.knowledgeGaps(player()).join(', ') || 'нет'),
-      'Свет палочки: ' + (world.isIlluminated(player()) ? 'горит' : 'не горит')
+      'Свет палочки: ' + (world.isIlluminated(player()) ? 'горит' : 'не горит'),
+      'Разговоров: ' + world.conversationHistory(player()).length
     ].join('\n');
   }
 
@@ -87,6 +88,7 @@ export function createTextSession(initial = createStarterSchool()) {
     if (!action) return '';
     if (action === 'help') return [
       'look | status | people | go <room> | wait <ticks> | ask <person> lumos',
+      'chat <person> <lessons|castle|hobbies> (only same room)',
       'practice lumos <professor> | practice lumos | cast lumos',
       'events | save <file> | load <file> | exit'
     ].join('\n');
@@ -112,6 +114,17 @@ export function createTextSession(initial = createStarterSchool()) {
       const occurred = advance(ticks);
       return 'Время: ' + world.clock().label +
         '; событий за время ожидания: ' + occurred.length + '\n' + look();
+    }
+    if (action === 'chat') {
+      const listener = arg ? world.id(arg) : undefined;
+      if (listener === undefined) return 'Неизвестный собеседник';
+      if (extra !== 'lessons' && extra !== 'castle' && extra !== 'hobbies')
+        return 'Тема: lessons, castle или hobbies';
+      const result = world.execute({ type: 'chat', actor: player(), listener, topic: extra });
+      if (!result.ok) return 'Разговор не состоялся: ' + result.reason;
+      advance(1);
+      return 'Вы поговорили. Общая история сохранена. ' +
+        'Беседы: ' + world.conversationHistory(player()).length;
     }
     if (action === 'ask') {
       if (extra !== 'lumos') return 'Сейчас можно спрашивать только о Lumos.';
