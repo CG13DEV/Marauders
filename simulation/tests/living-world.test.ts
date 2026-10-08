@@ -118,8 +118,8 @@ test('unavailable sources lead to a bounded search rather than endless wandering
 
 test('a question cannot manufacture facts if the respondent knows nothing', () => {
   const { world, lily, james, cup, classroom } = createBrokenCupScenario();
-  const newcomer = world.character('newcomer', 'Новенький', classroom);
   world.execute({ type: 'break_object', actor: james, target: cup });
+  const newcomer = world.character('newcomer', 'Новенький', classroom);
   const result = world.execute({ type: 'ask_about', actor: lily, listener: newcomer, object: cup });
   assert.deepEqual(result, { ok: true, events: [
     { type: 'question_asked', actor: lily, listener: newcomer, object: cup, answered: false }
