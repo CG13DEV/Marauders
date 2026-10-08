@@ -9,7 +9,7 @@ import { isSleepTime, mealAt } from './daily-life.ts';
 
 export type IntentionImportance='casual'|'important';
 export type IntentionStatus='queued'|'active'|'paused'|'completed'|'expired'|'cancelled';
-export type Interruption='lesson'|'promise'|'manual'|'hunger'|'fatigue'|'higher_priority';
+export type Interruption='lesson'|'promise'|'manual'|'hunger'|'fatigue'|'higher_priority'|'waiting';
 export type PersonalIntention={
   id:number;
   kind:'visit'|'learn_concept'|'attend_meeting'|'investigate';

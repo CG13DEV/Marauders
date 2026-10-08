@@ -437,8 +437,10 @@ export function createSimulation() {
       minute:schoolTime(tick).absoluteMinute});
     return goal;
   }
-  function queueMeetingIntents(meeting:MeetingCommitment):void{
-    for(const actor of [meeting.promisor,meeting.beneficiary]){
+  function queueMeetingIntents(meeting:MeetingCommitment,accepted=true):void{
+    // A unilateral declaration cannot conscript a non-consenting listener.
+    for(const actor of accepted
+      ? [meeting.promisor,meeting.beneficiary]:[meeting.promisor]){
       queueIntention(actor,{
         kind:'attend_meeting',destination:meeting.room,
         importance:'important',meetingId:meeting.id,
@@ -800,7 +802,7 @@ export function createSimulation() {
         meetingId:meeting.id,room:meeting.room,minute:now
       };
       emit(event);
-      queueMeetingIntents(meeting);
+      queueMeetingIntents(meeting,false);
       return {ok:true,events:[event]};
     }
     if(command.type==='intend_study'){

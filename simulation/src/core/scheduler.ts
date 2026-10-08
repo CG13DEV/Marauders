@@ -324,7 +324,10 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
         if(goal.status==='active')
           transitionIntention(actor,goal.id,'paused',
             choice.kind==='eat'?'hunger':
-            choice.kind==='rest'?'fatigue':'higher_priority');
+            choice.kind==='rest'?'fatigue':
+            choice.kind==='idle' && goal.kind==='learn_concept'?'waiting':
+            choice.kind==='idle' && goal.kind==='attend_meeting'?'waiting':
+            'higher_priority');
       }
       if(choice.kind==='eat'){
         // Physical journey and legal meal command only during serving hours.
@@ -363,6 +366,9 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
               !decisions.some(d=>d.actor===other),
             minute
           });
+          if(!intention){
+            transitionIntention(actor,goal.id,'paused','waiting');
+          }
           if(intention){
             const action:Command={type:'offer_meeting',actor,
               listener:intention.helper,room:intention.room,
