@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createSchoolWeek, HOUSES } from '../src/scenarios/school-week.ts';
+import { createPersistentSimulation, restoreCheckpoint, restoreSimulation } from '../src/core/persistence.ts';
 
 function reachableWithout(
   world: ReturnType<typeof createSchoolWeek>['world'],
@@ -84,4 +85,28 @@ test('leisure spaces are optional, not mandatory corridors between students', ()
   assert.ok(!world.exits(home).includes(layout.courtyard));
   assert.ok(!world.exits(home).includes(layout.library));
   assert.notEqual(layout.dorms.gryffindor.common,layout.dorms.slytherin.common);
+});
+
+test('floor and room-purpose metadata belong to the world and survive checkpoint restoration', () => {
+  const w = createPersistentSimulation();
+  const {layout}=createSchoolWeek(w);
+  const original = w.roomInfo(layout.library);
+  assert.deepEqual(original, {floor:2,wing:'east',kind:'library'});
+  original!.floor = 999;
+  assert.equal(w.roomInfo(layout.library)?.floor,2);
+  const restored=restoreCheckpoint(w.checkpoint());
+  const id=restored.id('library')!;
+  assert.deepEqual(restored.roomInfo(id), {floor:2,wing:'east',kind:'library'});
+  const v1=restoreSimulation(w.snapshot());
+  assert.deepEqual(v1.roomInfo(v1.id('hospital_wing')!), {
+    floor:1,wing:'west',kind:'hospital'
+  });
+});
+
+test('spatial metadata is stable through a populated week of character movement', () => {
+  const {world,layout}=createSchoolWeek();
+  for(let i=0;i<40;i++) world.step();
+  assert.equal(world.roomInfo(layout.dorms.gryffindor.girls)?.house,'gryffindor');
+  assert.equal(world.roomInfo(layout.courtyard)?.floor,0);
+  assert.equal(world.roomInfo(layout.classrooms[6]!)?.floor,3);
 });
