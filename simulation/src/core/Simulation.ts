@@ -12,12 +12,13 @@ import {
 import { validateMovement, type MoveRejection } from './movement-rules.ts';
 import { perceiveCrash } from './perception-rules.ts';
 import { copyClaim, type Claim, type Belief } from './beliefs.ts';
-import { assessReports, decideInvestigation, type Assessment, type Trust } from './cognition.ts';
-import { nextRoomOnRoute } from './navigation.ts';
+import { assessReports, type Assessment, type Trust } from './cognition.ts';
+
 import { createRuntimeStores } from './runtime-stores.ts';
+import { runWorldStep, type StepDecision } from './scheduler.ts';
 import type { RuntimeSnapshot, StateFlags } from './runtime-snapshot.ts';
 import {
-  schoolTime, validateTimetable, currentLesson, registerAttendance,
+  schoolTime, validateTimetable,
   type Lesson, type AttendanceRecord, type SchoolPriority
 } from './school-time.ts';
 import {
@@ -25,7 +26,7 @@ import {
   type SpellId, type SpellStage, type LearningRecord
 } from './spellcraft.ts';
 import {
-  willingToTutor, copyRequest,
+  copyRequest,
   type TutoringRequest, type AssistanceMemory
 } from './social-learning.ts';
 
@@ -742,283 +743,31 @@ export function createSimulation() {
     return { ok: true, events: [event] };
   }
 
-  function step(): { actor: EntityId; action: Command; result: CommandResult }[] {
-    tick += 1;
-    const minute = schoolTime(tick).absoluteMinute;
-    const decisions: { actor: EntityId; action: Command; result: CommandResult }[] = [];
-    const occupiedBySchool = new Set<EntityId>();
-    const socialParticipants = new Set<EntityId>();
-
-    function travelTowardLesson(actor: EntityId, room: EntityId, goal: EntityId): void {
-      if (room === goal) return;
-      const next = nextRoomOnRoute(room, goal,
-        location => getRelationTargets(ecs, location, PassageTo));
-      if (next === null) return;
-      const door = doors.get(pairKey(room, next));
-      const action: Command = door !== undefined && Door.open[door] === 0
-        ? { type: 'open_door', actor, door }
-        : { type: 'move', actor, destination: next };
-      const result = execute(action);
-      decisions.push({ actor, action, result });
-    }
-
-    // Lesson-first pupils reserve the school period and prepare ahead of time.
-    // Other pupils may continue investigating, at the cost of late attendance.
-    for (const actor of query(ecs, [Character, HasTimetable])) {
-      const timetable = timetables.get(actor);
-      const room = currentRoom(actor);
-      if (!timetable || room === null || timetable.priority !== 'lesson_first' ||
-          hasComponent(ecs, actor, ManuallyControlled)) continue;
-      const lesson = currentLesson(timetable.records, minute);
-      if (!lesson) continue;
-      occupiedBySchool.add(actor);
-      travelTowardLesson(actor, room, lesson.room);
-    }
-
-    // First, helpers respond to requests they actually heard earlier. Being
-    // busy with a scheduled lesson defers help; no involuntary class skipping.
-    // One response consumes one NPC action this tick.
-    for (const request of [...pendingTutoring.values()]) {
-      const helper = request.helper;
-      if (hasComponent(ecs, helper, ManuallyControlled) || occupiedBySchool.has(helper) ||
-          decisions.some(d => d.actor === helper)) continue;
-      if (currentRoom(helper) === null ||
-          currentRoom(helper) !== currentRoom(request.requester)) continue;
-      const accept = willingToTutor({
-        helpful: hasComponent(ecs, helper, Helpful),
-        trustsRequester: trustOf(helper, request.requester),
-        knowsConcept: spellKnowledge.stage(helper, request.spell) !== 'unaware',
-        learnerNeedsConcept: spellKnowledge.stage(request.requester, request.spell) === 'unaware'
-      });
-      const action: Command = {
-        type: 'answer_tutoring', actor: helper, requester: request.requester,
-        spell: request.spell, accept
-      };
-      const result = execute(action);
-      decisions.push({ actor: helper, action, result });
-      if (result.ok) {
-        socialParticipants.add(helper);
-        socialParticipants.add(request.requester);
-      }
-    }
-
-    // A pupil knows their own concrete gap and notices people sharing a room.
-    // They do NOT consult the bystander's hidden knowledge or private plans.
-    for (const actor of query(ecs, [Character, SeeksHelp])) {
-      if (hasComponent(ecs, actor, ManuallyControlled) || occupiedBySchool.has(actor) ||
-          socialParticipants.has(actor) || decisions.some(d => d.actor === actor) ||
-          pendingTutoring.has(actor) || !hasComponent(ecs, actor, Hearing)) continue;
-      const room = currentRoom(actor);
-      if (room === null) continue;
-      const gaps = knowledgeGaps(actor);
-      if (gaps.length === 0) continue;
-      const attempted = attemptedTutors.get(actor)!;
-      const locals = occupants(room).filter(other =>
-        other !== actor && hasComponent(ecs, other, Hearing));
-      const ranked = locals.sort((a, b) => {
-        const ranks: Record<Trust, number> = { trusted: 2, neutral: 1, distrusted: 0 };
-        return ranks[trustOf(actor, b)] - ranks[trustOf(actor, a)] || a - b;
-      });
-      const candidates = ranked.filter(other =>
-        trustOf(actor, other) !== 'distrusted' &&
-        !occupiedBySchool.has(other) && !socialParticipants.has(other));
-      const target = gaps
-        .flatMap(spell => candidates
-          .filter(other => !attempted.has(`${other}:${spell}`))
-          .map(helper => ({ helper, spell })))
-        [0];
-      if (!target) continue;
-      const action: Command = {
-        type: 'ask_tutoring', actor, listener: target.helper, spell: target.spell
-      };
-      const result = execute(action);
-      decisions.push({ actor, action, result });
-      if (result.ok) {
-        socialParticipants.add(actor);
-        socialParticipants.add(target.helper);
-      }
-    }
-
-    // The decision policy reads only the actor's beliefs and locally visible
-    // objects. In particular it never reads authoritative broken-state or events.
-    for (const actor of query(ecs, [Character, Inquisitive])) {
-      if (hasComponent(ecs, actor, ManuallyControlled) || occupiedBySchool.has(actor) ||
-          socialParticipants.has(actor)) continue;
-      if (!hasComponent(ecs, actor, Vision)) continue;
-      const room = currentRoom(actor);
-      if (room === null) continue;
-      const visibleObjects = Array.from(query(ecs, [Fragile, LocatedIn(room)]));
-      const beliefs = beliefsByCharacter.read(actor);
-      const claimedObjects = [...new Set(beliefs.map(b => b.claim.object))];
-      const inspected = new Set(observations(actor)
-        .filter(o => o.kind === 'inspected_object')
-        .map(o => o.target));
-      const assessments = claimedObjects.map(object => assessment(actor, object));
-      const target = decideInvestigation(assessments, visibleObjects, inspected, true);
-      if (target === null) continue;
-      const action: Command = { type: 'inspect_object', actor, target };
-      const result = execute(action);
-      decisions.push({ actor, action, result });
-    }
-    // A separate opt-in social policy keeps the original inspection policy
-    // independent. One physical/social action per NPC per tick.
-    for (const actor of query(ecs, [Character, SociableInvestigator])) {
-      if (hasComponent(ecs, actor, ManuallyControlled) || occupiedBySchool.has(actor) ||
-          socialParticipants.has(actor) || decisions.some(d => d.actor === actor)) continue;
-      if (!hasComponent(ecs, actor, Hearing)) continue;
-      const room = currentRoom(actor);
-      if (room === null) continue;
-
-      const beliefs = beliefsByCharacter.read(actor);
-      const objects = [...new Set(beliefs.map(b => b.claim.object))].sort((a, b) => a - b);
-      const target = objects.find(o => assessment(actor, o).status === 'contested');
-      if (target === undefined) {
-        searches.delete(actor);
-        continue;
-      }
-      let search = searches.get(actor);
-      if (!search || search.object !== target) {
-        search = { object: target, asked: new Set(), seenRooms: new Set([room]), trail: [room] };
-        searches.set(actor, search);
-      }
-      // If a script or player moved the character, the previous exploration
-      // trail is obsolete; rebuild only from the NPC's current surroundings.
-      if (search.trail.at(-1) !== room) {
-        search.trail = [room];
-        search.seenRooms = new Set([room]);
-      }
-
-      const sources = [...new Set(beliefs
-        .filter(b => b.claim.object === target && b.evidence.kind === 'testimony')
-        .map(b => b.evidence.kind === 'testimony' ? b.evidence.speaker : -1))]
-        .filter(s => s !== actor && !search!.asked.has(s))
-        .sort((a, b) => {
-          const ranks: Record<Trust, number> = { trusted: 2, neutral: 1, distrusted: 0 };
-          return ranks[trustOf(actor, b)] - ranks[trustOf(actor, a)] || a - b;
-        });
-      if (sources.length === 0) continue;
-      const local = new Set(occupants(room));
-      const interview = sources.find(s => local.has(s) && hasComponent(ecs, s, Hearing));
-      if (interview !== undefined) {
-        const action: Command = { type: 'ask_about', actor, listener: interview, object: target };
-        const result = execute(action);
-        if (result.ok) search.asked.add(interview);
-        decisions.push({ actor, action, result });
-        continue;
-      }
-
-      // Depth-first exploration discovers one room at a time, without knowing
-      // where a source is. Only public adjacent exits are inspected.
-      const unexplored = getRelationTargets(ecs, room, PassageTo)
-        .filter(next => !search!.seenRooms.has(next)).sort((a, b) => a - b);
-      const next = unexplored[0];
-      if (next !== undefined) {
+  function step(): StepDecision[] {
+    const flags = {
+      manual: ManuallyControlled, vision: Vision, hearing: Hearing, helpful: Helpful
+    };
+    const agentComponents = {
+      timetable: HasTimetable, seeksHelp: SeeksHelp, inquisitive: Inquisitive,
+      socialInvestigator: SociableInvestigator, experimental: Experimental,
+      routine: HasRoutine
+    };
+    return runWorldStep({
+      advanceClock: () => schoolTime(++tick).absoluteMinute,
+      actors: trait => Array.from(query(ecs, [Character, agentComponents[trait]])),
+      has: (actor, flag) => hasComponent(ecs, actor, flags[flag]),
+      visibleFragiles: room => Array.from(query(ecs, [Fragile, LocatedIn(room)])),
+      passageAction: (actor, room, next) => {
         const door = doors.get(pairKey(room, next));
-        const action: Command = door !== undefined && Door.open[door] === 0
+        return door !== undefined && Door.open[door] === 0
           ? { type: 'open_door', actor, door }
           : { type: 'move', actor, destination: next };
-        const result = execute(action);
-        if (result.ok && action.type === 'move') {
-          search.seenRooms.add(next);
-          search.trail.push(next);
-        }
-        decisions.push({ actor, action, result });
-        continue;
-      }
-      if (search.trail.length > 1) {
-        const parent = search.trail[search.trail.length - 2]!;
-        const action: Command = { type: 'move', actor, destination: parent };
-        const result = execute(action);
-        if (result.ok) search.trail.pop();
-        decisions.push({ actor, action, result });
-      }
-    }
-    // Inquiry-first pupils attend once they have no higher-priority action.
-    // Remaining within a lesson's room takes priority over leisure routines.
-    for (const actor of query(ecs, [Character, HasTimetable])) {
-      if (hasComponent(ecs, actor, ManuallyControlled) || socialParticipants.has(actor) ||
-          decisions.some(d => d.actor === actor)) continue;
-      const timetable = timetables.get(actor);
-      const room = currentRoom(actor);
-      if (!timetable || room === null || timetable.priority !== 'inquiry_first') continue;
-      const lesson = currentLesson(timetable.records, minute);
-      if (!lesson) continue;
-      occupiedBySchool.add(actor);
-      travelTowardLesson(actor, room, lesson.room);
-    }
-
-    // A curious experimenter can apply a genuinely learned pattern.
-    // They must previously have performed guided practice; no secret unlock.
-    for (const actor of query(ecs, [Character, Experimental])) {
-      if (hasComponent(ecs, actor, ManuallyControlled) || occupiedBySchool.has(actor) ||
-          socialParticipants.has(actor) || decisions.some(d => d.actor === actor)) continue;
-      const ready = spellKnowledge.history(actor)
-        .filter(r => r.stage === 'guided')
-        .map(r => r.spell)
-        .find(spell => spellKnowledge.stage(actor, spell) === 'guided');
-      if (ready === undefined) continue;
-      const definition = spellDefinitions[ready];
-      const action: Command = {
-        type: 'practice_spell', actor, spell: ready,
-        intent: definition.intent, target: definition.semanticTarget,
-        incantation: definition.incantation
-      };
-      const result = execute(action);
-      decisions.push({ actor, action, result });
-    }
-
-    // Independent routines produce movement from explicit destination goals.
-    // They use the castle's public topology, never hidden character locations.
-    for (const actor of query(ecs, [Character, HasRoutine])) {
-      if (hasComponent(ecs, actor, ManuallyControlled) || occupiedBySchool.has(actor) ||
-          socialParticipants.has(actor) || decisions.some(d => d.actor === actor)) continue;
-      const pending = routines.get(actor);
-      const room = currentRoom(actor);
-      if (!pending || room === null) continue;
-      while (pending[0] === room) pending.shift();
-      if (pending.length === 0) {
-        setRoutine(actor, []);
-        continue;
-      }
-      const goal = pending[0]!;
-      const next = nextRoomOnRoute(room, goal,
-        location => getRelationTargets(ecs, location, PassageTo));
-      if (next === null) continue; // unreachable destination: do not teleport
-      const door = doors.get(pairKey(room, next));
-      const action: Command = door !== undefined && Door.open[door] === 0
-        ? { type: 'open_door', actor, door }
-        : { type: 'move', actor, destination: next };
-      const result = execute(action);
-      decisions.push({ actor, action, result });
-      if (result.ok && action.type === 'move' && next === goal) {
-        pending.shift();
-        if (pending.length === 0) setRoutine(actor, []);
-      }
-    }
-    for (const [actor, timetable] of timetables) {
-      // Register arrival before teaching. Being marked present at some point in
-      // the lesson is not enough: the pupil must be there at the teaching tick.
-      const presentRoom = currentRoom(actor);
-      for (const record of registerAttendance(timetable.records, minute, presentRoom)) {
-        emit({
-          type: 'lesson_attendance', actor, lessonId: record.id,
-          status: record.status as 'on_time' | 'late' | 'missed',
-          minute
-        });
-      }
-      for (const lesson of timetable.records) {
-        if (!lesson.spell || minute !== lesson.startsAt + 10 ||
-            presentRoom !== lesson.room || lesson.status === 'pending' ||
-            lesson.status === 'missed' ||
-            lesson.arrivedAt === undefined || lesson.arrivedAt > minute) continue;
-        const learned = spellKnowledge.learn(actor, lesson.spell, 'conceptual',
-          { kind: 'lesson', lessonId: lesson.id, minute });
-        if (learned) emit({
-          type: 'spell_concept_learned', actor, spell: lesson.spell, source: 'lesson', minute
-        });
-      }
-    }
-    return decisions;
+      },
+      exits: room => getRelationTargets(ecs, room, PassageTo),
+      execute, currentRoom, occupants, observations, assessment, trustOf, knowledgeGaps,
+      pendingTutoring, attemptedTutors, searches, timetables, routines,
+      spellKnowledge, beliefsByCharacter, setRoutine, emit
+    });
   }
 
   function occupants(place: EntityId): EntityId[] {
