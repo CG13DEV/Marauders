@@ -368,6 +368,8 @@ export function createSimulation() {
     if (!isRoom(plan.homeRoom) || !isRoom(plan.diningRoom) ||
         (plan.socialRoom !== undefined && !isRoom(plan.socialRoom)) ||
         (plan.leisureRoom !== undefined && !isRoom(plan.leisureRoom)) ||
+        (plan.commitmentPriority !== undefined &&
+          !['school_first','promise_first'].includes(plan.commitmentPriority)) ||
         !['outgoing', 'reserved'].includes(plan.style) ||
         !['lessons', 'castle', 'hobbies'].includes(plan.interest)) {
       throw new Error('Invalid daily-life configuration');
@@ -1158,6 +1160,7 @@ export function createSimulation() {
     for (const [id, items] of state.rests) rests.set(id, items);
     commitments.splice(0,commitments.length,...(state.commitments ?? []).map(x=>({...x})));
     commitmentMemories.clear();
+    for(const id of Array.from(query(ecs,[Character]))) commitmentMemories.set(id,[]);
     for(const [id,items] of state.commitmentMemories ?? []) {
       commitmentMemories.set(id,items.map(m=>({...m})));
     }

@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createSimulation } from '../src/core/Simulation.ts';
 import { createPersistentSimulation, restoreCheckpoint, restoreSimulation } from '../src/core/persistence.ts';
+import { personallyAvoids } from '../src/core/social-commitments.ts';
+import { chooseLocalCompanion } from '../src/core/daily-life.ts';
 
 function promiseFixture(schoolFirst = false) {
   const w=createPersistentSimulation();
@@ -145,4 +147,37 @@ test('promise state never leaks across parallel worlds',()=>{
   assert.equal(a.w.meetingLedger().length,1);
   assert.deepEqual(b.w.meetingLedger(),[]);
   assert.deepEqual(b.w.promiseHistory(b.pupil),[]);
+});
+
+test('a witnessed failure changes the next social approach without inventing a trust score',()=>{
+  const {w,remus,pupil,library}=promiseFixture();
+  w.setManualControl(remus,true);
+  w.execute({type:'promise_meeting',actor:remus,listener:pupil,
+    room:library,atMinute:540,purpose:'study'});
+  for(let i=0;i<9;i++)w.step();
+  const witness=w.promiseHistory(pupil);
+  assert.equal(personallyAvoids(witness,remus),true);
+  assert.equal(personallyAvoids(w.promiseHistory(remus),pupil),false);
+  const other=w.character('other','Другой ученик',library);
+  const partner=chooseLocalCompanion(pupil,[remus,other],[],0,
+    candidate=>personallyAvoids(witness,candidate)?'distrusted':'neutral');
+  assert.equal(partner,other);
+});
+
+test('restoring a historical checkpoint without commitments preserves the ability to promise',()=>{
+  const old=createPersistentSimulation();
+  const room=old.room('room','Гостиная');
+  const library=old.room('library','Библиотека');
+  old.connect(room,library);
+  old.character('a','А',room);
+  old.character('b','Б',room);
+  const snap=old.checkpoint();
+  delete snap.runtime.commitments;
+  delete snap.runtime.commitmentMemories;
+  const w=restoreCheckpoint(snap);
+  const response=w.execute({type:'promise_meeting',actor:w.id('a')!,
+    listener:w.id('b')!,room:w.id('library')!,
+    atMinute:540,purpose:'explore'});
+  assert.equal(response.ok,true);
+  assert.equal(w.promiseHistory(w.id('b')!).length,1);
 });
