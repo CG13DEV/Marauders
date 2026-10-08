@@ -23,6 +23,8 @@ import {
   type MeetingPurpose, type MeetingCommitment, type CommitmentMemory
 } from './social-commitments.ts';
 import { runWorldStep, type StepDecision } from './scheduler.ts';
+import { nextRoomOnRoute } from './navigation.ts';
+import {type ToiletNeed,type PatrolKind,type PatrolPlan} from './resident-life.ts';
 import { INITIAL_NEEDS, afterMeal, isOpenIntention,
   type BodilyNeeds,type PersonalIntention,type IntentionImportance,
   type IntentionStatus,type Interruption } from './intentions.ts';
@@ -83,7 +85,9 @@ export type Command =
   | { type: 'intend_investigate'; actor:EntityId; object:EntityId }
   | {type:'decide_house_points';actor:EntityId;pupil:EntityId;delta:number;
      reason:string;basis:PointBasis}
-  | {type:'share_house_points';actor:EntityId;listener:EntityId;decisionId:number};
+  | {type:'share_house_points';actor:EntityId;listener:EntityId;decisionId:number}
+  | {type:'use_toilet';actor:EntityId}
+  | {type:'signal_incident';actor:EntityId;listener:EntityId};
 
 export type WorldEvent =
   | { type: 'entity_moved'; actor: EntityId; from: EntityId; to: EntityId }
@@ -115,7 +119,9 @@ export type WorldEvent =
   | {type:'house_points_changed';actor:EntityId;pupil:EntityId;house:HouseId;
      decisionId:number;delta:number;reason:string;minute:number}
   | {type:'house_points_shared';actor:EntityId;listener:EntityId;
-     decisionId:number;minute:number};
+     decisionId:number;minute:number}
+  | {type:'toilet_used';actor:EntityId;room:EntityId;minute:number}
+  | {type:'animal_alerted';actor:EntityId;listener:EntityId;minute:number};
 
 /**
  * What a character is ALLOWED to know.
@@ -128,7 +134,8 @@ export type Observation =
   | { kind: 'heard_crash'; source: 'hearing' }
   | { kind: 'inspected_object'; source: 'vision'; target: EntityId; broken: boolean }
   | {kind:'heard_house_points';source:'hearing'|'testimony';decisionId:number;
-      speaker?:EntityId};
+      speaker?:EntityId}
+  | {kind:'animal_alert';source:'hearing';actor:EntityId};
 
 export type BreakRejection =
   | 'unknown_actor'
@@ -171,7 +178,9 @@ export type IntentionRejection='no_intention_planner'|'invalid_intention'|
 
 export type CommandResult =
   | { ok: true; events: readonly WorldEvent[] }
-  | { ok: false; reason: MoveRejection | BreakRejection | SocialRejection | DoorRejection | InspectRejection | QuestionRejection | SpellRejection | HelpRejection | DailyRejection | MeetingRejection | IntentionRejection | PointRejection; events: readonly [] };
+  | { ok: false; reason: MoveRejection | BreakRejection | SocialRejection | DoorRejection | InspectRejection | QuestionRejection | SpellRejection | HelpRejection | DailyRejection | MeetingRejection | IntentionRejection | PointRejection | 'no_toilet_need' | 'wrong_toilet' |
+      'not_urgent' | 'no_animal_signal' | 'not_partner' | 'no_sighting' |
+      'animal_cannot_speak'; events: readonly [] };
 
 export type DoorOptions = {
   door: { key: string; label: string; open: boolean };
@@ -216,7 +225,8 @@ export function createSimulation() {
     spellKnowledge, pendingTutoring, attemptedTutors, assistanceHistory,
     searches, routines, timetables, dailyPlans, meals, conversations, rests,
     commitments, commitmentMemories, intentions, bodilyNeeds,
-    houseMembership, pointAuthorities, pointLedger, pointNews
+    houseMembership, pointAuthorities, pointLedger, pointNews,
+    toiletNeeds,patrolPlans
   } = createRuntimeStores();
   let tick = 0;
 
@@ -421,6 +431,37 @@ export function createSimulation() {
     if (!isCharacter(actor)) throw new Error('Manual control requires a character');
     if (enabled) addComponent(ecs, actor, ManuallyControlled);
     else removeComponent(ecs, actor, ManuallyControlled);
+  }
+
+  function configureToilet(actor:EntityId,rooms:readonly EntityId[],urgency=0):void{
+    if(!isCharacter(actor)||!rooms.length||new Set(rooms).size!==rooms.length||
+       rooms.some(id=>!isRoom(id)||roomDetails.get(id)?.kind!=='bathroom')||
+       !Number.isFinite(urgency)||urgency<0||urgency>100||patrolPlans.has(actor))
+      throw new Error('Invalid personal toilet need');
+    toiletNeeds.set(actor,{urgency,bathrooms:[...rooms],visits:0});
+  }
+  function toiletState(actor:EntityId):ToiletNeed|null{
+    const need=toiletNeeds.get(actor);
+    return need?{...need,bathrooms:[...need.bathrooms]}:null;
+  }
+  function configurePatrol(actor:EntityId,role:PatrolKind,waypoints:readonly EntityId[],
+    partner?:EntityId,rendezvous?:EntityId):void{
+    if(!isCharacter(actor)||!['caretaker','animal'].includes(role)||
+       !waypoints.length||waypoints.some(id=>!isRoom(id))||
+       (role==='animal'&&(partner===undefined||!isCharacter(partner)||
+         rendezvous===undefined||!isRoom(rendezvous)))||
+       (role==='caretaker'&&(partner!==undefined||rendezvous!==undefined))||
+       toiletNeeds.has(actor))
+      throw new Error('Invalid caretaker patrol');
+    patrolPlans.set(actor,{kind:role,waypoints:[...waypoints],waypoint:0,
+      ...(partner===undefined?{}:{partner}),
+      ...(rendezvous===undefined?{}:{rendezvous}),
+      sentSignals:0,reportedClaims:[]});
+  }
+  function patrolState(actor:EntityId):PatrolPlan|null{
+    const plan=patrolPlans.get(actor);
+    return plan?{...plan,waypoints:[...plan.waypoints],
+      reportedClaims:[...plan.reportedClaims]}:null;
   }
 
   function setRoutine(actor: EntityId, destinations: readonly EntityId[]): void {
@@ -769,6 +810,42 @@ export function createSimulation() {
       const event:WorldEvent={type:'house_points_shared',actor:command.actor,
         listener:command.listener,decisionId:decision.id,
         minute:schoolTime(tick).absoluteMinute};
+      emit(event);
+      return {ok:true,events:[event]};
+    }
+    if(command.type==='use_toilet'){
+      const need=toiletNeeds.get(command.actor);
+      if(!need)return {ok:false,reason:'no_toilet_need',events:[]};
+      const room=currentRoom(command.actor);
+      if(room===null||!need.bathrooms.includes(room))
+        return {ok:false,reason:'wrong_toilet',events:[]};
+      if(need.urgency<40)return {ok:false,reason:'not_urgent',events:[]};
+      toiletNeeds.set(command.actor,{...need,urgency:4,visits:need.visits+1});
+      const event:WorldEvent={type:'toilet_used',actor:command.actor,room,
+        minute:schoolTime(tick).absoluteMinute};
+      emit(event);
+      return {ok:true,events:[event]};
+    }
+    if(command.type==='signal_incident'){
+      const plan=patrolPlans.get(command.actor);
+      if(!plan||plan.kind!=='animal')
+        return {ok:false,reason:'no_animal_signal',events:[]};
+      if(plan.partner!==command.listener||
+         currentRoom(command.actor)===null||
+         currentRoom(command.actor)!==currentRoom(command.listener)||
+         !hasComponent(ecs,command.listener,Hearing))
+        return {ok:false,reason:'not_partner',events:[]};
+      const sightings=(observationsByCharacter.get(command.actor)??[])
+        .filter(o=>o.kind==='witnessed_breakage'||
+          (o.kind==='inspected_object'&&o.broken)).length;
+      if(sightings<=plan.sentSignals)
+        return {ok:false,reason:'no_sighting',events:[]};
+      plan.sentSignals=sightings;
+      // A cat conveys suspicion, never culpability, object IDs or telepathy.
+      observationsByCharacter.get(command.listener)?.push({
+        kind:'animal_alert',source:'hearing',actor:command.actor});
+      const event:WorldEvent={type:'animal_alerted',actor:command.actor,
+        listener:command.listener,minute:schoolTime(tick).absoluteMinute};
       emit(event);
       return {ok:true,events:[event]};
     }
@@ -1250,6 +1327,8 @@ export function createSimulation() {
     }
 
     if (command.type === 'tell') {
+      if(patrolPlans.get(command.actor)?.kind==='animal')
+        return {ok:false,reason:'animal_cannot_speak',events:[]};
       if (!entityExists(ecs, command.listener)) {
         return { ok: false, reason: 'unknown_listener', events: [] };
       }
