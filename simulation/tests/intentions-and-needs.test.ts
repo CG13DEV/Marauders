@@ -179,16 +179,28 @@ test('V1 journal and V2 checkpoint replay the same interrupted life, needs and g
   assert.equal(c.intentionHistory(c.id('student')!)[0]?.status,'completed');
 });
 
-test('historic checkpoint without needs/goals hydrates and two worlds never share state',()=>{
-  const {w,student}=fixture();
-  const snap=w.checkpoint();
+test('historical checkpoint with no goal planner remains compatible, worlds stay isolated',()=>{
+  const old=createPersistentSimulation();
+  const room=old.room('old_room','Старая гостиная');
+  const pupil=old.character('old_pupil','Ученик',room);
+  old.setDailyLife(pupil,{
+    homeRoom:room,diningRoom:room,style:'reserved',interest:'castle'
+  });
+  const snap=old.checkpoint();
   delete snap.runtime.intentions;
   delete snap.runtime.bodilyNeeds;
   const restored=restoreCheckpoint(snap);
-  assert.deepEqual(restored.needsOf(restored.id('student')!),{hunger:26,fatigue:0});
-  const independent=fixture();
+  assert.equal(restored.needsOf(restored.id('old_pupil')!),null);
+  const {w,student}=fixture(),independent=fixture();
   visit(w,student,w.id('library')!);
   assert.equal(independent.w.intentionHistory(independent.student).length,0);
+});
+
+test('tampering with a modern checkpoint by erasing active bodily state fails integrity check',()=>{
+  const {w}=fixture();
+  const snap=w.checkpoint();
+  delete snap.runtime.bodilyNeeds;
+  assert.throws(()=>restoreCheckpoint(snap),/diverged/);
 });
 
 test('pure bodily change and intention ordering have no hidden state',()=>{
