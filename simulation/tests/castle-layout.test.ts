@@ -25,9 +25,9 @@ function reachableWithout(
 
 test('castle graph contains separate landings, multiple floors and useful destinations', () => {
   const { world, layout } = createSchoolWeek();
-  assert.equal(layout.places.size, 49);
+  assert.equal(layout.places.size, 79);
   assert.deepEqual([...new Set([...layout.places.values()].map(p => p.floor))].sort((a,b)=>a-b),
-    [-1,0,1,2,3,4]);
+    [-1,0,1,2,3,4,5,6,7]);
   assert.equal(layout.places.get('hospital_wing')?.kind, 'hospital');
   assert.equal(layout.places.get('hospital_wing')?.floor, 1);
   assert.equal(layout.places.get('library')?.kind, 'library');
@@ -36,8 +36,12 @@ test('castle graph contains separate landings, multiple floors and useful destin
   assert.equal(layout.places.get('courtyard')?.floor, 0);
   assert.equal(layout.places.get('great_hall')?.kind, 'dining');
   const roomIds=[...layout.places.values()].map(x=>x.id);
-  assert.equal(new Set(roomIds).size,49);
-  for(const room of roomIds) assert.equal(reachableWithout(world,room,layout.hall),true);
+  assert.equal(new Set(roomIds).size,79);
+  for(const room of roomIds) {
+    if (room !== layout.roomOfRequirement)
+      assert.equal(reachableWithout(world,room,layout.hall),true);
+  }
+  assert.equal(reachableWithout(world,layout.roomOfRequirement,layout.hall),false);
 });
 
 test('two stair routes and the courtyard allow travel without the old universal central hub', () => {

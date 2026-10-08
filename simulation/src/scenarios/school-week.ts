@@ -6,6 +6,7 @@
 import { createSimulation } from '../core/Simulation.ts';
 import type { Lesson } from '../core/school-time.ts';
 import { createCastleLayout } from './castle-layout.ts';
+import { createCastleResidents, NAMED_STAFF } from './castle-residents.ts';
 import {
   HOUSES, SUBJECTS, ELECTIVES, HOUSE_LABELS, SUBJECT_LABELS, electiveChoices,
   type House, type CoreSubject, type ElectiveSubject, type Subject
@@ -62,10 +63,13 @@ export function createSchoolWeek(
   world = createSimulation(),
   planning: 'adaptive' | 'legacy' = 'adaptive',
   social: 'autonomous' | 'off' = 'autonomous',
-  rollout: IntentionRolloutStage = 'control'
+  rollout: IntentionRolloutStage = 'control',
+  expansion: 'baseline' | 'expanded' = 'baseline'
 ) {
   if(!INTENTION_ROLLOUT_STAGES.includes(rollout))
     throw new Error('Unknown intention rollout stage');
+  if(expansion !== 'baseline' && expansion !== 'expanded')
+    throw new Error('Unknown school expansion');
   const population=rolloutPopulation(rollout);
   const layout = createCastleLayout(world);
   const { hall, greatHall, staffRoom, library, courtyard, hospital,
@@ -75,7 +79,8 @@ export function createSchoolWeek(
 
   const professors: Teacher[] = [...SUBJECTS, ...ELECTIVES].map((subject, index) => {
     const id = world.character('prof_' + index,
-      'Преподаватель: ' + SUBJECT_LABELS[subject], staffRoom);
+      (expansion === 'expanded' ? NAMED_STAFF[subject] : undefined) ??
+        'Преподаватель: ' + SUBJECT_LABELS[subject], staffRoom);
     world.setDailyLife(id, {
       homeRoom: staffRoom, diningRoom: greatHall,
       style: index % 2 === 0 ? 'outgoing' : 'reserved',
@@ -226,8 +231,13 @@ export function createSchoolWeek(
     world.setTimetable(id, lessons, 'lesson_first');
   }
 
+  // Opt-in fixture: named leaders, house heads, spirits and caretaker do not
+  // change the experiment #20 population gates or artificial pupil cohorts.
+  const residents = expansion === 'expanded'
+    ? createCastleResidents(world, layout, professors) : null;
+
   return {
-    world, rollout, population, layout, hall, staffRoom, greatHall, library, courtyard, hospital,
+    world, rollout, population, expansion, residents, layout, hall, staffRoom, greatHall, library, courtyard, hospital,
     dorms, classrooms, electiveRooms, professors, students, teachingGroups,
     sessions, pupilSchedule, staffSchedule
   };
