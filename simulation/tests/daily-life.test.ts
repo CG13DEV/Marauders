@@ -56,6 +56,12 @@ test('the week schedules dining travel, evenings and rest without missing lesson
   assert.ok(report.pupilMeals > 0);
   assert.ok(report.pupilRests > 0);
   assert.ok(report.pupilConversations > 0);
+  assert.ok(report.withinHouseConversations > 0, 'house common rooms create local contacts');
+  assert.ok(report.acrossHouseConversations > 0, 'shared spaces enable inter-house contacts');
+  assert.equal(2 * (report.withinHouseConversations + report.acrossHouseConversations),
+    report.pupilConversations);
+  assert.ok(world.events().some(e=>e.type==='entity_moved' && e.to===scene.library));
+  assert.ok(world.events().some(e=>e.type==='entity_moved' && e.to===scene.courtyard));
   assert.ok(world.events().some(e=>e.type==='conversation_shared'));
   assert.ok(world.events().some(e=>e.type==='rest_recorded'));
   // At the end of 1008 ticks it is already 08:00 next Monday;
