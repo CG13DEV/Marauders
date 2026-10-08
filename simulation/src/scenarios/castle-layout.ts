@@ -36,7 +36,7 @@ export function createCastleLayout(world: Simulation) {
   const places = new Map<string, Place>();
   function add(key: string, label: string, floor: Floor, wing: Wing,
                kind: RoomKind, house?: string): EntityId {
-    const id = world.room(key, label);
+    const id = world.room(key, label, {floor,wing,kind,...(house ? {house}: {})});
     places.set(key, { id, key, floor, wing, kind, ...(house ? { house } : {}) });
     return id;
   }

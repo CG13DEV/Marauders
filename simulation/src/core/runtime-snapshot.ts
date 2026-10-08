@@ -1,5 +1,5 @@
 /** Materialized state schema; separate from entity/world construction blueprint. */
-import type { Observation, WorldEvent } from './Simulation.ts';
+import type { Observation, WorldEvent, RoomDescriptor } from './Simulation.ts';
 import type { Belief } from './beliefs.ts';
 import type { LearningRecord } from './spellcraft.ts';
 import type { AttendanceRecord, SchoolPriority } from './school-time.ts';
@@ -20,6 +20,7 @@ export type PersistedSearch = { object: number; asked: number[]; seenRooms: numb
 export type RuntimeSnapshot = {
   tick: number;
   entityKeys: [string, number][];
+  roomDetails?: [number, RoomDescriptor][];
   locations: [number, number][];
   broken: [number, boolean][];
   doors: [number, boolean][];
@@ -94,6 +95,9 @@ export function remapRuntimeSnapshot(snapshot: RuntimeSnapshot, at: (id: number)
   return {
     tick: snapshot.tick,
     entityKeys: snapshot.entityKeys.map(([key, id]) => [key, at(id)]),
+    ...(snapshot.roomDetails === undefined ? {} : {
+      roomDetails: snapshot.roomDetails.map(([id, details]) => [at(id), { ...details }] as [number, RoomDescriptor])
+    }),
     locations: snapshot.locations.map(([id, room]) => [at(id), at(room)]),
     broken: snapshot.broken.map(([id, value]) => [at(id), value]),
     doors: snapshot.doors.map(([id, value]) => [at(id), value]),

@@ -36,6 +36,12 @@ import {
 } from './social-learning.ts';
 
 export type EntityId = number;
+export type RoomDescriptor = {
+  floor: number;
+  wing?: 'west' | 'east' | 'central';
+  kind?: string;
+  house?: string;
+};
 
 export type Command =
   | { type: 'move'; actor: EntityId; destination: EntityId }
@@ -150,7 +156,7 @@ export function createSimulation() {
   const PassageTo = createRelation();
 
   const {
-    keys, doors, events, observationsByCharacter, beliefsByCharacter,
+    keys, doors, events, observationsByCharacter, beliefsByCharacter, roomDetails,
     spellKnowledge, pendingTutoring, attemptedTutors, assistanceHistory,
     searches, routines, timetables, dailyPlans, meals, conversations, rests
   } = createRuntimeStores();
@@ -169,10 +175,22 @@ export function createSimulation() {
     return entityExists(ecs, eid) && hasComponent(ecs, eid, Room);
   }
 
-  function room(key: string, label: string): EntityId {
+  function room(key: string, label: string, descriptor?: RoomDescriptor): EntityId {
+    if (descriptor && (!Number.isSafeInteger(descriptor.floor) ||
+        (descriptor.wing !== undefined &&
+         !['west','east','central'].includes(descriptor.wing)))) {
+      throw new Error('Invalid room floor/wing descriptor');
+    }
     const eid = addNamedEntity(key, label);
     addComponent(ecs, eid, Room);
+    if (descriptor) roomDetails.set(eid, { ...descriptor });
     return eid;
+  }
+
+  /** World-owned spatial metadata, not an NPC's discovered map. */
+  function roomInfo(id: EntityId): RoomDescriptor | null {
+    const info = roomDetails.get(id);
+    return info ? { ...info } : null;
   }
 
   function character(
@@ -929,6 +947,10 @@ export function createSimulation() {
     const state: RuntimeSnapshot = {
       tick,
       entityKeys: [...keys.entries()],
+      ...(roomDetails.size
+        ? { roomDetails: [...roomDetails.entries()].map(([id, details]) =>
+            [id, { ...details }] as [number, RoomDescriptor]) }
+        : {}),
       locations: [...keys.values()].flatMap(id => {
         const room = locationOf(id);
         return room === null ? [] : [[id, room] as [number, number]];
@@ -968,6 +990,10 @@ export function createSimulation() {
         state.entityKeys.length !== keys.size ||
         state.entityKeys.some(([key, id]) => keys.get(key) !== id))
       throw new Error('Checkpoint topology or clock does not match constructed world');
+
+    if (state.roomDetails !== undefined &&
+        JSON.stringify([...roomDetails.entries()]) !== JSON.stringify(state.roomDetails))
+      throw new Error('Checkpoint room metadata does not match castle topology');
 
     for (const [id, destination] of state.locations) {
       if (!entityExists(ecs, id) || !isRoom(destination))
@@ -1039,7 +1065,7 @@ export function createSimulation() {
   }
 
   return {
-    room, character, fragileObject, connect, execute, step,
+    room, roomInfo, character, fragileObject, connect, execute, step,
     captureRuntime, hydrateRuntime,
     setTrust, trustOf, setInquisitive, setSocialInvestigator, setGuarded, setRoutine, assessment,
     setTimetable, setManualControl, attendance, learningDebt, knowledgeGaps,

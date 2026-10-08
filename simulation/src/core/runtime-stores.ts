@@ -1,7 +1,7 @@
 /** Runtime-owned stores: exactly one instance per ECS world, never globals. */
 import { createBeliefStore } from './beliefs.ts';
 import { createSpellKnowledge } from './spellcraft.ts';
-import type { EntityId, Observation, WorldEvent } from './Simulation.ts';
+import type { EntityId, Observation, WorldEvent, RoomDescriptor } from './Simulation.ts';
 import type { TutoringRequest, AssistanceMemory } from './social-learning.ts';
 import type { AttendanceRecord, SchoolPriority } from './school-time.ts';
 import type { DailyLifePlan, MealMemory, ConversationMemory, RestMemory } from './daily-life.ts';
@@ -22,6 +22,7 @@ export type TimetableState = {
 export function createRuntimeStores() {
   return {
     keys: new Map<string, EntityId>(),
+    roomDetails: new Map<EntityId, RoomDescriptor>(),
     doors: new Map<string, EntityId>(),
     events: [] as WorldEvent[],
     observationsByCharacter: new Map<EntityId, Observation[]>(),

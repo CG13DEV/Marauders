@@ -6,7 +6,7 @@
  * costs O(all recorded operations); compact materialized checkpoints and DB
  * persistence are separate future milestones.
  */
-import { createSimulation, type Command, type EntityId, type Simulation } from './Simulation.ts';
+import { createSimulation, type Command, type EntityId, type Simulation, type RoomDescriptor } from './Simulation.ts';
 import type { DoorOptions } from './Simulation.ts';
 import type { Trust } from './cognition.ts';
 import type { SpellId, SpellStage } from './spellcraft.ts';
@@ -15,7 +15,7 @@ import type { DailyLifePlan } from './daily-life.ts';
 import { remapRuntimeSnapshot, type RuntimeSnapshot } from './runtime-snapshot.ts';
 
 type EntityCreation =
-  | { kind: 'room'; key: string; label: string; id: number }
+  | { kind: 'room'; key: string; label: string; id: number; descriptor?: RoomDescriptor }
   | { kind: 'character'; key: string; label: string; initialRoom: number; senses?: { vision?: boolean; hearing?: boolean }; id: number }
   | { kind: 'fragileObject'; key: string; label: string; initialRoom: number; id: number }
   | { kind: 'connect'; a: number; b: number; options?: DoorOptions; doorId?: number };
@@ -143,9 +143,10 @@ function createFacade(world: Simulation, operations: Operation[]) {
   // initiated by world.step() stay internal, so nothing is double-recorded.
   const facade = {
     ...world,
-    room(key: string, label: string) {
-      const id = world.room(key, label);
-      operations.push({ kind: 'room', key, label, id });
+    room(key: string, label: string, descriptor?: RoomDescriptor) {
+      const id = world.room(key, label, descriptor);
+      operations.push({ kind: 'room', key, label, id,
+        ...(descriptor ? { descriptor: copy(descriptor) } : {}) });
       return id;
     },
     character(key: string, label: string, initialRoom: number, senses?: { vision?: boolean; hearing?: boolean }) {
@@ -272,7 +273,7 @@ export function restoreCheckpoint(serialized: string | SavedCheckpointV2): Persi
   const at = (id: number) => remapId(id, ids);
   for (const op of save.setup) {
     switch (op.kind) {
-      case 'room': ids.set(op.id, restored.room(op.key, op.label)); break;
+      case 'room': ids.set(op.id, restored.room(op.key, op.label, op.descriptor)); break;
       case 'character':
         ids.set(op.id, restored.character(op.key, op.label, at(op.initialRoom), op.senses));
         break;
@@ -313,7 +314,7 @@ export function restoreSimulation(serialized: string | SavedSimulationV1 | Saved
   for (const op of save.operations) {
     if (!op || typeof op.kind !== 'string') throw new Error('Invalid journal operation');
     switch (op.kind) {
-      case 'room': ids.set(op.id, restored.room(op.key, op.label)); break;
+      case 'room': ids.set(op.id, restored.room(op.key, op.label, op.descriptor)); break;
       case 'character': ids.set(op.id, restored.character(op.key, op.label, at(op.initialRoom), op.senses)); break;
       case 'fragileObject': ids.set(op.id, restored.fragileObject(op.key, op.label, at(op.initialRoom))); break;
       case 'connect': {
