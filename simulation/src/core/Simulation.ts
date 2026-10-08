@@ -13,6 +13,7 @@ import { validateMovement, type MoveRejection } from './movement-rules.ts';
 import { perceiveCrash } from './perception-rules.ts';
 import { createBeliefStore, copyClaim, type Claim, type Belief } from './beliefs.ts';
 import { assessReports, decideInvestigation, type Assessment, type Trust } from './cognition.ts';
+import { nextRoomOnRoute } from './navigation.ts';
 
 export type EntityId = number;
 
@@ -83,6 +84,7 @@ export function createSimulation() {
   const Inquisitive = {};
   const SociableInvestigator = {};
   const Guarded = {};
+  const HasRoutine = {};
   const Trusts = createRelation();
   const Distrusts = createRelation();
   const Name = { value: [] as string[] };
@@ -102,6 +104,8 @@ export function createSimulation() {
     trail: EntityId[];
   };
   const searches = new Map<EntityId, Search>();
+  const routines = new Map<EntityId, EntityId[]>();
+  let tick = 0;
 
   function addNamedEntity(key: string, label: string): EntityId {
     if (keys.has(key)) throw new Error(`Duplicate entity key: ${key}`);
@@ -238,6 +242,20 @@ export function createSimulation() {
     if (!isCharacter(character)) throw new Error('Guarded disposition requires a character');
     if (enabled) addComponent(ecs, character, Guarded);
     else removeComponent(ecs, character, Guarded);
+  }
+
+  function setRoutine(actor: EntityId, destinations: readonly EntityId[]): void {
+    if (!isCharacter(actor)) throw new Error('Routine requires a character');
+    if (destinations.some(destination => !isRoom(destination))) {
+      throw new Error('Routine destinations must all be rooms');
+    }
+    if (destinations.length > 0) {
+      routines.set(actor, [...destinations]);
+      addComponent(ecs, actor, HasRoutine);
+    } else {
+      routines.delete(actor);
+      removeComponent(ecs, actor, HasRoutine);
+    }
   }
 
   function assessment(observer: EntityId, object: EntityId): Assessment {
@@ -449,6 +467,7 @@ export function createSimulation() {
   }
 
   function step(): { actor: EntityId; action: Command; result: CommandResult }[] {
+    tick += 1;
     // The decision policy reads only the actor's beliefs and locally visible
     // objects. In particular it never reads authoritative broken-state or events.
     const decisions: { actor: EntityId; action: Command; result: CommandResult }[] = [];
@@ -541,6 +560,33 @@ export function createSimulation() {
         decisions.push({ actor, action, result });
       }
     }
+    // Independent routines produce movement from explicit destination goals.
+    // They use the castle's public topology, never hidden character locations.
+    for (const actor of query(ecs, [Character, HasRoutine])) {
+      if (decisions.some(d => d.actor === actor)) continue;
+      const pending = routines.get(actor);
+      const room = currentRoom(actor);
+      if (!pending || room === null) continue;
+      while (pending[0] === room) pending.shift();
+      if (pending.length === 0) {
+        setRoutine(actor, []);
+        continue;
+      }
+      const goal = pending[0]!;
+      const next = nextRoomOnRoute(room, goal,
+        location => getRelationTargets(ecs, location, PassageTo));
+      if (next === null) continue; // unreachable destination: do not teleport
+      const door = doors.get(pairKey(room, next));
+      const action: Command = door !== undefined && Door.open[door] === 0
+        ? { type: 'open_door', actor, door }
+        : { type: 'move', actor, destination: next };
+      const result = execute(action);
+      decisions.push({ actor, action, result });
+      if (result.ok && action.type === 'move' && next === goal) {
+        pending.shift();
+        if (pending.length === 0) setRoutine(actor, []);
+      }
+    }
     return decisions;
   }
 
@@ -556,7 +602,8 @@ export function createSimulation() {
 
   return {
     room, character, fragileObject, connect, execute, step,
-    setTrust, trustOf, setInquisitive, setSocialInvestigator, setGuarded, assessment,
+    setTrust, trustOf, setInquisitive, setSocialInvestigator, setGuarded, setRoutine, assessment,
+    tick: () => tick,
     beliefs: (observer: EntityId): Belief[] => beliefsByCharacter.read(observer),
     currentRoom, locationOf, occupants, observations,
     isBroken: (eid: EntityId) => hasComponent(ecs, eid, Fragile) && Fragile.broken[eid] === 1,
