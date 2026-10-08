@@ -92,6 +92,30 @@ test('a socially accepted meeting becomes two real personal goals; neither telep
   assert.equal(w.events().filter(e=>e.type==='entity_moved'&&e.to===study).length,2);
 });
 
+test('an unilateral promise does not compel a listener to adopt an intention',()=>{
+  const {w,learner,helper,study}=grounds();
+  const result=w.execute({type:'promise_meeting',actor:learner,
+    listener:helper,room:study,atMinute:2620,purpose:'explore'});
+  assert.equal(result.ok,true);
+  assert.equal(w.intentionHistory(learner)[0]?.kind,'attend_meeting');
+  assert.equal(w.intentionHistory(helper).length,0);
+});
+
+test('investigation resumes by remembered location, never by omniscient object tracking',()=>{
+  const {w,learner,home,library}=grounds();
+  const cup=w.fragileObject('cup','Чашка',home);
+  const witness=w.character('witness','Очевидец',home);
+  w.execute({type:'tell',actor:witness,listener:learner,
+    claim:{kind:'broke_object',culprit:witness,object:cup}});
+  assert.equal(w.execute({type:'intend_investigate',actor:learner,object:cup}).ok,true);
+  assert.equal(w.execute({type:'move',actor:learner,destination:w.id('hall')!}).ok,true);
+  w.step(); // Hunger/meal may interrupt; the goal survives.
+  for(let i=0;i<7;i++)w.step();
+  assert.equal(w.currentRoom(learner),home);
+  assert.equal(w.intentionHistory(learner).find(g=>g.kind==='investigate')?.status,'completed');
+  assert.equal(w.observations(learner).filter(x=>x.kind==='inspected_object').length,1);
+});
+
 test('rejected invitation makes no obligation and cannot create meeting goals',()=>{
   const {w,learner,helper,study}=grounds();
   w.execute({type:'offer_meeting',actor:learner,listener:helper,
