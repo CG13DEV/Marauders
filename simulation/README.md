@@ -234,8 +234,20 @@ Each house common room -> boys' bedroom
 - In that same seven-day run, **248 conversations occurred within houses and 32 between houses**. Existing conversation histories already measure that mix; no fabricated friendship meters or scripted house-by-house dialogue.
 
 Future spatial changes should extend the keyed topology and room semantics, not invalidate the distinction between factual world map, each character's partial knowledge of the map, and any later Marauders' Map. Room access restrictions and individual discovered routes are still upcoming.
+## Experiment #13 — subject-based classrooms and individual curricula
+
+The castle is now **49 spatial locations**. Dedicated classrooms belong to **subjects**, not to year levels: Charms uses a third-floor corridor, Potions a dungeon, the library has moved to fourth floor, Astronomy has a tower, Herbology is taught in a courtyard-connected greenhouse. Five elective teaching spaces and kitchens extend the graph. The room metadata contains an explicit `loreStatus` (`CANON / INFERENCE / GAME`) and optional source: **do not interpret our staircase connections or level approximation as canon**.
+
+- **14 cross-house core groups** (two groups for each of seven years) and **12 subject professors** (7 core + 5 elective) in the population of 84 pupils.
+- **Individual timetables:** a pupil inherits core sessions from a group; from year three onward each pupil selects two synthetic electives independently of others. The core programme deliberately rotates subjects, so one subject professor teaches a distinct group in each simultaneous slot.
+- **Reservation validation:** each teaching session claims its professor, room and students. Teaching collisions fail loudly at scenario setup. Teacher and group provenance are stored in `Lesson` and remapped through snapshots/replay.
+- **Weekly result:** 155 teaching sessions, 750 individual lesson entries, including 120 elective enrolments. 126 automated tests cover course differences, classroom reuse, collision freedom, spell provenance, checkpoints and seven-day continued simulation.
+- **Limit:** this is NOT a canonical historical timetable or an advanced seventh-year syllabus. Daytime Astronomy, curriculum frequency and travel-time delays remain GAME approximations. Realism and year-scale progression come later.
+
+For explicit book-evidence grades and room table, see [Hogwarts Academic Model](../docs/technical/hogwarts-academic-model.md). Earlier experiment sections in this README document **historical prototypes** and are superseded where they describe course-owned classrooms or the original 42-room world.
+
 ## What next?
 
-Build individual route knowledge and access control atop the new multi-level graph; tune class travel time without teleportation, and expand the seven-day social simulation into a repeated calendar with obligations, lessons and long-term consequences.
+Improve advance-departure planning and travel-time costs, then expand subject curriculum, exercises and semester progression. Add personal map knowledge and access control before treating the world as a whole-year simulation.
 
 The source of truth for design remains the main repository `docs/` directory. This code is a small executable [GAME] model, not a statement of canon.

@@ -7,6 +7,12 @@ console.log('Замок:',scene.layout.places.size,'помещения на',
   new Set([...scene.layout.places.values()].map(place => place.floor)).size,'уровнях');
 console.log('Общие пространства:',[scene.world.label(scene.courtyard),
   scene.world.label(scene.hospital),scene.world.label(scene.library)].join(', '));
+console.log('Учебных групп:', scene.teachingGroups.length,
+  'учебных занятий:', scene.sessions.length);
+const learner=scene.students.find(s=>s.year===3 && s.house==='gryffindor')!;
+console.log('Личный план третьекурсника:',learner.key,
+  'факультативы:',learner.electives.join(', '));
+console.log('Первый урок:',JSON.stringify(scene.world.attendance(learner.id)[0]));
 for(let day=0;day<7;day++){
   for(let t=0;t<144;t++) scene.world.step();
   const data=reportSchoolWeek(scene);
