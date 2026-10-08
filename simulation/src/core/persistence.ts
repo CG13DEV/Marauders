@@ -9,6 +9,7 @@
 import { createSimulation, type Command, type EntityId, type Simulation, type RoomDescriptor } from './Simulation.ts';
 import type { DoorOptions } from './Simulation.ts';
 import type { Trust } from './cognition.ts';
+import type { HouseId, PointAuthority } from './house-points.ts';
 import type { SpellId, SpellStage } from './spellcraft.ts';
 import type { Lesson, SchoolPriority } from './school-time.ts';
 import type { DailyLifePlan } from './daily-life.ts';
@@ -23,6 +24,8 @@ type EntityCreation =
 type Operation = EntityCreation
   | { kind: 'execute'; command: Command }
   | { kind: 'step' }
+  | { kind:'registerHouse'; actor:number; house:HouseId }
+  | { kind:'grantPointAuthority'; actor:number; role:PointAuthority }
   | { kind: 'setTrust'; observer: number; source: number; value: Trust }
   | { kind: 'setInquisitive' | 'setSocialInvestigator' | 'setGuarded' | 'setHelpSeeking' | 'setHelpful' | 'setExperimenter' | 'setManualControl'; actor: number; enabled: boolean }
   | { kind: 'setRoutine'; actor: number; destinations: number[] }
@@ -74,7 +77,11 @@ function remapCommand(command: Command, ids: Map<number, number>): Command {
     case 'intend_visit': return {...command,actor:at(command.actor),destination:at(command.destination)};
     case 'cancel_intention': case 'intend_study': return {...command,actor:at(command.actor)};
     case 'intend_investigate': return {...command,actor:at(command.actor),object:at(command.object)};
-    case 'chat': return { ...command, actor: at(command.actor), listener: at(command.listener) };
+    case 'chat': case 'share_house_points':return {...command,
+      actor:at(command.actor),listener:at(command.listener)};
+    case 'decide_house_points':return {...command,actor:at(command.actor),
+      pupil:at(command.pupil),basis:command.basis.kind==='breakage_claim'
+        ?{...command.basis,object:at(command.basis.object)}:{...command.basis}};
     case 'promise_meeting': case 'offer_meeting': return {
       ...command,actor:at(command.actor),
       listener:at(command.listener),room:at(command.room)
@@ -88,7 +95,7 @@ function remapCommand(command: Command, ids: Map<number, number>): Command {
 function canonicalize(value: unknown, idToKey: Map<number, string>): unknown {
   const entityFields = new Set([
     'actor', 'listener', 'requester', 'helper', 'teacher', 'culprit', 'object',
-    'target', 'door', 'from', 'to', 'room', 'destination', 'source', 'observer', 'partner', 'promisor', 'beneficiary'
+    'target', 'door', 'from', 'to', 'room', 'destination', 'source', 'observer', 'partner', 'promisor', 'beneficiary', 'pupil', 'speaker', 'announcer'
   ]);
   function recur(input: unknown, parent?: string): unknown {
     if (Array.isArray(input)) return input.map(x => recur(x));
@@ -134,6 +141,8 @@ function auditOf(world: Simulation, operations: readonly Operation[]): string {
       meals: world.mealHistory(c.id),
       conversations: world.conversationHistory(c.id),
       rests: world.restHistory(c.id),
+      ...(world.houseOf(c.id)===null?{}:{house:world.houseOf(c.id)}),
+      ...(world.knownPointNews(c.id).length?{pointNews:world.knownPointNews(c.id)}:{}),
       ...(world.intentionHistory(c.id).length?{intentions:world.intentionHistory(c.id)}:{}),
       ...(world.needsOf(c.id)===null?{}:{needs:world.needsOf(c.id)}),
       ...(world.promiseHistory(c.id).length
@@ -141,6 +150,9 @@ function auditOf(world: Simulation, operations: readonly Operation[]): string {
     })),
     objects: objects.map(o => ({ key: o.key, room: world.locationOf(o.id), broken: world.isBroken(o.id) })),
     doors: doors.map(o => ({ key: o.options?.door.key, open: world.doorIsOpen(o.doorId!) })),
+    ...(world.pointHistory().length?{
+      housePoints:world.housePoints(),pointLedger:world.pointHistory()
+    }:{}),
     trust: [...trustPairs].sort().map(pair => {
       const [observer, source] = pair.split(':').map(Number);
       return { observer, source, value: world.trustOf(observer!, source!) };
@@ -185,6 +197,14 @@ function createFacade(world: Simulation, operations: Operation[]) {
       const result = world.step();
       operations.push({ kind: 'step' });
       return result;
+    },
+    registerHouse(actor:number,house:HouseId){
+      world.registerHouse(actor,house);
+      operations.push({kind:'registerHouse',actor,house});
+    },
+    grantPointAuthority(actor:number,role:PointAuthority){
+      world.grantPointAuthority(actor,role);
+      operations.push({kind:'grantPointAuthority',actor,role});
     },
     setTrust(observer: number, source: number, value: Trust) {
       world.setTrust(observer, source, value);
@@ -349,6 +369,8 @@ export function restoreSimulation(serialized: string | SavedSimulationV1 | Saved
         break;
       }
       case 'step': restored.step(); break;
+      case 'registerHouse':restored.registerHouse(at(op.actor),op.house);break;
+      case 'grantPointAuthority':restored.grantPointAuthority(at(op.actor),op.role);break;
       case 'setTrust': restored.setTrust(at(op.observer), at(op.source), op.value); break;
       case 'setManualControl': restored.setManualControl(at(op.actor), op.enabled); break;
       case 'setInquisitive': restored.setInquisitive(at(op.actor), op.enabled); break;
