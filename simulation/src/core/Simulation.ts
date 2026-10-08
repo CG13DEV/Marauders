@@ -22,6 +22,10 @@ import {
   createSpellKnowledge, spellDefinitions, isSpellId,
   type SpellId, type SpellStage, type LearningRecord
 } from './spellcraft.ts';
+import {
+  willingToTutor, copyRequest,
+  type TutoringRequest, type AssistanceMemory
+} from './social-learning.ts';
 
 export type EntityId = number;
 
@@ -34,7 +38,9 @@ export type Command =
   | { type: 'ask_about'; actor: EntityId; listener: EntityId; object: EntityId }
   | { type: 'tutor_spell'; actor: EntityId; listener: EntityId; spell: SpellId }
   | { type: 'practice_spell'; actor: EntityId; spell: SpellId; guide?: EntityId; intent: string; target: string; incantation: string }
-  | { type: 'cast_spell'; actor: EntityId; spell: SpellId; intent: string; target: string; incantation: string };
+  | { type: 'cast_spell'; actor: EntityId; spell: SpellId; intent: string; target: string; incantation: string }
+  | { type: 'ask_tutoring'; actor: EntityId; listener: EntityId; spell: SpellId }
+  | { type: 'answer_tutoring'; actor: EntityId; requester: EntityId; spell: SpellId; accept: boolean };
 
 export type WorldEvent =
   | { type: 'entity_moved'; actor: EntityId; from: EntityId; to: EntityId }
@@ -45,7 +51,9 @@ export type WorldEvent =
   | { type: 'question_asked'; actor: EntityId; listener: EntityId; object: EntityId; answered: boolean }
   | { type: 'lesson_attendance'; actor: EntityId; lessonId: string; status: 'on_time' | 'late' | 'missed'; minute: number }
   | { type: 'spell_concept_learned'; actor: EntityId; spell: SpellId; source: 'lesson' | 'tutoring'; minute: number }
-  | { type: 'spell_executed'; actor: EntityId; spell: SpellId; mode: 'guided' | 'independent'; minute: number };
+  | { type: 'spell_executed'; actor: EntityId; spell: SpellId; mode: 'guided' | 'independent'; minute: number }
+  | { type: 'tutoring_requested'; actor: EntityId; listener: EntityId; spell: SpellId; minute: number }
+  | { type: 'tutoring_answered'; actor: EntityId; requester: EntityId; spell: SpellId; accepted: boolean; minute: number };
 
 /**
  * What a character is ALLOWED to know.
@@ -76,9 +84,14 @@ export type SpellRejection =
   | 'invalid_guide' | 'guide_unqualified' | 'pattern_mismatch' | 'not_practiced'
   | 'speaker_cannot_hear' | 'student_cannot_hear' | 'already_understood';
 
+export type HelpRejection =
+  | 'not_missing_concept' | 'already_requested' | 'no_pending_request'
+  | 'not_colocated' | 'cannot_hear' | 'invalid_helper' | 'invalid_requester'
+  | 'not_character';
+
 export type CommandResult =
   | { ok: true; events: readonly WorldEvent[] }
-  | { ok: false; reason: MoveRejection | BreakRejection | SocialRejection | DoorRejection | InspectRejection | QuestionRejection | SpellRejection; events: readonly [] };
+  | { ok: false; reason: MoveRejection | BreakRejection | SocialRejection | DoorRejection | InspectRejection | QuestionRejection | SpellRejection | HelpRejection; events: readonly [] };
 
 export type DoorOptions = {
   door: { key: string; label: string; open: boolean };
@@ -107,6 +120,9 @@ export function createSimulation() {
   const HasTimetable = {};
   const Experimental = {};
   const Illuminated = {};
+  const SeeksHelp = {};
+  const Helpful = {};
+  const HelpedBy = createRelation();
   const Trusts = createRelation();
   const Distrusts = createRelation();
   const Name = { value: [] as string[] };
@@ -119,6 +135,9 @@ export function createSimulation() {
   const observationsByCharacter = new Map<EntityId, Observation[]>();
   const beliefsByCharacter = createBeliefStore();
   const spellKnowledge = createSpellKnowledge();
+  const pendingTutoring = new Map<EntityId, TutoringRequest>();
+  const attemptedTutors = new Map<EntityId, Set<string>>();
+  const assistanceHistory = new Map<EntityId, AssistanceMemory[]>();
   // Goals remember what has been attempted, not secret NPC locations.
   type Search = {
     object: EntityId;
@@ -165,6 +184,8 @@ export function createSimulation() {
     observationsByCharacter.set(eid, []);
     beliefsByCharacter.register(eid);
     spellKnowledge.register(eid);
+    attemptedTutors.set(eid, new Set());
+    assistanceHistory.set(eid, []);
     return eid;
   }
 
@@ -320,6 +341,32 @@ export function createSimulation() {
     spellKnowledge.learn(actor, spell, stage, { kind: 'prior_training' });
   }
 
+  function setHelpSeeking(actor: EntityId, enabled: boolean): void {
+    if (!isCharacter(actor)) throw new Error('Help seeking requires a character');
+    if (enabled) addComponent(ecs, actor, SeeksHelp);
+    else removeComponent(ecs, actor, SeeksHelp);
+  }
+
+  function setHelpful(actor: EntityId, enabled: boolean): void {
+    if (!isCharacter(actor)) throw new Error('Willingness to help requires a character');
+    if (enabled) addComponent(ecs, actor, Helpful);
+    else removeComponent(ecs, actor, Helpful);
+  }
+
+  function tutoringRequest(actor: EntityId): TutoringRequest | null {
+    const request = pendingTutoring.get(actor);
+    return request ? copyRequest(request) : null;
+  }
+
+  function assistance(actor: EntityId): AssistanceMemory[] {
+    return (assistanceHistory.get(actor) ?? []).map(a => ({ ...a }));
+  }
+
+  function hasHelped(helper: EntityId, learner: EntityId): boolean {
+    return isCharacter(helper) && isCharacter(learner) &&
+      hasComponent(ecs, learner, HelpedBy(helper));
+  }
+
   function setExperimenter(actor: EntityId, enabled: boolean): void {
     if (!isCharacter(actor)) throw new Error('Experimenter must be a character');
     if (enabled) addComponent(ecs, actor, Experimental);
@@ -411,6 +458,82 @@ export function createSimulation() {
     if (!hasComponent(ecs, command.actor, Character)) {
       return { ok: false, reason: 'not_character', events: [] };
     }
+    if (command.type === 'ask_tutoring') {
+      if (!isSpellId(command.spell)) return { ok: false, reason: 'unknown_spell', events: [] };
+      if (!isCharacter(command.listener) || command.actor === command.listener) {
+        return { ok: false, reason: 'invalid_helper', events: [] };
+      }
+      if (!knowledgeGaps(command.actor).includes(command.spell)) {
+        return { ok: false, reason: 'not_missing_concept', events: [] };
+      }
+      if (pendingTutoring.has(command.actor) ||
+          attemptedTutors.get(command.actor)!.has(`${command.listener}:${command.spell}`)) {
+        return { ok: false, reason: 'already_requested', events: [] };
+      }
+      if (currentRoom(command.actor) === null ||
+          currentRoom(command.actor) !== currentRoom(command.listener)) {
+        return { ok: false, reason: 'not_colocated', events: [] };
+      }
+      if (!hasComponent(ecs, command.actor, Hearing) ||
+          !hasComponent(ecs, command.listener, Hearing)) {
+        return { ok: false, reason: 'cannot_hear', events: [] };
+      }
+      const minute = schoolTime(tick).absoluteMinute;
+      pendingTutoring.set(command.actor, {
+        requester: command.actor, helper: command.listener, spell: command.spell, minute
+      });
+      attemptedTutors.get(command.actor)!.add(`${command.listener}:${command.spell}`);
+      const event: WorldEvent = {
+        type: 'tutoring_requested', actor: command.actor, listener: command.listener,
+        spell: command.spell, minute
+      };
+      emit(event);
+      return { ok: true, events: [event] };
+    }
+
+    if (command.type === 'answer_tutoring') {
+      if (!isSpellId(command.spell)) return { ok: false, reason: 'unknown_spell', events: [] };
+      if (!isCharacter(command.requester) || command.actor === command.requester) {
+        return { ok: false, reason: 'invalid_requester', events: [] };
+      }
+      const pending = pendingTutoring.get(command.requester);
+      if (!pending || pending.helper !== command.actor || pending.spell !== command.spell) {
+        return { ok: false, reason: 'no_pending_request', events: [] };
+      }
+      if (currentRoom(command.actor) === null ||
+          currentRoom(command.actor) !== currentRoom(command.requester)) {
+        return { ok: false, reason: 'not_colocated', events: [] };
+      }
+      if (!hasComponent(ecs, command.actor, Hearing) ||
+          !hasComponent(ecs, command.requester, Hearing)) {
+        return { ok: false, reason: 'cannot_hear', events: [] };
+      }
+      let lessonEvents: readonly WorldEvent[] = [];
+      if (command.accept) {
+        // Reuse the canonical, guarded teaching action. Helping cannot magic
+        // knowledge into existence or bypass the ordinary eligibility rules.
+        const taught = execute({
+          type: 'tutor_spell', actor: command.actor,
+          listener: command.requester, spell: command.spell
+        });
+        if (!taught.ok) return taught;
+        lessonEvents = taught.events;
+        addComponent(ecs, command.requester, HelpedBy(command.actor));
+        assistanceHistory.get(command.requester)!.push({
+          helper: command.actor, spell: command.spell,
+          minute: schoolTime(tick).absoluteMinute
+        });
+      }
+      pendingTutoring.delete(command.requester);
+      const response: WorldEvent = {
+        type: 'tutoring_answered', actor: command.actor, requester: command.requester,
+        spell: command.spell, accepted: command.accept,
+        minute: schoolTime(tick).absoluteMinute
+      };
+      emit(response);
+      return { ok: true, events: [...lessonEvents, response] };
+    }
+
     if (command.type === 'tutor_spell') {
       if (!isSpellId(command.spell)) return { ok: false, reason: 'unknown_spell', events: [] };
       if (!isCharacter(command.listener) || command.actor === command.listener) {
@@ -654,6 +777,58 @@ export function createSimulation() {
       travelTowardLesson(actor, room, lesson.room);
     }
 
+    // First, helpers respond to requests they actually heard earlier. Being
+    // busy with a scheduled lesson defers help; no involuntary class skipping.
+    // One response consumes one NPC action this tick.
+    for (const request of [...pendingTutoring.values()]) {
+      const helper = request.helper;
+      if (occupiedBySchool.has(helper) || decisions.some(d => d.actor === helper)) continue;
+      if (currentRoom(helper) === null ||
+          currentRoom(helper) !== currentRoom(request.requester)) continue;
+      const accept = willingToTutor({
+        helpful: hasComponent(ecs, helper, Helpful),
+        trustsRequester: trustOf(helper, request.requester),
+        knowsConcept: spellKnowledge.stage(helper, request.spell) !== 'unaware',
+        learnerNeedsConcept: spellKnowledge.stage(request.requester, request.spell) === 'unaware'
+      });
+      const action: Command = {
+        type: 'answer_tutoring', actor: helper, requester: request.requester,
+        spell: request.spell, accept
+      };
+      const result = execute(action);
+      decisions.push({ actor: helper, action, result });
+    }
+
+    // A pupil knows their own concrete gap and notices people sharing a room.
+    // They do NOT consult the bystander's hidden knowledge or private plans.
+    for (const actor of query(ecs, [Character, SeeksHelp])) {
+      if (occupiedBySchool.has(actor) || decisions.some(d => d.actor === actor) ||
+          pendingTutoring.has(actor) || !hasComponent(ecs, actor, Hearing)) continue;
+      const room = currentRoom(actor);
+      if (room === null) continue;
+      const gaps = knowledgeGaps(actor);
+      if (gaps.length === 0) continue;
+      const attempted = attemptedTutors.get(actor)!;
+      const locals = occupants(room).filter(other =>
+        other !== actor && hasComponent(ecs, other, Hearing));
+      const ranked = locals.sort((a, b) => {
+        const ranks: Record<Trust, number> = { trusted: 2, neutral: 1, distrusted: 0 };
+        return ranks[trustOf(actor, b)] - ranks[trustOf(actor, a)] || a - b;
+      });
+      const candidates = ranked.filter(other => trustOf(actor, other) !== 'distrusted');
+      const target = gaps
+        .flatMap(spell => candidates
+          .filter(other => !attempted.has(`${other}:${spell}`))
+          .map(helper => ({ helper, spell })))
+        [0];
+      if (!target) continue;
+      const action: Command = {
+        type: 'ask_tutoring', actor, listener: target.helper, spell: target.spell
+      };
+      const result = execute(action);
+      decisions.push({ actor, action, result });
+    }
+
     // The decision policy reads only the actor's beliefs and locally visible
     // objects. In particular it never reads authoritative broken-state or events.
     for (const actor of query(ecs, [Character, Inquisitive])) {
@@ -845,6 +1020,7 @@ export function createSimulation() {
     room, character, fragileObject, connect, execute, step,
     setTrust, trustOf, setInquisitive, setSocialInvestigator, setGuarded, setRoutine, assessment,
     setTimetable, attendance, learningDebt, knowledgeGaps,
+    setHelpSeeking, setHelpful, tutoringRequest, assistance, hasHelped,
     seedSpellKnowledge, spellStage, setExperimenter, isIlluminated,
     learningHistory: (actor: EntityId): LearningRecord[] => spellKnowledge.history(actor),
     tick: () => tick,
