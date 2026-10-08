@@ -34,11 +34,12 @@ const readableSubject: Record<typeof SUBJECTS[number], string> = {
   'History of Magic': 'История магии', Astronomy: 'Астрономия'
 };
 
-export function createSchoolWeek() {
-  const world = createSimulation();
+export function createSchoolWeek(world = createSimulation()) {
   const hall = world.room('hall', 'Центральный коридор');
   const staffRoom = world.room('staff_room', 'Учительская');
   world.connect(hall, staffRoom);
+  const greatHall = world.room('great_hall', 'Большой зал');
+  world.connect(hall, greatHall);
 
   const dorms = Object.fromEntries(HOUSES.map(house => {
     const room = world.room('dorm_' + house, 'Гостиная факультета ' + readableHouse[house]);
@@ -55,6 +56,11 @@ export function createSchoolWeek() {
 
   const professors: Teacher[] = SUBJECTS.map((subject, index) => {
     const id = world.character('prof_' + index, 'Преподаватель: ' + readableSubject[subject], staffRoom);
+    world.setDailyLife(id, {
+      homeRoom: staffRoom, diningRoom: greatHall,
+      style: index % 2 === 0 ? 'outgoing' : 'reserved',
+      interest: 'lessons'
+    });
     return { id, subject };
   });
 
@@ -66,6 +72,11 @@ export function createSchoolWeek() {
         const id = world.character(key,
           readableHouse[house] + ', ' + year + ' курс, ученик ' + (index + 1), dorms[house]);
         students.push({ id, key, house, year });
+        world.setDailyLife(id, {
+          homeRoom: dorms[house], diningRoom: greatHall,
+          style: index === 2 ? 'reserved' : 'outgoing',
+          interest: (['lessons', 'castle', 'hobbies'] as const)[index]!
+        });
       }
     }
   }
@@ -99,7 +110,10 @@ export function createSchoolWeek() {
   }
   for (const [id, lessons] of pupilSchedule) world.setTimetable(id, lessons, 'lesson_first');
   for (const [id, lessons] of staffSchedule) world.setTimetable(id, lessons, 'lesson_first');
-  return { world, hall, staffRoom, dorms, classrooms, professors, students, pupilSchedule, staffSchedule };
+  return {
+    world, hall, staffRoom, greatHall, dorms, classrooms,
+    professors, students, pupilSchedule, staffSchedule
+  };
 }
 
 export function reportSchoolWeek(scene: ReturnType<typeof createSchoolWeek>) {
@@ -122,6 +136,9 @@ export function reportSchoolWeek(scene: ReturnType<typeof createSchoolWeek>) {
     attendance: counts,
     studentsWithMissedLessons: active.length,
     firstYearKnowsLumos: students.filter(s =>
-      s.year === 1 && world.spellStage(s.id, 'lumos') !== 'unaware').length
+      s.year === 1 && world.spellStage(s.id, 'lumos') !== 'unaware').length,
+    pupilMeals: students.reduce((n, s) => n + world.mealHistory(s.id).length, 0),
+    pupilConversations: students.reduce((n, s) => n + world.conversationHistory(s.id).length, 0),
+    pupilRests: students.reduce((n, s) => n + world.restHistory(s.id).length, 0)
   };
 }
