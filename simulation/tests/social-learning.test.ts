@@ -205,3 +205,60 @@ test('willingness is an explicit rule, not a numerical affection probability', (
     helpful: true, trustsRequester: 'trusted', knowsConcept: false, learnerNeedsConcept: true
   }), false);
 });
+
+
+test('competing duties cause late arrival and later voluntary help without steering commands', () => {
+  const world = createSimulation();
+  const classroom = world.room('classroom', 'Класс чар');
+  const landing = world.room('landing', 'Лестничная площадка');
+  const corridor = world.room('corridor', 'Дальний коридор');
+  world.connect(classroom, landing);
+  world.connect(landing, corridor);
+  const lily = world.character('lily', 'Лили', classroom);
+  const remus = world.character('remus', 'Ремус', corridor);
+  const james = world.character('james', 'Джеймс', corridor);
+  const peter = world.character('peter', 'Питер', corridor);
+  const cup = world.fragileObject('cup', 'Чашка', corridor);
+  for (const [source, claimed] of [[james, james], [peter, peter]]) {
+    const result = world.execute({
+      type: 'tell', actor: source, listener: remus,
+      claim: { kind: 'broke_object', culprit: claimed, object: cup }
+    });
+    assert.equal(result.ok, true);
+  }
+  const lesson = {
+    id: 'lumos_class', subject: 'Чары', room: classroom,
+    startsAt: 510, endsAt: 550, spell: 'lumos' as const
+  };
+  world.setTimetable(lily, [lesson], 'lesson_first');
+  world.setTimetable(remus, [lesson], 'inquiry_first');
+  world.setInquisitive(remus, true);
+  world.setSocialInvestigator(remus, true);
+  world.setHelpSeeking(remus, true);
+  world.setHelpful(lily, true);
+  world.setTrust(remus, lily, 'trusted');
+  world.setTrust(remus, james, 'distrusted');
+  world.setTrust(remus, peter, 'distrusted');
+
+  const timeline = Array.from({ length: 9 }, () =>
+    world.step().map(({ actor, action }) => [actor, action.type]));
+
+  assert.deepEqual(timeline, [
+    [[remus, 'inspect_object']],
+    [[remus, 'ask_about']],
+    [[remus, 'ask_about']],
+    [[remus, 'move']],
+    [[remus, 'move']],
+    [],
+    [[remus, 'ask_tutoring']],
+    [[lily, 'answer_tutoring']],
+    []
+  ]);
+  assert.equal(world.attendance(lily)[0]?.status, 'on_time');
+  assert.equal(world.attendance(remus)[0]?.status, 'late');
+  assert.equal(world.spellStage(lily, 'lumos'), 'conceptual');
+  assert.equal(world.spellStage(remus, 'lumos'), 'conceptual');
+  assert.equal(world.learningHistory(remus)[0]?.source.kind, 'tutoring');
+  assert.deepEqual(world.assistance(remus), [{ helper: lily, spell: 'lumos', minute: 560 }]);
+  assert.equal(world.events().some(e => e.type === 'object_broken'), false);
+});
