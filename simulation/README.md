@@ -25,6 +25,7 @@ npm run invitations-demo
 npm run learning-purpose-demo
 npm run intentions-demo
 npm run unified-intentions-demo
+npm run rollout-demo
 npm run play
 npm start
 npm test
@@ -356,8 +357,42 @@ All four kinds share `queued/active/paused/completed/expired/cancelled`, an even
 
 **Next:** enable the merged queue for progressively larger cohorts (12 → 24 → 84 pupils, then 12 teachers), measure emerging delays/meal skipping/meeting failures instead of requiring old exact behaviour, and retain objective invariants (no teleportation, no omniscient knowledge, deterministic restoration, lessons actually taught). Later: semantic food items, quality of sleep, map knowledge, long-lived social inquiry.
 
+## Experiment #20 — staged adoption by all 96 school inhabitants
+
+**Goal:** adopt the shared intention/physiology policy progressively rather than calling the system complete after two isolated test actors. The fourth optional school-week parameter is a deterministic population gate:
+
+```ts
+createSchoolWeek(world, 'adaptive', 'autonomous', 'control');   // 0 pupils, 0 staff
+createSchoolWeek(world, 'adaptive', 'autonomous', '12-pupils'); // first years
+createSchoolWeek(world, 'adaptive', 'autonomous', '24-pupils'); // years 1 and 2
+createSchoolWeek(world, 'adaptive', 'autonomous', '84-pupils'); // all students
+createSchoolWeek(world, 'adaptive', 'autonomous', '96-all');   // all students + teachers
+```
+
+The original one-, two-, and three-argument calls retain the **unchanged control**. A pupil's year/house is the only selection criterion; no random or hidden character preference decides who is upgraded. Opted-in teachers keep their existing subject timetables.
+
+`npm run rollout-demo` runs **five independent seven-day worlds**, outputs their observed school and body metrics, checks route topology, character counts, bodily-state bounds, timetable accounting and persistence behavior (via integration tests); it also runs a separate **controlled 24-goal stress scenario**. The extra objectives in that scenario are deliberately injected as a test and must **not** be represented as spontaneously chosen by the pupils.
+
+### Verified rollout comparison: same 84 pupils + 12 staff
+
+| Stage | Intention-enabled | Pupil meals | Conversations | Invites / fulfilled | Lesson on-time / late / missed |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Control | 0 | 1542 | 277 | 56 / 44 | 684 / 66 / 0 |
+| First-years | 12 | 1560 | 277 | 56 / 44 | 684 / 66 / 0 |
+| Years 1–2 | 24 | 1572 | 277 | 56 / 44 | 684 / 66 / 0 |
+| All pupils | 84 | 1632 | 276 | 56 / 44 | 684 / 66 / 0 |
+| Whole school | 96 | 1632 | 276 | 56 / 44 | 684 / 66 / 0 |
+
+At the end of the full-week model the opted-in population's **mean internal hunger was 4 / 100 and fatigue ~7.4 / 100**. These are *internal laboratory coordinates*, not intended HUD needs meters and not real-world nutrition/sleep data. The full school's teacher meals remained at 229 and pupil rest-history records at 588; the previous opt-in-less control retained its prior academic, learning and social baselines.
+
+**A rollout bug we caught and fixed:** naively activating the personal planner for everyone made the entire opted-in group reach 100/100 hunger and caused **zero** autonomous conversations/invitations! Opted-in characters lost their regular pre-meal approach travel and evening social destinations. The corrected arbiter now reuses *school-aware feasible meal journeys* before serving closes and retains habitual common-room / night-time homeward movement when no active personal objective is available. One substantial consumed meal removes 80 provisional hunger units rather than the insufficient original 42. The diet constants and meal windows remain GAME-level approximations to tune, not claims about Hogwarts physiology.
+
+**Safety gates:** no teleporting (every world move must have a real graph passage), no missing attendance records, no invalid body state, real action/knowledge provenance and consent, correct headcount for every stage, healthy mean hunger and nonzero conversations/invitations in the full 96-person week, and deterministic continuation from both V1 action journals and V2 checkpoints. Result changes are assessed as possible *consequences*; failures of these world invariants are bugs.
+
+**Limitations:** these baseline weeks have few intrinsic goal conflicts because classroom timetables already work well; the test injects obligations separately to verify interruptions. All 96 participants now have the shared arbiter and bodily state, but **ordinary school inhabitants do not yet generate rich independent exploration goals just because they are enabled**. Full organic school-year variation, food objects, complete sleep actions, local map knowledge and richer staff goal-generation belong to later experiments.
+
 ## What next?
 
-Graduate the now-integrated intention queue to larger cohorts of pupils, then teachers; add tangible food, real sleep actions, personal route knowledge and multiweek continuity.
+Calibrate the population's food/rest economics, generate personal goals from individual circumstances throughout the school year, add tangible food and actual sleep actions, then personal route knowledge and multiweek continuity.
 
 The source of truth for design remains the main repository `docs/` directory. This code is a small executable [GAME] model, not a statement of canon.
