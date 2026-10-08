@@ -4,6 +4,7 @@
  */
 import type { EntityId, Command, CommandResult, WorldEvent, Observation } from './Simulation.ts';
 import { currentLesson, registerAttendance } from './school-time.ts';
+import { nextRoomOnRoute } from './navigation.ts';
 import { decideInvestigation, type Assessment, type Trust } from './cognition.ts';
 import { spellDefinitions, type SpellId, type LearningRecord } from './spellcraft.ts';
 import type { Belief } from './beliefs.ts';
