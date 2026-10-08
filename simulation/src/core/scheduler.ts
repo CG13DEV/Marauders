@@ -9,6 +9,7 @@ import { isActivePromise, personallyAvoids,
   type MeetingCommitment, type CommitmentMemory
 } from './social-commitments.ts';
 import { nextRoomOnRoute } from './navigation.ts';
+import { advanceToiletNeed,closestBathroom,type ToiletNeed } from './resident-life.ts';
 import { planStudyIntention } from './learning-intentions.ts';
 import { advanceNeeds,chooseNeedOrIntention,pickIntention,isOpenIntention,
   type PersonalIntention,type BodilyNeeds,type IntentionStatus,type Interruption
@@ -55,6 +56,7 @@ export type SchedulerContext = {
   commitmentMemories: Map<EntityId, CommitmentMemory[]>;
   intentions: Map<EntityId,PersonalIntention[]>;
   bodilyNeeds: Map<EntityId,BodilyNeeds>;
+  toiletNeeds: Map<EntityId,ToiletNeed>;
   transitionIntention(actor:EntityId,id:number,status:IntentionStatus,
     interruptedBy?:Interruption):void;
   resolveMeetings(minute: number): void;
@@ -75,7 +77,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
     exits, execute, currentRoom, occupants, observations, assessment,
     trustOf, knowledgeGaps, pendingTutoring, attemptedTutors, searches,
     timetables, routines, dailyPlans, meals, conversations, rests,
-    commitments, commitmentMemories, intentions, bodilyNeeds,
+    commitments, commitmentMemories, intentions, bodilyNeeds,toiletNeeds,
     transitionIntention, resolveMeetings,
     spellKnowledge, beliefsByCharacter, setRoutine, emit, recordDailyRest
   } = ctx;
@@ -88,6 +90,8 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       bodilyNeeds.set(actor,advanceNeeds(
         needs,currentRoom(actor)===plan.homeRoom,minute));
     }
+    for(const [actor,need] of toiletNeeds)
+      toiletNeeds.set(actor,advanceToiletNeed(need,isSleepTime(minute)));
     const decisions: { actor: EntityId; action: Command; result: CommandResult }[] = [];
     const occupiedBySchool = new Set<EntityId>();
     const socialParticipants = new Set<EntityId>();
@@ -143,6 +147,34 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
         if (!lesson) continue;
         occupiedBySchool.add(actor);
         travelTowardLesson(actor, room, lesson.room);
+      }
+    }
+
+    // Need-driven, physically traversed toilet journeys. Classroom duty and
+    // feasible imminent school journeys have priority over non-emergency trips.
+    // An assigned bathroom is a destination, never a magical instant relief.
+    for(const [actor,need] of toiletNeeds){
+      if(has(actor,'manual')||occupiedBySchool.has(actor)||
+         decisions.some(d=>d.actor===actor))continue;
+      if(need.urgency<68)continue;
+      const room=currentRoom(actor);
+      if(room===null)continue;
+      const lesson=nextSchoolJourney(timetables.get(actor)?.records??[],
+        minute,room,exits);
+      if(lesson?.committed)continue;
+      const destination=closestBathroom(room,need.bathrooms,
+        (from,to)=>shortestHops(from,to,exits));
+      if(destination===null)continue;
+      const action:Command|null=room===destination
+        ?{type:'use_toilet',actor}
+        :(()=>{
+          const next=nextRoomOnRoute(room,destination,exits);
+          return next===null?null:passageAction(actor,room,next);
+        })();
+      if(action){
+        const result=execute(action);
+        decisions.push({actor,action,result});
+        if(result.ok)occupiedBySchool.add(actor);
       }
     }
 

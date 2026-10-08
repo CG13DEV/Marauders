@@ -7,6 +7,7 @@ import type { TutoringRequest, AssistanceMemory } from './social-learning.ts';
 import type { Trust } from './cognition.ts';
 import type { MeetingCommitment, CommitmentMemory } from './social-commitments.ts';
 import type { PersonalIntention, BodilyNeeds } from './intentions.ts';
+import type { ToiletNeed,PatrolPlan } from './resident-life.ts';
 import type { HouseId, PointAuthority, PointDecision, PointNews } from './house-points.ts';
 import type {
   DailyLifePlan, MealMemory, ConversationMemory, RestMemory
@@ -46,6 +47,8 @@ export type RuntimeSnapshot = {
   pointAuthorities?: [number,PointAuthority][];
   pointLedger?: PointDecision[];
   pointNews?: [number,PointNews[]][];
+  toiletNeeds?: [number,ToiletNeed][];
+  patrolPlans?: [number,PatrolPlan][];
   routines: [number, number[]][];
   searches: [number, PersistedSearch][];
   requests: [number, TutoringRequest][];
@@ -67,6 +70,8 @@ function remapEvent(event: WorldEvent, at: (id: number) => number): WorldEvent {
       return { ...event, actor: at(event.actor) };
     case 'tutoring_requested': return { ...event, actor: at(event.actor), listener: at(event.listener) };
     case 'tutoring_answered': return { ...event, actor: at(event.actor), requester: at(event.requester) };
+    case 'toilet_used':return {...event,actor:at(event.actor),room:at(event.room)};
+    case 'animal_alerted':return {...event,actor:at(event.actor),listener:at(event.listener)};
     case 'house_points_changed':return {...event,actor:at(event.actor),pupil:at(event.pupil)};
     case 'house_points_shared':return {...event,actor:at(event.actor),listener:at(event.listener)};
     case 'meal_eaten': case 'rest_recorded': case 'intention_changed':
@@ -85,6 +90,7 @@ function remapObservation(record: Observation, at: (id: number) => number): Obse
     case 'heard_crash': return { ...record };
     case 'witnessed_breakage': return { ...record, actor: at(record.actor), target: at(record.target) };
     case 'inspected_object': return { ...record, target: at(record.target) };
+    case 'animal_alert':return {...record,actor:at(record.actor)};
     case 'heard_house_points':return {...record,
       ...(record.speaker===undefined?{}:{speaker:at(record.speaker)})};
   }
@@ -179,6 +185,18 @@ export function remapRuntimeSnapshot(snapshot: RuntimeSnapshot, at: (id: number)
           ...(n.speaker===undefined?{}:{speaker:at(n.speaker)})}))
       ] as [number,PointNews[]])
     }),
+    ...(snapshot.toiletNeeds===undefined?{}:{toiletNeeds:snapshot.toiletNeeds.map(
+      ([actor,need])=>[at(actor),{...need,bathrooms:need.bathrooms.map(at)}] as [number,ToiletNeed])}),
+    ...(snapshot.patrolPlans===undefined?{}:{patrolPlans:snapshot.patrolPlans.map(
+      ([actor,plan])=>[at(actor),{...plan,waypoints:plan.waypoints.map(at),
+        ...(plan.partner===undefined?{}:{partner:at(plan.partner)}),
+        ...(plan.rendezvous===undefined?{}:{rendezvous:at(plan.rendezvous)}),
+        reportedClaims:plan.reportedClaims.map(key=>{
+          const parts=key.split(':').map(Number);
+          if(parts.length!==3||parts.some(v=>!Number.isSafeInteger(v)))throw new Error('Invalid patrol report');
+          return parts.map(at).join(':');
+        })
+      }] as [number,PatrolPlan])}),
     routines: snapshot.routines.map(([id, path]) => [at(id), path.map(at)]),
     searches: snapshot.searches.map(([id, search]) => [at(id), {
       object: at(search.object), asked: search.asked.map(at),
