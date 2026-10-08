@@ -10,7 +10,8 @@ export type Claim = {
 
 export type Evidence =
   | { kind: 'vision'; eventSequence: number }
-  | { kind: 'testimony'; speaker: number; eventSequence: number };
+  | { kind: 'testimony'; speaker: number; eventSequence: number;
+      origin?: { kind: 'vision' } | { kind: 'testimony'; speaker: number } };
 
 export type Belief = {
   claim: Claim;
@@ -19,6 +20,12 @@ export type Belief = {
 
 export function copyClaim(claim: Claim): Claim {
   return { kind: claim.kind, culprit: claim.culprit, object: claim.object };
+}
+
+function cloneEvidence(evidence: Evidence): Evidence {
+  return evidence.kind === 'testimony' && evidence.origin
+    ? { ...evidence, origin: { ...evidence.origin } }
+    : { ...evidence };
 }
 
 export function createBeliefStore() {
@@ -32,14 +39,14 @@ export function createBeliefStore() {
   function remember(character: number, claim: Claim, evidence: Evidence): void {
     const ledger = records.get(character);
     if (!ledger) throw new Error('Unregistered recipient');
-    ledger.push({ claim: copyClaim(claim), evidence: { ...evidence } });
+    ledger.push({ claim: copyClaim(claim), evidence: cloneEvidence(evidence) });
   }
 
   function read(character: number): Belief[] {
     const ledger = records.get(character);
     return ledger ? ledger.map(entry => ({
       claim: copyClaim(entry.claim),
-      evidence: { ...entry.evidence }
+      evidence: cloneEvidence(entry.evidence)
     })) : [];
   }
 
