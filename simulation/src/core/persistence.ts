@@ -305,8 +305,13 @@ export function restoreCheckpoint(serialized: string | SavedCheckpointV2): Persi
   }
   const state = remapRuntimeSnapshot(save.runtime, at);
   restored.hydrateRuntime(state);
-  if (JSON.stringify(restored.captureRuntime()) !== JSON.stringify(state)) {
-    throw new Error('Materialized checkpoint diverged during hydration');
+  const materialized=restored.captureRuntime();
+  if(JSON.stringify(materialized)!==JSON.stringify(state)){
+    // Fail closed, but report the mismatch category (not private NPC data).
+    const sections=Object.keys(state).filter(key=>
+      JSON.stringify((materialized as unknown as Record<string,unknown>)[key])!==
+      JSON.stringify((state as unknown as Record<string,unknown>)[key]));
+    throw new Error('Materialized checkpoint diverged during hydration: '+sections.join(','));
   }
   restored.markCheckpointRooted();
   return restored;
