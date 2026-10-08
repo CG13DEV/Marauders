@@ -45,6 +45,7 @@ test('materialized checkpoint contains no historical ticks or commands and resto
 
 test('checkpoint restores private observations, testimony, flags, spell learning and positions', () => {
   const {w,lily,remus,james,cup,classroom}=schoolWithConsequences();
+  w.setManualControl(remus,true); // deliberately absent at the instruction tick
   for(let i=0;i<7;i++) w.step();
   w.execute({type:'move',actor:remus,destination:classroom});
   w.execute({type:'tell',actor:lily,listener:remus,
