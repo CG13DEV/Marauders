@@ -15,6 +15,8 @@ test('expanded residents, deans and ghost teacher exist without rewriting 96 tim
   assert.equal(s.residents!.ghostProfessor,
     s.professors.find(p => p.subject === 'History of Magic')?.id);
   assert.equal(world.label(s.residents!.ghostProfessor), 'Катберт Биннс');
+  assert.equal(world.needsOf(s.residents!.ghostProfessor), null);
+  assert.equal(world.mealHistory(s.residents!.ghostProfessor).length, 0);
   const kinds = s.residents!.people.map(p=>p.kind);
   assert.equal(kinds.filter(k=>k==='ghost').length,5);
   assert.equal(kinds.filter(k=>k==='poltergeist').length,1);
