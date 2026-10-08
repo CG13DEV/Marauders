@@ -41,7 +41,9 @@ export function advanceNeeds(
   };
 }
 export function afterMeal(previous:Readonly<BodilyNeeds>):BodilyNeeds {
-  return {...previous,hunger:Math.max(0,previous.hunger-42)};
+  // A substantial meal must cover more than half a waking day on this
+  // ten-minute model. Otherwise even three validated meals cause starvation.
+  return {...previous,hunger:Math.max(0,previous.hunger-80)};
 }
 export function isOpenIntention(goal:PersonalIntention):boolean {
   return goal.status==='queued'||goal.status==='active'||goal.status==='paused';

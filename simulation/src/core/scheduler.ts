@@ -10,7 +10,7 @@ import { isActivePromise, personallyAvoids,
 } from './social-commitments.ts';
 import { nextRoomOnRoute } from './navigation.ts';
 import { planStudyIntention } from './learning-intentions.ts';
-import { advanceNeeds,chooseNeedOrIntention,isOpenIntention,
+import { advanceNeeds,chooseNeedOrIntention,pickIntention,isOpenIntention,
   type PersonalIntention,type BodilyNeeds,type IntentionStatus,type Interruption
 } from './intentions.ts';
 import { decideInvestigation, type Assessment, type Trust } from './cognition.ts';
@@ -317,6 +317,31 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       });
       const choice=chooseNeedOrIntention(
         needs,minute,eligible,kind=>ateMeal(meals.get(actor)??[],dayOf(minute),kind));
+      // Meal service is a window, not instantaneous food wherever hunger
+      // strikes. Plan the actual journey *before* the serving window closes,
+      // reusing the same path/time feasibility rules as the academic planner.
+      const nextSchool=nextSchoolJourney(
+        timetables.get(actor)?.records??[],minute,room,exits);
+      const mealJourney=feasibleMealJourney(
+        minute,room,plan.diningRoom,
+        meals.get(actor)??[],nextSchool?.lesson??null,exits);
+      const bestGoal=pickIntention(eligible);
+      const seekMeal=needs.hunger>=24 &&
+        (needs.hunger>=60||bestGoal?.importance!=='important');
+      if(mealJourney && seekMeal && choice.kind!=='eat'){
+        for(const goal of remaining)
+          if(goal.status==='active')
+            transitionIntention(actor,goal.id,'paused','hunger');
+        if(room!==plan.diningRoom){
+          const next=nextRoomOnRoute(room,plan.diningRoom,exits);
+          if(next!==null){
+            const action=passageAction(actor,room,next);
+            const result=execute(action);
+            decisions.push({actor,action,result});
+          }
+        }
+        continue;
+      }
       const target=choice.kind==='visit'||choice.kind==='pursue'
         ?choice.intention:null;
       for(const goal of remaining){
@@ -437,8 +462,24 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
         }
         continue;
       }
-      // Idle characters can still chat and join invitations. No fake hunger
-      // meals, and no compulsory bed teleportation when their needs are low.
+      // The lack of a personal quest is not immobility. Ordinary free time
+      // still has habitual social destinations and curfew-driven homeward
+      // travel. The old planner and new one share the same public topology.
+      if(choice.kind==='idle'){
+        const destination=isLeisure(minute)
+          ? leisureDestination(plan,minute)
+          : shouldReturnHome(minute)?plan.homeRoom:null;
+        if(destination!==null && destination!==room){
+          const next=nextRoomOnRoute(room,destination,exits);
+          if(next!==null){
+            const action=passageAction(actor,room,next);
+            const result=execute(action);
+            decisions.push({actor,action,result});
+          }
+        }
+      }
+      // Idle characters can now share common rooms and talk; neither a
+      // closed kitchen nor a sleeping period invents free nourishment.
     }
 
     // Basic daily needs have the same physical travel/action rules as classes.
