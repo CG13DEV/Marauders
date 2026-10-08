@@ -118,6 +118,7 @@ export function createSimulation() {
   const Guarded = {};
   const HasRoutine = {};
   const HasTimetable = {};
+  const ManuallyControlled = {};
   const Experimental = {};
   const Illuminated = {};
   const SeeksHelp = {};
@@ -288,6 +289,13 @@ export function createSimulation() {
     if (!isCharacter(character)) throw new Error('Guarded disposition requires a character');
     if (enabled) addComponent(ecs, character, Guarded);
     else removeComponent(ecs, character, Guarded);
+  }
+
+  /** Player and AI are the same world entities; only the action source differs. */
+  function setManualControl(actor: EntityId, enabled: boolean): void {
+    if (!isCharacter(actor)) throw new Error('Manual control requires a character');
+    if (enabled) addComponent(ecs, actor, ManuallyControlled);
+    else removeComponent(ecs, actor, ManuallyControlled);
   }
 
   function setRoutine(actor: EntityId, destinations: readonly EntityId[]): void {
@@ -771,7 +779,8 @@ export function createSimulation() {
     for (const actor of query(ecs, [Character, HasTimetable])) {
       const timetable = timetables.get(actor);
       const room = currentRoom(actor);
-      if (!timetable || room === null || timetable.priority !== 'lesson_first') continue;
+      if (!timetable || room === null || timetable.priority !== 'lesson_first' ||
+          hasComponent(ecs, actor, ManuallyControlled)) continue;
       const lesson = currentLesson(timetable.records, minute);
       if (!lesson) continue;
       occupiedBySchool.add(actor);
@@ -783,7 +792,8 @@ export function createSimulation() {
     // One response consumes one NPC action this tick.
     for (const request of [...pendingTutoring.values()]) {
       const helper = request.helper;
-      if (occupiedBySchool.has(helper) || decisions.some(d => d.actor === helper)) continue;
+      if (hasComponent(ecs, helper, ManuallyControlled) || occupiedBySchool.has(helper) ||
+          decisions.some(d => d.actor === helper)) continue;
       if (currentRoom(helper) === null ||
           currentRoom(helper) !== currentRoom(request.requester)) continue;
       const accept = willingToTutor({
@@ -807,8 +817,8 @@ export function createSimulation() {
     // A pupil knows their own concrete gap and notices people sharing a room.
     // They do NOT consult the bystander's hidden knowledge or private plans.
     for (const actor of query(ecs, [Character, SeeksHelp])) {
-      if (occupiedBySchool.has(actor) || socialParticipants.has(actor) ||
-          decisions.some(d => d.actor === actor) ||
+      if (hasComponent(ecs, actor, ManuallyControlled) || occupiedBySchool.has(actor) ||
+          socialParticipants.has(actor) || decisions.some(d => d.actor === actor) ||
           pendingTutoring.has(actor) || !hasComponent(ecs, actor, Hearing)) continue;
       const room = currentRoom(actor);
       if (room === null) continue;
@@ -844,7 +854,8 @@ export function createSimulation() {
     // The decision policy reads only the actor's beliefs and locally visible
     // objects. In particular it never reads authoritative broken-state or events.
     for (const actor of query(ecs, [Character, Inquisitive])) {
-      if (occupiedBySchool.has(actor) || socialParticipants.has(actor)) continue;
+      if (hasComponent(ecs, actor, ManuallyControlled) || occupiedBySchool.has(actor) ||
+          socialParticipants.has(actor)) continue;
       if (!hasComponent(ecs, actor, Vision)) continue;
       const room = currentRoom(actor);
       if (room === null) continue;
@@ -864,8 +875,8 @@ export function createSimulation() {
     // A separate opt-in social policy keeps the original inspection policy
     // independent. One physical/social action per NPC per tick.
     for (const actor of query(ecs, [Character, SociableInvestigator])) {
-      if (occupiedBySchool.has(actor) || socialParticipants.has(actor) ||
-          decisions.some(d => d.actor === actor)) continue;
+      if (hasComponent(ecs, actor, ManuallyControlled) || occupiedBySchool.has(actor) ||
+          socialParticipants.has(actor) || decisions.some(d => d.actor === actor)) continue;
       if (!hasComponent(ecs, actor, Hearing)) continue;
       const room = currentRoom(actor);
       if (room === null) continue;
@@ -937,7 +948,8 @@ export function createSimulation() {
     // Inquiry-first pupils attend once they have no higher-priority action.
     // Remaining within a lesson's room takes priority over leisure routines.
     for (const actor of query(ecs, [Character, HasTimetable])) {
-      if (socialParticipants.has(actor) || decisions.some(d => d.actor === actor)) continue;
+      if (hasComponent(ecs, actor, ManuallyControlled) || socialParticipants.has(actor) ||
+          decisions.some(d => d.actor === actor)) continue;
       const timetable = timetables.get(actor);
       const room = currentRoom(actor);
       if (!timetable || room === null || timetable.priority !== 'inquiry_first') continue;
@@ -950,7 +962,8 @@ export function createSimulation() {
     // A curious experimenter can apply a genuinely learned pattern.
     // They must previously have performed guided practice; no secret unlock.
     for (const actor of query(ecs, [Character, Experimental])) {
-      if (occupiedBySchool.has(actor) || socialParticipants.has(actor) || decisions.some(d => d.actor === actor)) continue;
+      if (hasComponent(ecs, actor, ManuallyControlled) || occupiedBySchool.has(actor) ||
+          socialParticipants.has(actor) || decisions.some(d => d.actor === actor)) continue;
       const ready = spellKnowledge.history(actor)
         .filter(r => r.stage === 'guided')
         .map(r => r.spell)
@@ -969,7 +982,8 @@ export function createSimulation() {
     // Independent routines produce movement from explicit destination goals.
     // They use the castle's public topology, never hidden character locations.
     for (const actor of query(ecs, [Character, HasRoutine])) {
-      if (occupiedBySchool.has(actor) || socialParticipants.has(actor) || decisions.some(d => d.actor === actor)) continue;
+      if (hasComponent(ecs, actor, ManuallyControlled) || occupiedBySchool.has(actor) ||
+          socialParticipants.has(actor) || decisions.some(d => d.actor === actor)) continue;
       const pending = routines.get(actor);
       const room = currentRoom(actor);
       if (!pending || room === null) continue;
@@ -1032,7 +1046,7 @@ export function createSimulation() {
   return {
     room, character, fragileObject, connect, execute, step,
     setTrust, trustOf, setInquisitive, setSocialInvestigator, setGuarded, setRoutine, assessment,
-    setTimetable, attendance, learningDebt, knowledgeGaps,
+    setTimetable, setManualControl, attendance, learningDebt, knowledgeGaps,
     setHelpSeeking, setHelpful, tutoringRequest, assistance, hasHelped,
     seedSpellKnowledge, spellStage, setExperimenter, isIlluminated,
     learningHistory: (actor: EntityId): LearningRecord[] => spellKnowledge.history(actor),
