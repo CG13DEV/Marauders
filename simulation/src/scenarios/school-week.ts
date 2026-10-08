@@ -16,6 +16,21 @@ export const SCHOOL_WEEK_DAYS = 5;
 export const CLASS_STARTS = [9 * 60, 11 * 60, 14 * 60] as const;
 export const PUPILS_PER_HOUSE_PER_YEAR = 3;
 
+/**
+ * [GAME] Deterministic population gates. Existing three-argument calls remain
+ * unchanged; 'control' is the backward-compatible experiment #19 school.
+ */
+export const INTENTION_ROLLOUT_STAGES = [
+  'control','12-pupils','24-pupils','84-pupils','96-all'
+] as const;
+export type IntentionRolloutStage = typeof INTENTION_ROLLOUT_STAGES[number];
+export function rolloutPopulation(stage:IntentionRolloutStage) {
+  const pupils=stage==='control'?0:
+    stage==='12-pupils'?12:stage==='24-pupils'?24:84;
+  return {pupils,teachers:stage==='96-all'?12:0};
+}
+
+
 export type Student = {
   id: number;
   key: string;
@@ -46,8 +61,12 @@ export type TeachingSession = {
 export function createSchoolWeek(
   world = createSimulation(),
   planning: 'adaptive' | 'legacy' = 'adaptive',
-  social: 'autonomous' | 'off' = 'autonomous'
+  social: 'autonomous' | 'off' = 'autonomous',
+  rollout: IntentionRolloutStage = 'control'
 ) {
+  if(!INTENTION_ROLLOUT_STAGES.includes(rollout))
+    throw new Error('Unknown intention rollout stage');
+  const population=rolloutPopulation(rollout);
   const layout = createCastleLayout(world);
   const { hall, greatHall, staffRoom, library, courtyard, hospital,
     classrooms, electiveRooms } = layout;
@@ -61,6 +80,7 @@ export function createSchoolWeek(
       homeRoom: staffRoom, diningRoom: greatHall,
       style: index % 2 === 0 ? 'outgoing' : 'reserved',
       interest: 'lessons',
+      ...(population.teachers===12?{intentionPlanning:true}:{ }),
       ...(planning === 'adaptive' ? {schoolPlanning:'adaptive' as const} : {})
     });
     return { id, subject };
@@ -103,6 +123,7 @@ export function createSchoolWeek(
           interest: (['lessons', 'castle', 'hobbies'] as const)[index]!,
           ...(social === 'autonomous' ? { socialInvitations: true } : {}),
           ...(year === 1 ? { learningAppointments: true } : {}),
+          ...(students.length<=population.pupils?{intentionPlanning:true}:{}),
           ...(planning === 'adaptive' ? {schoolPlanning:'adaptive' as const} : {})
         });
         // The first year notices their *own* gaps after a missed explanation.
@@ -206,7 +227,7 @@ export function createSchoolWeek(
   }
 
   return {
-    world, layout, hall, staffRoom, greatHall, library, courtyard, hospital,
+    world, rollout, population, layout, hall, staffRoom, greatHall, library, courtyard, hospital,
     dorms, classrooms, electiveRooms, professors, students, teachingGroups,
     sessions, pupilSchedule, staffSchedule
   };
