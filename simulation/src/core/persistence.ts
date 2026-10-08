@@ -288,8 +288,8 @@ export function restoreCheckpoint(serialized: string | SavedCheckpointV2): Persi
   return restored;
 }
 
-export function restoreSimulation(serialized: string | SavedSimulationV1): PersistentSimulation {
-  const save: SavedSimulationV1 = typeof serialized === 'string' ? JSON.parse(serialized) : copy(serialized);
+export function restoreSimulation(serialized: string | SavedSimulationV1 | SavedCheckpointV2): PersistentSimulation {
+  const save: SavedSimulationV1 | SavedCheckpointV2 = typeof serialized === 'string' ? JSON.parse(serialized) : copy(serialized);
   if (save?.format === 'marauders.checkpoint' && save.version === 2)
     return restoreCheckpoint(save as SavedCheckpointV2);
   if (save?.format !== 'marauders.headless' || save.version !== 1 ||
