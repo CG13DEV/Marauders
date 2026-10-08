@@ -1,3 +1,5 @@
+import { isSpellId, type SpellId } from './spellcraft.ts';
+
 /** Gameplay-only clock: ten simulated minutes per world step, starting at 08:00. */
 export const SCHOOL_START_MINUTE = 8 * 60;
 export const MINUTES_PER_TICK = 10;
@@ -8,6 +10,8 @@ export type Lesson = {
   room: number;
   startsAt: number; // minute of day, currently day one
   endsAt: number;
+  /** Optional technique explicitly taught at startsAt + ten minutes. */
+  spell?: SpellId;
 };
 export type AttendanceStatus = 'pending' | 'on_time' | 'late' | 'missed';
 export type AttendanceRecord = Lesson & {
@@ -36,7 +40,11 @@ export function validateTimetable(lessons: readonly Lesson[]): void {
     if (!lesson.id.trim() || !lesson.subject.trim() || ids.has(lesson.id) ||
         !Number.isInteger(lesson.startsAt) || !Number.isInteger(lesson.endsAt) ||
         lesson.startsAt < SCHOOL_START_MINUTE || lesson.endsAt > 1440 ||
-        lesson.startsAt >= lesson.endsAt) {
+        lesson.startsAt >= lesson.endsAt ||
+        (lesson.spell !== undefined && (
+          !isSpellId(lesson.spell) ||
+          lesson.endsAt - lesson.startsAt < 20 ||
+          lesson.startsAt % 10 !== 0))) {
       throw new Error('Invalid or duplicated school lesson');
     }
     if (i > 0 && sorted[i - 1]!.endsAt > lesson.startsAt) {
