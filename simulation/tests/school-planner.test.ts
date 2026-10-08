@@ -96,8 +96,8 @@ test('adaptive daily plan survives journal and materialized checkpoints', () => 
 });
 
 test('the same population yields a fair legacy-vs-adaptive seven-day comparison', () => {
-  const before=createSchoolWeek(createSimulation(),'legacy');
-  const after=createSchoolWeek(createSimulation(),'adaptive');
+  const before=createSchoolWeek(createSimulation(),'legacy','off');
+  const after=createSchoolWeek(createSimulation(),'adaptive','off');
   for(let tick=0;tick<1008;tick++){before.world.step();after.world.step();}
   const original=reportSchoolWeek(before), improved=reportSchoolWeek(after);
   assert.equal(original.pupilLessonSlots,750);

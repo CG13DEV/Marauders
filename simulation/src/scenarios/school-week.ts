@@ -45,7 +45,8 @@ export type TeachingSession = {
 
 export function createSchoolWeek(
   world = createSimulation(),
-  planning: 'adaptive' | 'legacy' = 'adaptive'
+  planning: 'adaptive' | 'legacy' = 'adaptive',
+  social: 'autonomous' | 'off' = 'autonomous'
 ) {
   const layout = createCastleLayout(world);
   const { hall, greatHall, staffRoom, library, courtyard, hospital,
@@ -100,6 +101,7 @@ export function createSchoolWeek(
           leisureRoom: index === 0 ? library : index === 1 ? courtyard : dorms[house],
           style: index === 2 ? 'reserved' : 'outgoing',
           interest: (['lessons', 'castle', 'hobbies'] as const)[index]!,
+          ...(social === 'autonomous' ? { socialInvitations: true } : {}),
           ...(planning === 'adaptive' ? {schoolPlanning:'adaptive' as const} : {})
         });
       }

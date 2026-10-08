@@ -4,7 +4,7 @@ import { createSchoolWeek, reportSchoolWeek } from '../scenarios/school-week.ts'
 console.log('Мародёры / эксперимент №14: прежний планировщик против маршрутного');
 for (const mode of ['legacy','adaptive'] as const) {
   const world=createSimulation();
-  const scene=createSchoolWeek(world,mode);
+  const scene=createSchoolWeek(world,mode,'off');
   for(let i=0;i<1008;i++)world.step();
   const report=reportSchoolWeek(scene);
   console.log(mode+': '+JSON.stringify({
