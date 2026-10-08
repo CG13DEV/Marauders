@@ -861,7 +861,7 @@ export function createSimulation() {
     const agentComponents = {
       timetable: HasTimetable, seeksHelp: SeeksHelp, inquisitive: Inquisitive,
       socialInvestigator: SociableInvestigator, experimental: Experimental,
-      routine: HasRoutine
+      routine: HasRoutine, dailyLife: HasDailyLife
     };
     return runWorldStep({
       advanceClock: () => schoolTime(++tick).absoluteMinute,
@@ -907,6 +907,7 @@ export function createSimulation() {
       guarded: hasComponent(ecs, actor, Guarded),
       hasRoutine: hasComponent(ecs, actor, HasRoutine),
       hasTimetable: hasComponent(ecs, actor, HasTimetable),
+      hasDailyLife: hasComponent(ecs, actor, HasDailyLife),
       manuallyControlled: hasComponent(ecs, actor, ManuallyControlled),
       experimental: hasComponent(ecs, actor, Experimental),
       illuminated: hasComponent(ecs, actor, Illuminated),
@@ -939,6 +940,10 @@ export function createSimulation() {
       beliefs: characters.map(id => [id, beliefsByCharacter.read(id)]),
       learning: characters.map(id => [id, spellKnowledge.history(id)]),
       schedules: [...timetables.entries()],
+      dailyPlans: [...dailyPlans.entries()],
+      meals: [...meals.entries()],
+      conversations: [...conversations.entries()],
+      rests: [...rests.entries()],
       routines: [...routines.entries()],
       searches: [...searches.entries()].map(([id, value]) => [id, {
         object: value.object, asked: [...value.asked], seenRooms: [...value.seenRooms], trail: [...value.trail]
@@ -981,6 +986,7 @@ export function createSimulation() {
       vision: Vision, hearing: Hearing, inquisitive: Inquisitive,
       socialInvestigator: SociableInvestigator, guarded: Guarded,
       hasRoutine: HasRoutine, hasTimetable: HasTimetable,
+      hasDailyLife: HasDailyLife,
       manuallyControlled: ManuallyControlled, experimental: Experimental,
       illuminated: Illuminated, seeksHelp: SeeksHelp, helpful: Helpful
     };
@@ -1005,6 +1011,14 @@ export function createSimulation() {
 
     timetables.clear();
     for (const [id, schedule] of state.schedules) timetables.set(id, schedule);
+    dailyPlans.clear();
+    for (const [id, plan] of state.dailyPlans) dailyPlans.set(id, plan);
+    meals.clear();
+    for (const [id, items] of state.meals) meals.set(id, items);
+    conversations.clear();
+    for (const [id, items] of state.conversations) conversations.set(id, items);
+    rests.clear();
+    for (const [id, items] of state.rests) rests.set(id, items);
     routines.clear();
     for (const [id, route] of state.routines) routines.set(id, route);
     searches.clear();
