@@ -1,6 +1,6 @@
 {
   "name": "marauders-simulation",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -11,7 +11,8 @@
     "demo": "node --experimental-strip-types src/cli/main.ts --demo",
     "perception-demo": "node --experimental-strip-types src/cli/perception-demo.ts",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "social-demo": "node --experimental-strip-types src/cli/social-demo.ts"
   },
   "dependencies": {
     "bitecs": "0.4.0"
