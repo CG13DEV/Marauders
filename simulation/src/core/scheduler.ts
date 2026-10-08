@@ -4,7 +4,10 @@
  */
 import type { EntityId, Command, CommandResult, WorldEvent, Observation } from './Simulation.ts';
 import { currentLesson, registerAttendance } from './school-time.ts';
-import { nextSchoolJourney, feasibleMealJourney } from './school-planner.ts';
+import { nextSchoolJourney, feasibleMealJourney, shortestHops } from './school-planner.ts';
+import { isActivePromise, personallyAvoids,
+  type MeetingCommitment, type CommitmentMemory
+} from './social-commitments.ts';
 import { nextRoomOnRoute } from './navigation.ts';
 import { decideInvestigation, type Assessment, type Trust } from './cognition.ts';
 import { spellDefinitions, type SpellId, type LearningRecord } from './spellcraft.ts';
@@ -44,6 +47,9 @@ export type SchedulerContext = {
   meals: Map<EntityId, MealMemory[]>;
   conversations: Map<EntityId, ConversationMemory[]>;
   rests: Map<EntityId, RestMemory[]>;
+  commitments: MeetingCommitment[];
+  commitmentMemories: Map<EntityId, CommitmentMemory[]>;
+  resolveMeetings(minute: number): void;
   recordDailyRest(minute: number): void;
   spellKnowledge: {
     history(actor: number): LearningRecord[];
@@ -61,6 +67,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
     exits, execute, currentRoom, occupants, observations, assessment,
     trustOf, knowledgeGaps, pendingTutoring, attemptedTutors, searches,
     timetables, routines, dailyPlans, meals, conversations, rests,
+    commitments, commitmentMemories, resolveMeetings,
     spellKnowledge, beliefsByCharacter, setRoutine, emit, recordDailyRest
   } = ctx;
     const minute = advanceClock();
@@ -68,6 +75,22 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
     const occupiedBySchool = new Set<EntityId>();
     const socialParticipants = new Set<EntityId>();
     const sleeping = new Set<EntityId>();
+    const promisePriorities = new Set<EntityId>();
+    const upcomingFor = (actor: EntityId) =>
+      commitments.find(m => isActivePromise(m,minute) &&
+        (m.promisor===actor || m.beneficiary===actor));
+    // Personal commitment priority can genuinely conflict with school duty.
+    for(const actor of actors('dailyLife')) {
+      const plan=dailyPlans.get(actor);
+      if(plan?.commitmentPriority !== 'promise_first' ||
+          has(actor,'manual')) continue;
+      const promise=upcomingFor(actor);
+      const room=currentRoom(actor);
+      if(!promise || room===null) continue;
+      const hops=shortestHops(room,promise.room,exits);
+      if(hops!==null && minute>=promise.atMinute-(hops+1)*10)
+        promisePriorities.add(actor);
+    }
 
     function travelTowardLesson(actor: EntityId, room: EntityId, goal: EntityId): void {
       if (room === goal) return;
@@ -85,7 +108,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       const timetable = timetables.get(actor);
       const room = currentRoom(actor);
       if (!timetable || room === null || timetable.priority !== 'lesson_first' ||
-          has(actor, 'manual')) continue;
+          has(actor, 'manual') || promisePriorities.has(actor)) continue;
       if (dailyPlans.get(actor)?.schoolPlanning === 'adaptive') {
         const journey = nextSchoolJourney(timetable.records, minute, room, exits);
         if (!journey || !journey.committed) continue;
@@ -103,6 +126,32 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
         if (!lesson) continue;
         occupiedBySchool.add(actor);
         travelTowardLesson(actor, room, lesson.room);
+      }
+    }
+
+    // A heard personal promise can override meals and leisure, but not a
+    // scheduled lesson unless the actor explicitly prioritizes that promise.
+    // Each actor considers only their own participation, not others' plans.
+    for(const actor of actors('dailyLife')) {
+      if(has(actor,'manual') || occupiedBySchool.has(actor) ||
+        decisions.some(d=>d.actor===actor)) continue;
+      const promise=upcomingFor(actor);
+      const room=currentRoom(actor);
+      if(!promise || room===null) continue;
+      const hops=shortestHops(room,promise.room,exits);
+      if(hops===null) continue;
+      if(minute < promise.atMinute-(hops+1)*10) continue;
+      // While a person waits, don't let their routine drag them elsewhere.
+      if(room===promise.room){
+        occupiedBySchool.add(actor);
+        continue;
+      }
+      const next=nextRoomOnRoute(room,promise.room,exits);
+      if(next!==null){
+        const action=passageAction(actor,room,next);
+        const result=execute(action);
+        decisions.push({actor,action,result});
+        occupiedBySchool.add(actor);
       }
     }
 
@@ -357,7 +406,9 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
         !decisions.some(d => d.actor === other) &&
         !talkedToday(conversations.get(other) ?? [], dayOf(minute)));
       const listener = chooseLocalCompanion(actor, available, memories,
-        dayOf(minute), other => trustOf(actor, other));
+        dayOf(minute), other => personallyAvoids(
+          commitmentMemories.get(actor) ?? [],other
+        ) ? 'distrusted' : trustOf(actor,other));
       if (listener === null) continue;
       const action: Command = {
         type: 'chat', actor, listener, topic: plan.interest
@@ -430,7 +481,9 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
         if (!lesson.spell || minute !== lesson.startsAt + 10 ||
             presentRoom !== lesson.room || lesson.status === 'pending' ||
             lesson.status === 'missed' ||
-            lesson.arrivedAt === undefined || lesson.arrivedAt > minute) continue;
+            lesson.arrivedAt === undefined || lesson.arrivedAt > minute ||
+            (lesson.teacher !== undefined &&
+              currentRoom(lesson.teacher) !== lesson.room)) continue;
         const learned = spellKnowledge.learn(actor, lesson.spell, 'conceptual',
           { kind: 'lesson', lessonId: lesson.id, minute });
         if (learned) emit({
@@ -438,6 +491,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
         });
       }
     }
+    resolveMeetings(minute);
     recordDailyRest(minute);
     return decisions;
   }
