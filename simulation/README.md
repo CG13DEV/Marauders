@@ -14,6 +14,7 @@ npm run perception-demo
 npm run social-demo
 npm run agency-demo
 npm run living-demo
+npm run school-day-demo
 npm start
 npm test
 npm run typecheck
@@ -83,8 +84,21 @@ Run `npm run living-demo`. Unlike earlier hand-authored sequences, **each `world
 
 **[GAME] Prototype constraints:** routines are finite waypoint itineraries assigned externally; they are not full class schedules or autonomous goals. Room navigation relies on knowledge of the castle's public topology. Witness search is bounded depth-first exploration, with no hidden NPC position lookup. This is a local policy, not an LLM planner; response honesty is currently based on explicit personality constraints. Asking and answering require co-location and hearing; no semantic free-form conversation. Source ancestry is one level deep; we have not yet modeled multi-generation rumor transmission, reputation dynamics, or autonomous social goals.
 
+## Experiment #6: school time, lessons, and consequences
+
+Run `npm run school-day-demo`. The simulation advances **ten in-world minutes per `world.step()`**, from 08:00 on day one. The API `world.clock()` exposes the virtual time and `world.tick()` remains the discrete step counter.
+
+- Characters may have individual `setTimetable(character, lessons, priority)` schedules. Lessons use unique IDs, subjects, room entities, and non-overlapping `startsAt`/`endsAt` minutes-of-day windows.
+- The `lesson_first` policy reserves lesson periods and begins travelling up to twenty minutes before class. `inquiry_first` prioritizes autonomous investigation and only starts travelling when no investigation action is available.
+- Movement and door-opening use the same validated ECS command pipeline as before; disconnected classrooms cannot be reached by teleportation.
+- `world.attendance(character)` reports `pending`, `on_time`, `late`, or `missed` for each class. The world emits exactly one `lesson_attendance` event per resolved lesson.
+- `world.learningDebt(character)` is the number of fully **missed** lessons, **not a complete skill or knowledge model**. Arriving late is tracked separately.
+- The sample day includes Lily attending her library study session and then Charms on time, James attending class, and Remus arriving late to Potions because his investigation takes priority.
+
+**[GAME] MVP boundaries:** attendance is recorded on first arrival inside a lesson window (or when the window ends without arrival). There is no teacher, lesson content, detention, knowledge acquisition, class participation, or early-departure penalty yet. The timetable covers **day one only** and does not repeat automatically on subsequent days. Ten-minute ticks can only distinguish arrival to that granularity. School priorities and subject choices are configured explicitly; they are not yet derived from evolving goals or emotions.
+
 ## What next?
 
-Make trust evolve from witnessed behavior, store richer chains of hearsay and long-term goals, and expand decisions beyond local inspection to asking witnesses or travelling to investigate. Character cognition must remain restricted to character-local data.
+The next meaningful step is lesson content and learned abilities: each scheduled class can expose concrete knowledge only to students actually present, making attendance consequential beyond a counter. After that we can model shared social plans, obligations and more convincing priority negotiation.
 
 The source of truth for design remains the main repository `docs/` directory. This code is a small executable [GAME] model, not a statement of canon.
