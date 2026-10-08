@@ -10,16 +10,21 @@ import {
 } from 'bitecs';
 import { validateMovement, type MoveRejection } from './movement-rules.ts';
 import { perceiveCrash } from './perception-rules.ts';
+import { createBeliefStore, copyClaim, type Claim, type Belief } from './beliefs.ts';
 
 export type EntityId = number;
 
 export type Command =
   | { type: 'move'; actor: EntityId; destination: EntityId }
-  | { type: 'break_object'; actor: EntityId; target: EntityId };
+  | { type: 'break_object'; actor: EntityId; target: EntityId }
+  | { type: 'open_door'; actor: EntityId; door: EntityId }
+  | { type: 'tell'; actor: EntityId; listener: EntityId; claim: Claim };
 
 export type WorldEvent =
   | { type: 'entity_moved'; actor: EntityId; from: EntityId; to: EntityId }
-  | { type: 'object_broken'; actor: EntityId; target: EntityId; room: EntityId };
+  | { type: 'object_broken'; actor: EntityId; target: EntityId; room: EntityId }
+  | { type: 'door_opened'; actor: EntityId; door: EntityId }
+  | { type: 'testimony_delivered'; actor: EntityId; listener: EntityId; claim: Claim };
 
 /**
  * What a character is ALLOWED to know.
@@ -39,9 +44,12 @@ export type BreakRejection =
   | 'already_broken'
   | 'not_in_reach';
 
+export type SocialRejection = 'unknown_listener' | 'listener_not_character' | 'cannot_talk_to_self' | 'not_colocated' | 'listener_cannot_hear' | 'invalid_claim';
+export type DoorRejection = 'unknown_door' | 'not_door' | 'not_near_door' | 'already_open';
+
 export type CommandResult =
   | { ok: true; events: readonly WorldEvent[] }
-  | { ok: false; reason: MoveRejection | BreakRejection; events: readonly [] };
+  | { ok: false; reason: MoveRejection | BreakRejection | SocialRejection | DoorRejection; events: readonly [] };
 
 export type DoorOptions = {
   door: { key: string; label: string; open: boolean };
@@ -71,6 +79,7 @@ export function createSimulation() {
   const doors = new Map<string, EntityId>();
   const events: WorldEvent[] = [];
   const observationsByCharacter = new Map<EntityId, Observation[]>();
+  const beliefsByCharacter = createBeliefStore();
 
   function addNamedEntity(key: string, label: string): EntityId {
     if (keys.has(key)) throw new Error(`Duplicate entity key: ${key}`);
@@ -104,6 +113,7 @@ export function createSimulation() {
     if (senses.hearing !== false) addComponent(ecs, eid, Hearing);
     addComponent(ecs, eid, LocatedIn(initialRoom));
     observationsByCharacter.set(eid, []);
+    beliefsByCharacter.register(eid);
     return eid;
   }
 
@@ -157,8 +167,14 @@ export function createSimulation() {
     return door === undefined || Door.open[door] === 1;
   }
 
+  function copyEvent(event: WorldEvent): WorldEvent {
+    return event.type === 'testimony_delivered'
+      ? { ...event, claim: copyClaim(event.claim) }
+      : { ...event };
+  }
+
   function emit(event: WorldEvent): void {
-    events.push(event);
+    events.push(copyEvent(event));
     if (event.type !== 'object_broken') return;
 
     // An authoritative event becomes *different* observations per observer.
@@ -178,6 +194,10 @@ export function createSimulation() {
       if (!ledger) throw new Error('Character missing observation ledger');
       if (mode === 'witnessed') {
         ledger.push({ kind: 'witnessed_breakage', source: 'vision', actor: event.actor, target: event.target });
+        beliefsByCharacter.remember(observer,
+          { kind: 'broke_object', culprit: event.actor, object: event.target },
+          { kind: 'vision', eventSequence: events.length }
+        );
       } else if (mode === 'heard') {
         ledger.push({ kind: 'heard_crash', source: 'hearing' });
       }
@@ -212,6 +232,61 @@ export function createSimulation() {
     if (!hasComponent(ecs, command.actor, Character)) {
       return { ok: false, reason: 'not_character', events: [] };
     }
+    if (command.type === 'open_door') {
+      if (!entityExists(ecs, command.door)) {
+        return { ok: false, reason: 'unknown_door', events: [] };
+      }
+      if (!hasComponent(ecs, command.door, Door)) {
+        return { ok: false, reason: 'not_door', events: [] };
+      }
+      const place = currentRoom(command.actor);
+      if (place !== Door.roomA[command.door] && place !== Door.roomB[command.door]) {
+        return { ok: false, reason: 'not_near_door', events: [] };
+      }
+      if (Door.open[command.door] === 1) {
+        return { ok: false, reason: 'already_open', events: [] };
+      }
+      Door.open[command.door] = 1;
+      const event: WorldEvent = { type: 'door_opened', actor: command.actor, door: command.door };
+      emit(event);
+      return { ok: true, events: [copyEvent(event)] };
+    }
+
+    if (command.type === 'tell') {
+      if (!entityExists(ecs, command.listener)) {
+        return { ok: false, reason: 'unknown_listener', events: [] };
+      }
+      if (!hasComponent(ecs, command.listener, Character)) {
+        return { ok: false, reason: 'listener_not_character', events: [] };
+      }
+      if (command.actor === command.listener) {
+        return { ok: false, reason: 'cannot_talk_to_self', events: [] };
+      }
+      if (currentRoom(command.actor) === null || currentRoom(command.actor) !== currentRoom(command.listener)) {
+        return { ok: false, reason: 'not_colocated', events: [] };
+      }
+      if (!hasComponent(ecs, command.listener, Hearing)) {
+        return { ok: false, reason: 'listener_cannot_hear', events: [] };
+      }
+      // A claim may be false, but its referents must exist and be of the right types.
+      if (command.claim.kind !== 'broke_object' ||
+          !entityExists(ecs, command.claim.culprit) ||
+          !hasComponent(ecs, command.claim.culprit, Character) ||
+          !entityExists(ecs, command.claim.object) ||
+          !hasComponent(ecs, command.claim.object, Fragile)) {
+        return { ok: false, reason: 'invalid_claim', events: [] };
+      }
+      const event: WorldEvent = {
+        type: 'testimony_delivered', actor: command.actor,
+        listener: command.listener, claim: copyClaim(command.claim)
+      };
+      emit(event);
+      beliefsByCharacter.remember(command.listener, command.claim,
+        { kind: 'testimony', speaker: command.actor, eventSequence: events.length }
+      );
+      return { ok: true, events: [copyEvent(event)] };
+    }
+
     if (!entityExists(ecs, command.target)) {
       return { ok: false, reason: 'unknown_target', events: [] };
     }
@@ -244,13 +319,14 @@ export function createSimulation() {
 
   return {
     room, character, fragileObject, connect, execute,
+    beliefs: (observer: EntityId): Belief[] => beliefsByCharacter.read(observer),
     currentRoom, locationOf, occupants, observations,
     isBroken: (eid: EntityId) => hasComponent(ecs, eid, Fragile) && Fragile.broken[eid] === 1,
     doorIsOpen: (eid: EntityId) => hasComponent(ecs, eid, Door) ? Door.open[eid] === 1 : null,
     id: (key: string) => keys.get(key),
     label: (eid: EntityId) => Name.value[eid] ?? `entity#${eid}`,
     exits: (place: EntityId) => getRelationTargets(ecs, place, PassageTo),
-    events: () => events.map(event => ({ ...event }))
+    events: () => events.map(copyEvent)
   };
 }
 
