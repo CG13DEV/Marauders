@@ -65,7 +65,7 @@ test('a remote answer is rejected; an unheard answer cannot be telepathic',()=>{
 test('the autonomous actor invites a past interlocutor, the addressee accepts, and both really meet',()=>{
   const {w,a,b,lounge}=invitationFixture();
   assert.equal(w.execute({type:'chat',actor:a,listener:b,topic:'lessons'}).ok,true);
-  for(let i=0;i<73;i++)w.step(); // evening of day zero
+  for(let i=0;i<67;i++)w.step(); // 19:10: first invitation, before the reply
   const records=w.meetingLedger();
   assert.equal(records.length,1);
   assert.equal(records[0]?.status,'offered');
@@ -73,7 +73,7 @@ test('the autonomous actor invites a past interlocutor, the addressee accepts, a
   assert.equal(records[0]?.atMinute,2620);
   w.step();
   assert.equal(w.meetingLedger()[0]?.status,'pending');
-  for(let i=74;i<215;i++)w.step();
+  for(let i=68;i<=214;i++)w.step(); // next evening at 19:40
   assert.equal(w.meetingLedger()[0]?.status,'kept');
   assert.equal(w.events().filter(e=>e.type==='meeting_offered').length,1);
   assert.equal(w.events().filter(e=>e.type==='meeting_answered').length,1);
@@ -83,15 +83,21 @@ test('the autonomous actor invites a past interlocutor, the addressee accepts, a
 test('the reserved addressee autonomously refuses an exploration invitation',()=>{
   const {w,a,b}=invitationFixture('reserved','explore');
   assert.equal(w.execute({type:'chat',actor:a,listener:b,topic:'castle'}).ok,true);
-  for(let i=0;i<74;i++)w.step();
+  for(let i=0;i<68;i++)w.step(); // invitation + the invitee's refusal
   assert.equal(w.meetingLedger().length,1);
   assert.equal(w.meetingLedger()[0]?.status,'declined');
   assert.deepEqual(w.promiseHistory(b).map(x=>x.kind),['invited','declined']);
 });
 
-test('no previous personal conversation means no unsolicited autonomous invitation',()=>{
-  const {w}=invitationFixture();
+test('characters with no co-presence or conversation do not invent invitations',()=>{
+  const {w,b,library}=invitationFixture();
+  assert.equal(w.execute({type:'move',actor:b,destination:library}).ok,true);
+  w.setDailyLife(b,{
+    homeRoom:library,diningRoom:library,socialRoom:library,
+    style:'outgoing',interest:'lessons',socialInvitations:true
+  });
   for(let i=0;i<160;i++)w.step();
+  assert.equal(w.conversationHistory(b).length,0);
   assert.equal(w.meetingLedger().length,0);
 });
 
@@ -108,7 +114,7 @@ test('unanswered invitations expire without manufacturing personal betrayal memo
 test('invitation and consent are stable through checkpoint and journal replay',()=>{
   const {w,a,b}=invitationFixture();
   w.execute({type:'chat',actor:a,listener:b,topic:'lessons'});
-  for(let i=0;i<73;i++)w.step();
+  for(let i=0;i<67;i++)w.step();
   assert.equal(w.meetingLedger()[0]?.status,'offered');
   const checkpoint=restoreCheckpoint(w.checkpoint());
   const journal=restoreSimulation(w.snapshot());
