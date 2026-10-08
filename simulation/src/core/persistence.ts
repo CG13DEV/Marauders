@@ -72,6 +72,8 @@ function remapCommand(command: Command, ids: Map<number, number>): Command {
     case 'cast_spell': return { ...command, actor: at(command.actor) };
     case 'eat_meal': return { ...command, actor: at(command.actor) };
     case 'chat': return { ...command, actor: at(command.actor), listener: at(command.listener) };
+    case 'promise_meeting': return { ...command, actor: at(command.actor),
+      listener: at(command.listener), room: at(command.room) };
     default: throw new Error('Unknown replay command');
   }
 }
@@ -80,7 +82,7 @@ function remapCommand(command: Command, ids: Map<number, number>): Command {
 function canonicalize(value: unknown, idToKey: Map<number, string>): unknown {
   const entityFields = new Set([
     'actor', 'listener', 'requester', 'helper', 'teacher', 'culprit', 'object',
-    'target', 'door', 'from', 'to', 'room', 'destination', 'source', 'observer', 'partner'
+    'target', 'door', 'from', 'to', 'room', 'destination', 'source', 'observer', 'partner', 'promisor', 'beneficiary'
   ]);
   function recur(input: unknown, parent?: string): unknown {
     if (Array.isArray(input)) return input.map(x => recur(x));
@@ -125,7 +127,9 @@ function auditOf(world: Simulation, operations: readonly Operation[]): string {
       request: world.tutoringRequest(c.id), help: world.assistance(c.id),
       meals: world.mealHistory(c.id),
       conversations: world.conversationHistory(c.id),
-      rests: world.restHistory(c.id)
+      rests: world.restHistory(c.id),
+      ...(world.promiseHistory(c.id).length
+        ? { promises: world.promiseHistory(c.id) } : {})
     })),
     objects: objects.map(o => ({ key: o.key, room: world.locationOf(o.id), broken: world.isBroken(o.id) })),
     doors: doors.map(o => ({ key: o.options?.door.key, open: world.doorIsOpen(o.doorId!) })),
