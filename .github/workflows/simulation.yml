@@ -33,3 +33,4 @@ jobs:
       - run: npm run play-demo
       - run: npm run week-demo
       - run: npm run planner-demo
+      - run: npm run commitment-demo

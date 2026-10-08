@@ -20,6 +20,7 @@ npm run help-demo
 npm run play-demo
 npm run week-demo
 npm run planner-demo
+npm run commitment-demo
 npm run play
 npm start
 npm test
@@ -275,8 +276,23 @@ Note that increased inter-house contacts may be produced by different timing and
 
 Reproduce both worlds with `npm run planner-demo`; regression tests prove earlier departure without teleporting, correct meal windows, legacy behavior for unconfigured NPCs, and deterministic continuation through both journal replay and direct V2 checkpoint.
 
+## Experiment #15 — personal promises, competing obligations and witnessed failure
+
+**Scope:** This is a causal social-commitment **vertical slice** layered on top of the headless world; it does *not* automatically generate friendships or obligations in the seven-cohort baseline yet.
+
+- A physically co-located, hearing-capable promisor can execute `promise_meeting` to a listener for a **future tick, reachable-or-unreachable specified room, and purpose** (`study` or `explore`). Invalid times, duplicate conflicts, inaudible and remote conversations are rejected by the authoritative command. The unilateral promise is heard by the listener; **negotiation and explicit acceptance** are not yet implemented.
+- Both characters get **distinct autobiographical memories**: `promised` for the speaker, `heard_promise` for the listener. Their futures contain one scheduled meeting in the shared world ledger; their minds do not contain global meeting outcome.
+- When a meeting approaches, each participant can walk to its location using normal validated edge-by-edge navigation. A character's `commitmentPriority` may be `school_first` (default) or `promise_first`. `school_first` preserves lessons, while `promise_first` can delay or miss a lesson. **There is no automatic teleport or arbitrary percentage of betrayal.**
+- If both physically meet during the 20-minute appointment window, both remember `met`. Otherwise the meeting expires. **Only a participant actually standing at the agreed location** remembers `waited_alone`; an absent character never receives an omniscient resentment message.
+- An NPC avoids a former partner whom they personally remember failing to arrive. This is derived from the **last relevant personal meeting memory**, not from a magic numeric friendship meter. Promises can be kept, broken, remembered and replayed deterministically after a V2 checkpoint or V1 journal restore.
+- Teaching a spell concept during a timed class now **requires the named teacher to actually be present in the classroom at the explanation tick**; lessons without teacher identifiers preserve compatibility with older scenarios. Arriving late to an empty classroom still cannot create magical knowledge.
+
+Run `npm run commitment-demo` to see the same two characters choose the lesson-first or promise-first plan and the resulting *local* memories, class attendance and meeting resolution. There are eight direct scenario tests plus two tests covering personally witnessed social avoidance and backward-compatible checkpoints.
+
+**Important boundaries:** this experiment uses an explicit promise action invoked by a scenario/player; the full 84-pupil week is not yet creating promises of its own. Autonomous negotiation, invitations, consent, apology and reconciliation, true lesson exercises and teacher pedagogical intent remain future work. It is **not** yet a generalized social planner that chooses among arbitrary personal desires. Future chapters should make social promises emerge from private needs and evidence of actual relationships.
+
 ## What next?
 
-Add individual route knowledge and time-cost uncertainty, intentional choices to break school commitments, and richer subject learning. Then build a repeating term/year calendar, access constraints and long-term social obligations.
+Make promises arise from repeated encounters and personal learning needs with explicit invitations and consent; then support apologies and rescheduling, personal route knowledge, real teacher-driven subject learning and multiweek school terms.
 
 The source of truth for design remains the main repository `docs/` directory. This code is a small executable [GAME] model, not a statement of canon.
