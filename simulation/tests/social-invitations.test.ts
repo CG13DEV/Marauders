@@ -134,6 +134,10 @@ test('autonomous school week creates locally accepted and refused meetings',()=>
   assert.ok(meetings.length>0,'social meetings should form from actual local conversations');
   assert.ok(meetings.some(m=>m.status==='kept'),'some appointments must be kept');
   assert.ok(meetings.some(m=>m.status==='declined'),'some invitations should be refused');
+  assert.equal(report.invitations,meetings.length);
+  assert.equal(report.fulfilledMeetings,meetings.filter(m=>m.status==='kept').length);
+  assert.equal(report.acceptedInvitations+report.declinedInvitations+
+    report.unansweredInvitations,report.invitations);
   assert.equal(report.attendance.pending,0);
   assert.equal(report.attendance.on_time+report.attendance.late+report.attendance.missed,750);
   assert.ok(report.pupilMeals>0);
