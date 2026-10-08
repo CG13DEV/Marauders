@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createBrokenCupScenario } from '../src/scenarios/broken-cup.ts';
+import { createSimulation } from '../src/core/Simulation.ts';
 
 function livingSchool() {
   const scene = createBrokenCupScenario();
@@ -95,23 +96,24 @@ test('NPC explores by exits, not by cheating with remote character positions', (
   ]);
 });
 
-test('unreachable witnesses lead to a finite search instead of endless wandering', () => {
-  const scene = createBrokenCupScenario(); // library deliberately disconnected
-  const { world, lily, james, remus, peter, cup, door, corridor, classroom } = scene;
-  world.execute({ type: 'break_object', actor: james, target: cup });
-  world.execute({ type: 'open_door', actor: lily, door });
-  world.execute({ type: 'move', actor: remus, destination: classroom });
-  world.execute({ type: 'tell', actor: lily, listener: remus,
-    claim: { kind: 'broke_object', culprit: peter, object: cup } });
-  world.execute({ type: 'tell', actor: james, listener: remus,
-    claim: { kind: 'broke_object', culprit: james, object: cup } });
-  world.setGuarded(james, true);
+test('unavailable sources lead to a bounded search rather than endless wandering', () => {
+  const world = createSimulation();
+  const classroom = world.room('classroom', 'Класс');
+  const corridor = world.room('corridor', 'Коридор');
+  world.connect(classroom, corridor);
+  const remus = world.character('remus', 'Ремус', classroom);
+  const silentA = world.character('silent_a', 'Первый источник', classroom, { hearing: false });
+  const silentB = world.character('silent_b', 'Второй источник', classroom, { hearing: false });
+  const cup = world.fragileObject('cup', 'Чашка', classroom);
+  world.execute({ type: 'tell', actor: silentA, listener: remus,
+    claim: { kind: 'broke_object', culprit: silentA, object: cup } });
+  world.execute({ type: 'tell', actor: silentB, listener: remus,
+    claim: { kind: 'broke_object', culprit: silentB, object: cup } });
   world.setSocialInvestigator(remus, true);
-  world.execute({ type: 'move', actor: lily, destination: corridor });
   const commands = Array.from({ length: 8 }, () => world.step().map(d => d.action.type));
-  assert.deepEqual(commands, [
-    ['ask_about'], ['move'], ['ask_about'], ['move'], [], [], [], []
-  ]);
+  assert.deepEqual(commands, [['move'], ['move'], [], [], [], [], [], []]);
+  assert.equal(world.currentRoom(remus), classroom);
+  assert.equal(world.events().some(e => e.type === 'question_asked'), false);
 });
 
 test('a question cannot manufacture facts if the respondent knows nothing', () => {
