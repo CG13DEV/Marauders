@@ -125,10 +125,11 @@ export function createCastleLayout(world: Simulation) {
     -1, 'east', 'classroom', 'CANON', sources.potions);
   world.connect(landings[-1].east, potions);
   const astronomy = makeCore('Astronomy', 'astronomy_tower', 'Астрономическая башня',
-    4, 'east', 'tower', 'CANON', sources.astronomy);
+    4, 'east', 'tower', 'INFERENCE', sources.astronomy);
   world.connect(landings[4].east, astronomy);
   const greenhouse = makeCore('Herbology', 'herbology_greenhouse', 'Оранжерея',
-    0, 'west', 'greenhouse', 'CANON');
+    0, 'west', 'greenhouse', 'INFERENCE',
+    LEXICON + '/place/hogwarts-school-of-witchcraft-and-wizardry/hogwarts-grounds/greenhouses/greenhouse-three/');
   world.connect(courtyard, greenhouse);
 
   const corePlaces: readonly [CoreSubject, string, string, Floor, 'west' | 'east'][] = [
