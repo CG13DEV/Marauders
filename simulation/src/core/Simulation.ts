@@ -15,6 +15,10 @@ import { copyClaim, type Claim, type Belief } from './beliefs.ts';
 import { assessReports, type Assessment, type Trust } from './cognition.ts';
 
 import { createRuntimeStores } from './runtime-stores.ts';
+import {
+  validMeetingTime, hasMeetingConflict,
+  type MeetingPurpose, type MeetingCommitment, type CommitmentMemory
+} from './social-commitments.ts';
 import { runWorldStep, type StepDecision } from './scheduler.ts';
 import type { RuntimeSnapshot, StateFlags } from './runtime-snapshot.ts';
 import {
@@ -59,7 +63,9 @@ export type Command =
   | { type: 'ask_tutoring'; actor: EntityId; listener: EntityId; spell: SpellId }
   | { type: 'answer_tutoring'; actor: EntityId; requester: EntityId; spell: SpellId; accept: boolean }
   | { type: 'eat_meal'; actor: EntityId; kind: MealKind }
-  | { type: 'chat'; actor: EntityId; listener: EntityId; topic: SocialTopic };
+  | { type: 'chat'; actor: EntityId; listener: EntityId; topic: SocialTopic }
+  | { type: 'promise_meeting'; actor: EntityId; listener: EntityId;
+      room: EntityId; atMinute: number; purpose: MeetingPurpose };
 
 export type WorldEvent =
   | { type: 'entity_moved'; actor: EntityId; from: EntityId; to: EntityId }
@@ -75,7 +81,11 @@ export type WorldEvent =
   | { type: 'tutoring_answered'; actor: EntityId; requester: EntityId; spell: SpellId; accepted: boolean; minute: number }
   | { type: 'meal_eaten'; actor: EntityId; kind: MealKind; minute: number }
   | { type: 'conversation_shared'; actor: EntityId; listener: EntityId; topic: SocialTopic; minute: number }
-  | { type: 'rest_recorded'; actor: EntityId; minute: number };
+  | { type: 'rest_recorded'; actor: EntityId; minute: number }
+  | { type: 'meeting_promised'; actor: EntityId; listener: EntityId;
+      meetingId: number; room: EntityId; minute: number }
+  | { type: 'meeting_resolved'; actor: EntityId; listener: EntityId;
+      meetingId: number; room: EntityId; minute: number; outcome: 'kept' | 'expired' };
 
 /**
  * What a character is ALLOWED to know.
@@ -116,9 +126,14 @@ export type DailyRejection =
   | 'wrong_topic' | 'already_chatted' | 'cannot_chat_to_self'
   | 'not_colocated' | 'listener_cannot_hear';
 
+export type MeetingRejection =
+  | 'invalid_partner' | 'invalid_meeting_room' | 'invalid_meeting_time'
+  | 'invalid_purpose' | 'already_committed' | 'not_colocated'
+  | 'listener_cannot_hear';
+
 export type CommandResult =
   | { ok: true; events: readonly WorldEvent[] }
-  | { ok: false; reason: MoveRejection | BreakRejection | SocialRejection | DoorRejection | InspectRejection | QuestionRejection | SpellRejection | HelpRejection | DailyRejection; events: readonly [] };
+  | { ok: false; reason: MoveRejection | BreakRejection | SocialRejection | DoorRejection | InspectRejection | QuestionRejection | SpellRejection | HelpRejection | DailyRejection | MeetingRejection; events: readonly [] };
 
 export type DoorOptions = {
   door: { key: string; label: string; open: boolean };
@@ -161,7 +176,8 @@ export function createSimulation() {
   const {
     keys, doors, events, observationsByCharacter, beliefsByCharacter, roomDetails,
     spellKnowledge, pendingTutoring, attemptedTutors, assistanceHistory,
-    searches, routines, timetables, dailyPlans, meals, conversations, rests
+    searches, routines, timetables, dailyPlans, meals, conversations, rests,
+    commitments, commitmentMemories
   } = createRuntimeStores();
   let tick = 0;
 
@@ -216,6 +232,7 @@ export function createSimulation() {
     meals.set(eid, []);
     conversations.set(eid, []);
     rests.set(eid, []);
+    commitmentMemories.set(eid, []);
     return eid;
   }
 
@@ -367,6 +384,14 @@ export function createSimulation() {
   }
   function restHistory(actor: EntityId): RestMemory[] {
     return (rests.get(actor) ?? []).map(m => ({ ...m }));
+  }
+  /** Subjective evidence only: an absent person doesn't hear about a missed visit. */
+  function promiseHistory(actor: EntityId): CommitmentMemory[] {
+    return (commitmentMemories.get(actor) ?? []).map(m => ({ ...m }));
+  }
+  /** World-level diagnostics, never exposed as omniscient input to NPC beliefs. */
+  function meetingLedger(): MeetingCommitment[] {
+    return commitments.map(m => ({ ...m }));
   }
 
   function setTimetable(actor: EntityId, lessons: readonly Lesson[], priority: SchoolPriority = 'lesson_first'): void {
@@ -522,6 +547,51 @@ export function createSimulation() {
     }
     if (!hasComponent(ecs, command.actor, Character)) {
       return { ok: false, reason: 'not_character', events: [] };
+    }
+    if (command.type === 'promise_meeting') {
+      if (!isCharacter(command.listener) || command.listener === command.actor) {
+        return {ok:false,reason:'invalid_partner',events:[]};
+      }
+      if (!isRoom(command.room)) return {ok:false,reason:'invalid_meeting_room',events:[]};
+      if (!['study','explore'].includes(command.purpose)) {
+        return {ok:false,reason:'invalid_purpose',events:[]};
+      }
+      const now=schoolTime(tick).absoluteMinute;
+      if (!validMeetingTime(now,command.atMinute)) {
+        return {ok:false,reason:'invalid_meeting_time',events:[]};
+      }
+      if (currentRoom(command.actor) === null ||
+          currentRoom(command.actor) !== currentRoom(command.listener)) {
+        return {ok:false,reason:'not_colocated',events:[]};
+      }
+      if (!hasComponent(ecs,command.actor,Hearing) ||
+          !hasComponent(ecs,command.listener,Hearing)) {
+        return {ok:false,reason:'listener_cannot_hear',events:[]};
+      }
+      if (hasMeetingConflict(commitments,command.actor,command.listener,command.atMinute)) {
+        return {ok:false,reason:'already_committed',events:[]};
+      }
+      const meeting:MeetingCommitment={
+        id:commitments.length+1, promisor:command.actor,
+        beneficiary:command.listener, room:command.room,
+        atMinute:command.atMinute, purpose:command.purpose,
+        status:'pending'
+      };
+      commitments.push(meeting);
+      commitmentMemories.get(command.actor)!.push({
+        meetingId:meeting.id,partner:command.listener,kind:'promised',
+        minute:now,room:meeting.room,purpose:meeting.purpose
+      });
+      commitmentMemories.get(command.listener)!.push({
+        meetingId:meeting.id,partner:command.actor,kind:'heard_promise',
+        minute:now,room:meeting.room,purpose:meeting.purpose
+      });
+      const event:WorldEvent={
+        type:'meeting_promised',actor:command.actor,listener:command.listener,
+        meetingId:meeting.id,room:meeting.room,minute:now
+      };
+      emit(event);
+      return {ok:true,events:[event]};
     }
     if (command.type === 'eat_meal') {
       const plan = dailyPlans.get(command.actor);
@@ -865,6 +935,34 @@ export function createSimulation() {
     return { ok: true, events: [event] };
   }
 
+  function resolveMeetings(minute: number): void {
+    for (const meeting of commitments) {
+      if (meeting.status !== 'pending' || minute < meeting.atMinute) continue;
+      const promisorHere=currentRoom(meeting.promisor)===meeting.room;
+      const beneficiaryHere=currentRoom(meeting.beneficiary)===meeting.room;
+      const kept=promisorHere && beneficiaryHere;
+      if (!kept && minute<meeting.atMinute+20) continue;
+      meeting.status=kept?'kept':'expired';
+      const remember=(who:number,partner:number,kind:CommitmentMemory['kind'])=>{
+        commitmentMemories.get(who)!.push({
+          meetingId:meeting.id,partner,kind,minute,room:meeting.room,
+          purpose:meeting.purpose
+        });
+      };
+      if(kept) {
+        remember(meeting.promisor,meeting.beneficiary,'met');
+        remember(meeting.beneficiary,meeting.promisor,'met');
+      } else {
+        // Only a *physically waiting* participant can remember abandonment.
+        if(promisorHere) remember(meeting.promisor,meeting.beneficiary,'waited_alone');
+        if(beneficiaryHere) remember(meeting.beneficiary,meeting.promisor,'waited_alone');
+      }
+      emit({type:'meeting_resolved',actor:meeting.promisor,
+        listener:meeting.beneficiary,meetingId:meeting.id,
+        room:meeting.room,minute,outcome:meeting.status});
+    }
+  }
+
   function recordDailyRest(minute: number): void {
     if (localTime(minute) < 1320) return;
     const day = dayOf(minute);
@@ -901,6 +999,8 @@ export function createSimulation() {
       execute, currentRoom, occupants, observations, assessment, trustOf, knowledgeGaps,
       pendingTutoring, attemptedTutors, searches, timetables, routines,
       dailyPlans, meals, conversations, rests,
+      commitments, commitmentMemories,
+      resolveMeetings,
       spellKnowledge, beliefsByCharacter, setRoutine, emit,
       recordDailyRest
     });
@@ -971,6 +1071,12 @@ export function createSimulation() {
       meals: [...meals.entries()],
       conversations: [...conversations.entries()],
       rests: [...rests.entries()],
+      ...(commitments.length ? { commitments: commitments.map(m=>({...m})) } : {}),
+      ...([...commitmentMemories.values()].some(items=>items.length)
+        ? { commitmentMemories: [...commitmentMemories.entries()]
+            .filter(([,items])=>items.length)
+            .map(([id,items])=>[id,items.map(m=>({...m}))] as [number,CommitmentMemory[]]) }
+        : {}),
       routines: [...routines.entries()],
       searches: [...searches.entries()].map(([id, value]) => [id, {
         object: value.object, asked: [...value.asked], seenRooms: [...value.seenRooms], trail: [...value.trail]
@@ -1050,6 +1156,11 @@ export function createSimulation() {
     for (const [id, items] of state.conversations) conversations.set(id, items);
     rests.clear();
     for (const [id, items] of state.rests) rests.set(id, items);
+    commitments.splice(0,commitments.length,...(state.commitments ?? []).map(x=>({...x})));
+    commitmentMemories.clear();
+    for(const [id,items] of state.commitmentMemories ?? []) {
+      commitmentMemories.set(id,items.map(m=>({...m})));
+    }
     routines.clear();
     for (const [id, route] of state.routines) routines.set(id, route);
     searches.clear();
@@ -1073,6 +1184,7 @@ export function createSimulation() {
     setTrust, trustOf, setInquisitive, setSocialInvestigator, setGuarded, setRoutine, assessment,
     setTimetable, setManualControl, attendance, learningDebt, knowledgeGaps,
     setDailyLife, mealHistory, conversationHistory, restHistory,
+    promiseHistory, meetingLedger,
     setHelpSeeking, setHelpful, tutoringRequest, assistance, hasHelped,
     seedSpellKnowledge, spellStage, setExperimenter, isIlluminated,
     learningHistory: (actor: EntityId): LearningRecord[] => spellKnowledge.history(actor),
