@@ -5,7 +5,8 @@
  */
 export type MeetingPurpose = 'study' | 'explore';
 export type CommitmentPriority = 'school_first' | 'promise_first';
-export type MeetingStatus = 'pending' | 'kept' | 'expired';
+export type MeetingStatus =
+  'offered' | 'pending' | 'declined' | 'unanswered' | 'kept' | 'expired';
 
 export type MeetingCommitment = {
   id: number;
@@ -20,7 +21,8 @@ export type MeetingCommitment = {
 export type CommitmentMemory = {
   meetingId: number;
   partner: number;
-  kind: 'promised' | 'heard_promise' | 'met' | 'waited_alone';
+  kind: 'promised' | 'heard_promise' | 'offered' | 'invited' |
+    'accepted' | 'declined' | 'met' | 'waited_alone';
   minute: number;
   room: number;
   purpose: MeetingPurpose;
@@ -43,7 +45,8 @@ export function hasMeetingConflict(
   meetings: readonly MeetingCommitment[],
   first: number, second: number, atMinute: number
 ): boolean {
-  return meetings.some(m => m.status === 'pending' &&
+  return meetings.some(m =>
+    (m.status === 'pending' || m.status === 'offered') &&
     (m.promisor === first || m.beneficiary === first ||
      m.promisor === second || m.beneficiary === second) &&
     Math.abs(m.atMinute - atMinute) < 40);

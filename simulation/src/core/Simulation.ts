@@ -65,7 +65,10 @@ export type Command =
   | { type: 'eat_meal'; actor: EntityId; kind: MealKind }
   | { type: 'chat'; actor: EntityId; listener: EntityId; topic: SocialTopic }
   | { type: 'promise_meeting'; actor: EntityId; listener: EntityId;
-      room: EntityId; atMinute: number; purpose: MeetingPurpose };
+      room: EntityId; atMinute: number; purpose: MeetingPurpose }
+  | { type: 'offer_meeting'; actor: EntityId; listener: EntityId;
+      room: EntityId; atMinute: number; purpose: MeetingPurpose }
+  | { type: 'answer_meeting'; actor: EntityId; meetingId: number; accept: boolean };
 
 export type WorldEvent =
   | { type: 'entity_moved'; actor: EntityId; from: EntityId; to: EntityId }
@@ -85,7 +88,11 @@ export type WorldEvent =
   | { type: 'meeting_promised'; actor: EntityId; listener: EntityId;
       meetingId: number; room: EntityId; minute: number }
   | { type: 'meeting_resolved'; actor: EntityId; listener: EntityId;
-      meetingId: number; room: EntityId; minute: number; outcome: 'kept' | 'expired' };
+      meetingId: number; room: EntityId; minute: number; outcome: 'kept' | 'expired' }
+  | { type: 'meeting_offered'; actor: EntityId; listener: EntityId;
+      meetingId: number; room: EntityId; minute: number }
+  | { type: 'meeting_answered'; actor: EntityId; listener: EntityId;
+      meetingId: number; room: EntityId; minute: number; accepted: boolean };
 
 /**
  * What a character is ALLOWED to know.
@@ -129,7 +136,8 @@ export type DailyRejection =
 export type MeetingRejection =
   | 'invalid_partner' | 'invalid_meeting_room' | 'invalid_meeting_time'
   | 'invalid_purpose' | 'already_committed' | 'not_colocated'
-  | 'listener_cannot_hear';
+  | 'listener_cannot_hear' | 'no_pending_offer' | 'not_invited'
+  | 'offer_timed_out';
 
 export type CommandResult =
   | { ok: true; events: readonly WorldEvent[] }
@@ -368,6 +376,8 @@ export function createSimulation() {
     if (!isRoom(plan.homeRoom) || !isRoom(plan.diningRoom) ||
         (plan.socialRoom !== undefined && !isRoom(plan.socialRoom)) ||
         (plan.leisureRoom !== undefined && !isRoom(plan.leisureRoom)) ||
+        (plan.socialInvitations !== undefined &&
+          typeof plan.socialInvitations !== 'boolean') ||
         (plan.commitmentPriority !== undefined &&
           !['school_first','promise_first'].includes(plan.commitmentPriority)) ||
         !['outgoing', 'reserved'].includes(plan.style) ||
@@ -549,6 +559,83 @@ export function createSimulation() {
     }
     if (!hasComponent(ecs, command.actor, Character)) {
       return { ok: false, reason: 'not_character', events: [] };
+    }
+    if (command.type === 'offer_meeting') {
+      if (!isCharacter(command.listener) || command.listener === command.actor)
+        return {ok:false,reason:'invalid_partner',events:[]};
+      if (!isRoom(command.room))
+        return {ok:false,reason:'invalid_meeting_room',events:[]};
+      if (!['study','explore'].includes(command.purpose))
+        return {ok:false,reason:'invalid_purpose',events:[]};
+      const now=schoolTime(tick).absoluteMinute;
+      if (!validMeetingTime(now,command.atMinute))
+        return {ok:false,reason:'invalid_meeting_time',events:[]};
+      if (currentRoom(command.actor)===null ||
+          currentRoom(command.actor)!==currentRoom(command.listener))
+        return {ok:false,reason:'not_colocated',events:[]};
+      if (!hasComponent(ecs,command.actor,Hearing) ||
+          !hasComponent(ecs,command.listener,Hearing))
+        return {ok:false,reason:'listener_cannot_hear',events:[]};
+      if (hasMeetingConflict(commitments,command.actor,command.listener,command.atMinute))
+        return {ok:false,reason:'already_committed',events:[]};
+      const offer:MeetingCommitment={
+        id:commitments.length+1,promisor:command.actor,
+        beneficiary:command.listener,room:command.room,
+        atMinute:command.atMinute,purpose:command.purpose,status:'offered'
+      };
+      commitments.push(offer);
+      commitmentMemories.get(command.actor)!.push({
+        meetingId:offer.id,partner:command.listener,kind:'offered',
+        minute:now,room:offer.room,purpose:offer.purpose
+      });
+      commitmentMemories.get(command.listener)!.push({
+        meetingId:offer.id,partner:command.actor,kind:'invited',
+        minute:now,room:offer.room,purpose:offer.purpose
+      });
+      const event:WorldEvent={
+        type:'meeting_offered',actor:command.actor,listener:command.listener,
+        meetingId:offer.id,room:offer.room,minute:now
+      };
+      emit(event);
+      return {ok:true,events:[event]};
+    }
+    if (command.type === 'answer_meeting') {
+      const offer=commitments.find(m=>m.id===command.meetingId);
+      if(!offer || offer.status!=='offered')
+        return {ok:false,reason:'no_pending_offer',events:[]};
+      if(offer.beneficiary!==command.actor)
+        return {ok:false,reason:'not_invited',events:[]};
+      const now=schoolTime(tick).absoluteMinute;
+      if(now>=offer.atMinute-20)
+        return {ok:false,reason:'offer_timed_out',events:[]};
+      if(currentRoom(command.actor)===null ||
+          currentRoom(command.actor)!==currentRoom(offer.promisor))
+        return {ok:false,reason:'not_colocated',events:[]};
+      if(!hasComponent(ecs,command.actor,Hearing) ||
+         !hasComponent(ecs,offer.promisor,Hearing))
+        return {ok:false,reason:'listener_cannot_hear',events:[]};
+      if(command.accept && hasMeetingConflict(
+          commitments.filter(x=>x.id!==offer.id),
+          offer.promisor,offer.beneficiary,offer.atMinute))
+        return {ok:false,reason:'already_committed',events:[]};
+      offer.status=command.accept?'pending':'declined';
+      const kind=command.accept?'accepted':'declined';
+      for(const [who,partner] of [
+        [offer.promisor,offer.beneficiary],
+        [offer.beneficiary,offer.promisor]
+      ]){
+        commitmentMemories.get(who)!.push({
+          meetingId:offer.id,partner,kind,minute:now,
+          room:offer.room,purpose:offer.purpose
+        });
+      }
+      const event:WorldEvent={
+        type:'meeting_answered',actor:command.actor,listener:offer.promisor,
+        meetingId:offer.id,room:offer.room,minute:now,
+        accepted:command.accept
+      };
+      emit(event);
+      return {ok:true,events:[event]};
     }
     if (command.type === 'promise_meeting') {
       if (!isCharacter(command.listener) || command.listener === command.actor) {
@@ -939,6 +1026,11 @@ export function createSimulation() {
 
   function resolveMeetings(minute: number): void {
     for (const meeting of commitments) {
+      if(meeting.status==='offered' && minute>=meeting.atMinute-20){
+        // Unanswered invitations are not social betrayals.
+        meeting.status='unanswered';
+        continue;
+      }
       if (meeting.status !== 'pending' || minute < meeting.atMinute) continue;
       const promisorHere=currentRoom(meeting.promisor)===meeting.room;
       const beneficiaryHere=currentRoom(meeting.beneficiary)===meeting.room;

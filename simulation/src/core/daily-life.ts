@@ -20,6 +20,8 @@ export type DailyLifePlan = {
   schoolPlanning?: 'adaptive';
   /** Default protects academic commitments; alternative models character choice. */
   commitmentPriority?: CommitmentPriority;
+  /** Opt-in, world-scoped autonomous invitation & response policy. */
+  socialInvitations?: boolean;
 };
 export type MealMemory = { day: number; kind: MealKind; minute: number };
 export type ConversationMemory = {

@@ -64,6 +64,7 @@ function remapEvent(event: WorldEvent, at: (id: number) => number): WorldEvent {
     case 'conversation_shared':
       return { ...event, actor: at(event.actor), listener: at(event.listener) };
     case 'meeting_promised': case 'meeting_resolved':
+    case 'meeting_offered': case 'meeting_answered':
       return { ...event, actor: at(event.actor), listener: at(event.listener), room: at(event.room) };
   }
 }
