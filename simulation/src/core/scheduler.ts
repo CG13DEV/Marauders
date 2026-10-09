@@ -780,25 +780,28 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
 
       // Depth-first exploration discovers one room at a time, without knowing
       // where a source is. Only public adjacent exits are inspected.
-      const unexplored = exits(room)
-        .filter(next => !search!.seenRooms.has(next)).sort((a, b) => a - b);
-      const next = unexplored[0];
-      if (next !== undefined) {
-        const action: Command = passageAction(actor, room, next);
-        const result = execute(action);
-        if (result.ok && action.type === 'move') {
+      const unexplored=(usesUnifiedTravel(actor)?knownExits(actor,room):exits(room))
+        .filter(next=>!search!.seenRooms.has(next))
+        .sort((a,b)=>usesUnifiedTravel(actor)
+          ?(passageMinutes(actor,room,a)??Infinity)-
+             (passageMinutes(actor,room,b)??Infinity)||a-b
+          :a-b);
+      const next=unexplored[0];
+      if(next!==undefined){
+        const moved=travelTo(actor,room,next);
+        // Searching visits exactly one new location per decision tick,
+        // even if the graph would permit a longer trip. The observer must
+        // physically enter a room before considering it explored.
+        if(moved?.result.ok&&currentRoom(actor)===next){
           search.seenRooms.add(next);
           search.trail.push(next);
         }
-        decisions.push({ actor, action, result });
         continue;
       }
-      if (search.trail.length > 1) {
-        const parent = search.trail[search.trail.length - 2]!;
-        const action: Command = { type: 'move', actor, destination: parent };
-        const result = execute(action);
-        if (result.ok) search.trail.pop();
-        decisions.push({ actor, action, result });
+      if(search.trail.length>1){
+        const parent=search.trail[search.trail.length-2]!;
+        const moved=travelTo(actor,room,parent);
+        if(moved?.result.ok&&currentRoom(actor)===parent)search.trail.pop();
       }
     }
     // Inquiry-first pupils attend once they have no higher-priority action.
