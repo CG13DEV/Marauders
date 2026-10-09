@@ -125,7 +125,7 @@ function auditOf(world: Simulation, operations: readonly Operation[]): string {
     if (op.kind === 'room' || op.kind === 'character' || op.kind === 'fragileObject')
       idToKey.set(op.id, op.key);
     if (op.kind === 'connect' && op.doorId !== undefined)
-      idToKey.set(op.doorId, op.options?.door.key ?? 'unnamed-door');
+      idToKey.set(op.doorId, op.options?.door?.key ?? 'unnamed-door');
   }
   const characters = operations.filter((o): o is Extract<EntityCreation, { kind: 'character' }> =>
     o.kind === 'character');
