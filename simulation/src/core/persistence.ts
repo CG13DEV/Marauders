@@ -82,7 +82,7 @@ function remapCommand(command: Command, ids: Map<number, number>): Command {
     case 'eat_meal': return { ...command, actor: at(command.actor) };
     case 'intend_visit': return {...command,actor:at(command.actor),destination:at(command.destination)};
     case 'cancel_intention': case 'intend_study': return {...command,actor:at(command.actor)};
-    case 'intend_investigate': return {...command,actor:at(command.actor),object:at(command.object)};
+    case 'intend_investigate': case 'intend_inquire': return {...command,actor:at(command.actor),object:at(command.object)};
     case 'chat': case 'share_house_points':return {...command,
       actor:at(command.actor),listener:at(command.listener)};
     case 'decide_house_points':return {...command,actor:at(command.actor),
