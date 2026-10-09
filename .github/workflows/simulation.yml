@@ -53,3 +53,8 @@ jobs:
         run: npm run unified-demo -- 96
         env:
           MARAUDERS_ROUTE_PROFILE: '1'
+      - name: Experiment 30.4 tick cost diagnostic
+        run: npm run unified-demo -- 96
+        env:
+          MARAUDERS_TICK_PROFILE: '1'
+          MARAUDERS_ROUTE_PROFILE: '1'
