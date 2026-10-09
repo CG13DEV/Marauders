@@ -98,8 +98,7 @@ test('#30: bounded physical travel to meals, actual consumption only in dining r
         [c,d]);
       walkedToFood=true;
     }
-    for(const event of w.events().filter(e=>e.type==='meal_eaten'&&e.actor===pupil))
-      assert.ok(event.minute>=480);
+    assert.ok(w.mealHistory(pupil).every(m=>m.minute>=480));
   }
   assert.ok(walkedToFood,'the same ten-minute tick traverses both real public rooms');
   assert.ok(w.mealHistory(pupil).some(m=>m.kind==='breakfast'));
@@ -116,7 +115,8 @@ test('#30: manual control cannot be hijacked by unified navigation',()=>{
 });
 
 test('#30: travel policy and private secrets replay via V1 and checkpoint V2',()=>{
-  const {w,a,d}=junction(true);
+  const {w:world,a,d}=junction(true);
+  const w=world as ReturnType<typeof createPersistentSimulation>;
   const actor=w.character('pupil','Ученица',a);
   w.setTravelMode(actor,'unified-30');
   w.setRoutine(actor,[d]);
