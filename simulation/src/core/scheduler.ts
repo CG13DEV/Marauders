@@ -21,6 +21,7 @@ import { advanceNeeds,chooseNeedOrIntention,pickIntention,isOpenIntention,
 } from './intentions.ts';
 import { decideInvestigation, type Assessment, type Trust } from './cognition.ts';
 import { chooseMischiefTarget, livedMischiefMotive } from './mischief.ts';
+import {chooseSocialResponse} from './social-choice.ts';
 import { spellDefinitions, type SpellId, type LearningRecord } from './spellcraft.ts';
 import type { Belief } from './beliefs.ts';
 import { willingToTutor, type TutoringRequest } from './social-learning.ts';
