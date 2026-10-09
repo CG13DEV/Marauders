@@ -7,8 +7,9 @@ const memory=(kind:CommitmentMemory['kind'],minute:number):CommitmentMemory=>({
   kind,minute,meetingId:minute,partner:7,room:2,purpose:'explore'
 });
 test('R1 A1: proposal, invitation, acceptance or refusal are not reconciliation',()=>{
-  for(const kind of ['offered','invited','accepted','declined','promised','heard_promise']
-    as const){
+  const kinds:CommitmentMemory['kind'][]=['offered','invited','accepted',
+    'declined','promised','heard_promise'];
+  for(const kind of kinds){
     assert.equal(personallyAvoids([memory('waited_alone',560),memory(kind,570)],7),
       true,kind);
   }
