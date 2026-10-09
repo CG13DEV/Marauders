@@ -350,10 +350,16 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
         learnerNeedsConcept:true
       });
       const ownEvidence=commitmentMemories.get(actor)??[];
-      const canRespondToRepair=offer.repairOfMeetingId!==undefined &&
+      // The original repair reference has to be in this listener's
+      // personally HEARD invitation, not only the authoritative ledger.
+      const heardRepair=ownEvidence.find(m=>m.meetingId===offer.id&&
+        m.partner===offer.promisor&&m.kind==='invited');
+      const admittedMeeting=heardRepair?.repairOfMeetingId;
+      const canRespondToRepair=admittedMeeting!==undefined &&
+        admittedMeeting===offer.repairOfMeetingId &&
         considersConcreteRepair({
           personalHistory:ownEvidence,partner:offer.promisor,
-          repairOfMeetingId:offer.repairOfMeetingId,
+          repairOfMeetingId:admittedMeeting,
           response:plan.repairResponse
         });
       // An acknowledgement may be considered, not magically accepted.
