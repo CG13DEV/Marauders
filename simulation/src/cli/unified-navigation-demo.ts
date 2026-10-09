@@ -49,7 +49,8 @@ console.log(JSON.stringify({
     filchSecretPassages:filch===undefined?null:s.world.passageDiscoveries(filch).length
   },
   benchmark:{setupMs,simulatedMs:Math.round(performance.now()-simStart)},
-  ...(process.env.MARAUDERS_ROUTE_PROFILE==='1'?{routeProfile:s.world.routeProfile()}:{})
+  ...(process.env.MARAUDERS_ROUTE_PROFILE==='1'?{routeProfile:s.world.routeProfile()}:{}),
+  ...(process.env.MARAUDERS_TICK_PROFILE==='1'?{tickProfile:s.world.tickProfile()}:{})
 },null,2));
 if(!ticksWithMultiMovement||!moves||!patrolMoves)
   throw Error('Unified physics must produce real multi-passage and patrol movement');
