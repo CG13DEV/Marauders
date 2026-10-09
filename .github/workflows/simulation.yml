@@ -36,6 +36,8 @@ jobs:
         run: npm run open-social-life-demo
       - name: Experiment 31.7 school duty versus social promise
         run: npm run competing-obligations-demo
+      - name: Experiment 31.8 deliberate amends and independent refusal
+        run: npm run repair-initiative-demo
       - run: npm run demo
       - run: npm run perception-demo
       - run: npm run social-demo
