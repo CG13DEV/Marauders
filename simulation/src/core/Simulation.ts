@@ -25,6 +25,7 @@ import {
 import { runWorldStep, type StepDecision } from './scheduler.ts';
 import { nextRoomOnRoute } from './navigation.ts';
 import {actorNextRoom,traverseActorJourney} from './actor-navigation.ts';
+import {shortestWeightedRoute,type WeightedRoute} from './weighted-navigation.ts';
 import {nearbySearchRooms,nextWitnessInquiry,type ToiletNeed,type PatrolKind,type PatrolPlan} from './resident-life.ts';
 import { INITIAL_NEEDS, afterMeal, isOpenIntention,
   type BodilyNeeds,type PersonalIntention,type IntentionImportance,
@@ -232,6 +233,9 @@ export function createSimulation() {
     a:number;b:number;minutes:number;hidden:boolean
   }>();
   const knownHidden=new Map<number,Set<string>>();
+  // World-local, derived memo. Routes are shared ONLY when the character's
+  // known hidden links are identical. Topology mutations invalidate all plans.
+  const routeMemo=new Map<string,WeightedRoute|null>();
   // #30: explicit, actor-local navigation policy; no global all-knowing map.
   const unifiedTravel=new Set<number>();
   function setTravelMode(actor:EntityId,mode:'unified-30'|null):void{
@@ -332,6 +336,7 @@ export function createSimulation() {
     if(options?.hidden!==undefined&&typeof options.hidden!=='boolean')
       throw new Error('Invalid hidden passage setting');
     weightedPassages.set(key,{a,b,minutes,hidden});
+    routeMemo.clear();
     // Concealed entrances do NOT enter the public ECS PassageTo relation,
     // which is what legacy actors use for ordinary navigation.
     if(!hidden){
@@ -379,6 +384,19 @@ export function createSimulation() {
       (p.hidden&&!knownHidden.get(actor)?.has(pairKey(a,b))))
       return null;
     return p.minutes;
+  }
+
+  function planActorRoute(actor:EntityId,from:EntityId,to:EntityId):WeightedRoute|null{
+    if(!isCharacter(actor)||!isRoom(from)||!isRoom(to))return null;
+    const secrets=[...(knownHidden.get(actor)??[])].sort().join(';');
+    const cacheKey=secrets+'|'+from+':'+to;
+    if(routeMemo.has(cacheKey))return routeMemo.get(cacheKey)!;
+    const result=shortestWeightedRoute(from,to,
+      room=>knownExits(actor,room),
+      (a,b)=>passageMinutes(actor,a,b));
+    if(routeMemo.size>=100000)routeMemo.clear();
+    routeMemo.set(cacheKey,result);
+    return result;
   }
 
   function passageDiscoveries(actor:EntityId):[number,number][]{
@@ -1689,7 +1707,7 @@ export function createSimulation() {
           : { type: 'move', actor, destination: next };
       },
       exits: room => getRelationTargets(ecs, room, PassageTo),
-      knownExits,passageMinutes,usesUnifiedTravel,
+      knownExits,passageMinutes,planActorRoute,usesUnifiedTravel,
       canAnswerWitnessQuestion:actor=>patrolPlans.get(actor)?.kind!=='animal',
       execute, currentRoom, occupants, observations, assessment, trustOf, knowledgeGaps,
       pendingTutoring, attemptedTutors, searches, timetables, routines,
@@ -1701,7 +1719,7 @@ export function createSimulation() {
       recordDailyRest
     });
     // Patrollers share the exact same physics and personal graph as pupils.
-    const patrolTravelWorld={knownExits,passageMinutes,passageAction:
+    const patrolTravelWorld={knownExits,passageMinutes,planActorRoute,passageAction:
       (actor:EntityId,room:EntityId,next:EntityId):Command=>{
         const door=doors.get(pairKey(room,next));
         return door!==undefined&&Door.open[door]===0
@@ -2161,7 +2179,7 @@ export function createSimulation() {
     clock: () => schoolTime(tick),
     beliefs: (observer: EntityId): Belief[] => beliefsByCharacter.read(observer),
     currentRoom, locationOf, occupants, observations,
-    knownExits,passageMinutes,passageDiscoveries,
+    knownExits,passageMinutes,planActorRoute,passageDiscoveries,
     isBroken: (eid: EntityId) => hasComponent(ecs, eid, Fragile) && Fragile.broken[eid] === 1,
     doorIsOpen: (eid: EntityId) => hasComponent(ecs, eid, Door) ? Door.open[eid] === 1 : null,
     id: (key: string) => keys.get(key),
