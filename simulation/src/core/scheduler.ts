@@ -171,11 +171,17 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
     function estimateSchoolJourney(actor:EntityId,records:readonly import('./school-time.ts').AttendanceRecord[],
       room:EntityId){
       const travel=dailyPlans.get(actor)?.schoolTravel;
-      if(usesUnifiedTravel(actor)||travel==='weighted-29')
+      if(usesUnifiedTravel(actor))
         return nextWeightedSchoolJourney(
-        records,minute,room,
-        location=>knownExits(actor,location),
-        (a,b)=>passageMinutes(actor,a,b));
+          records,minute,room,
+          location=>knownExits(actor,location),
+          (a,b)=>passageMinutes(actor,a,b),10,
+          (from,to)=>planActorRoute(actor,from,to));
+      if(travel==='weighted-29')
+        return nextWeightedSchoolJourney(
+          records,minute,room,
+          location=>knownExits(actor,location),
+          (a,b)=>passageMinutes(actor,a,b));
       return nextSchoolJourney(records,minute,room,exits,10,
         travel==='micro-28'?MICRO_PASSAGE_MINUTES:10);
     }
