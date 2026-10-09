@@ -64,8 +64,10 @@ test('a face-to-face Norris alarm causes Filch to leave his fixed beat, inspect 
 test('caretaker cannot infer a distant wrong from an unsignalled cat sighting',()=>{
   const w=createPersistentSimulation();
   const office=w.room('office','Кабинет');
-  const corridor=w.room('corridor','Коридор');
-  w.connect(office,corridor);
+  const vestibule=w.room('vestibule','Промежуточный коридор');
+  const corridor=w.room('corridor','Дальний коридор');
+  w.connect(office,vestibule);
+  w.connect(vestibule,corridor);
   const filch=w.character('filch','Филч',office);
   const cat=w.character('cat','Норрис',corridor);
   const pupil=w.character('pupil','Ученик',corridor);
@@ -74,8 +76,8 @@ test('caretaker cannot infer a distant wrong from an unsignalled cat sighting',(
   w.configurePatrol(cat,'animal',[corridor,office],filch,office);
   w.execute({type:'break_object',actor:pupil,target:cup});
   assert.equal(w.patrolState(filch)?.search,undefined);
-  // A crash may be heard in an adjacent corridor, but hearing is NOT an
-  // eyewitness identification and cannot substitute for the cat's alert.
+  // The distant incident is two passages away: Filch never saw the culprit.
+  // Norris cannot transmit the crime until she physically meets him.
   assert.equal(w.observations(filch).some(o=>o.kind==='witnessed_breakage'),false);
   assert.equal(w.beliefs(filch).length,0);
   assert.equal(w.execute({type:'signal_incident',actor:cat,listener:filch}).ok,false);
