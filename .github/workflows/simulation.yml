@@ -34,6 +34,8 @@ jobs:
         run: npm run checkpoint-profile
       - name: Experiment 31.6 multiday autonomous social life
         run: npm run open-social-life-demo
+      - name: Experiment 31.7 school duty versus social promise
+        run: npm run competing-obligations-demo
       - run: npm run demo
       - run: npm run perception-demo
       - run: npm run social-demo
