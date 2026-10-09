@@ -231,6 +231,15 @@ export function createSimulation() {
     a:number;b:number;minutes:number;hidden:boolean
   }>();
   const knownHidden=new Map<number,Set<string>>();
+  // #30: explicit, actor-local navigation policy; no global all-knowing map.
+  const unifiedTravel=new Set<number>();
+  function setTravelMode(actor:EntityId,mode:'unified-30'|null):void{
+    if(!isCharacter(actor))throw Error('Navigation mode requires a character');
+    if(mode!=='unified-30'&&mode!==null)throw Error('Unknown navigation mode');
+    if(mode===null)unifiedTravel.delete(actor);
+    else unifiedTravel.add(actor);
+  }
+  const usesUnifiedTravel=(actor:EntityId)=>unifiedTravel.has(actor);
 
   const {
     keys, doors, events, observationsByCharacter, beliefsByCharacter, roomDetails,
@@ -1679,7 +1688,7 @@ export function createSimulation() {
           : { type: 'move', actor, destination: next };
       },
       exits: room => getRelationTargets(ecs, room, PassageTo),
-      knownExits,passageMinutes,
+      knownExits,passageMinutes,usesUnifiedTravel,
       canAnswerWitnessQuestion:actor=>patrolPlans.get(actor)?.kind!=='animal',
       execute, currentRoom, occupants, observations, assessment, trustOf, knowledgeGaps,
       pendingTutoring, attemptedTutors, searches, timetables, routines,
@@ -1855,6 +1864,7 @@ export function createSimulation() {
       }),
       broken: Array.from(query(ecs, [Fragile])).map(id => [id, Fragile.broken[id] === 1]),
       doors: Array.from(query(ecs, [Door])).map(id => [id, Door.open[id] === 1]),
+      ...(unifiedTravel.size?{unifiedTravel:[...unifiedTravel].sort((a,b)=>a-b)}:{}),
       ...(knownHidden.size?{knownPassages:[...knownHidden.entries()]
         .filter(([,known])=>known.size>0)
         .map(([actor,known]):[number,[number,number][]]=>[
@@ -1935,6 +1945,12 @@ export function createSimulation() {
     for (const [id, open] of state.doors) {
       if (!hasComponent(ecs, id, Door)) throw new Error('Checkpoint references missing door');
       Door.open[id] = open ? 1 : 0;
+    }
+    unifiedTravel.clear();
+    for(const actor of state.unifiedTravel??[]){
+      if(!isCharacter(actor)||unifiedTravel.has(actor))
+        throw Error('Invalid saved navigation policy');
+      unifiedTravel.add(actor);
     }
     knownHidden.clear();
     for(const [actor,pairs] of state.knownPassages??[]){
@@ -2108,7 +2124,8 @@ export function createSimulation() {
     captureRuntime, hydrateRuntime,
     setTrust, trustOf, setInquisitive, setSocialInvestigator, setGuarded, setRoutine, assessment,
     setTimetable, setManualControl, attendance, learningDebt, knowledgeGaps,
-    setDailyLife, mealHistory, conversationHistory, restHistory,
+    setDailyLife,setTravelMode,usesUnifiedTravel,
+    mealHistory, conversationHistory, restHistory,
     promiseHistory, meetingLedger, intentionHistory, needsOf,
     setHelpSeeking, setHelpful, tutoringRequest, assistance, hasHelped,
     seedSpellKnowledge, spellStage, setExperimenter, isIlluminated,
