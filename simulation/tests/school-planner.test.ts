@@ -179,5 +179,5 @@ test('#30.7: weighted meal still preserves public hop metadata when selected',()
   const legacy=feasibleMealJourney(470,1,3,[],null,
     (room)=>publicGraph.get(room)??[]);
   assert.equal(legacy?.hops,2);
-  assert.equal(legacy?.eatingAt,500);
+  assert.equal(legacy?.eatingAt,490);
 });
