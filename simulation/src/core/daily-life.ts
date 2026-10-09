@@ -26,6 +26,8 @@ export type DailyLifePlan = {
   learningAppointments?: boolean;
   /** Opt-in resumable goal queue with bodily needs (Experiment #18). */
   intentionPlanning?: boolean;
+  /** [GAME] Opt-in: personally inspected damage can generate witness inquiry goals. */
+  evidenceInquiry?:boolean;
 };
 export type MealMemory = { day: number; kind: MealKind; minute: number };
 export type ConversationMemory = {
