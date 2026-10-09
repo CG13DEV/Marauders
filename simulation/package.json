@@ -46,7 +46,8 @@
     "social-choice-demo": "node --experimental-strip-types src/cli/social-choice-demo.ts",
     "relationship-evidence-demo": "node --experimental-strip-types src/cli/relationship-evidence-demo.ts",
     "checkpoint-profile": "node --experimental-strip-types src/cli/checkpoint-profile.ts",
-    "open-social-life-demo": "node --experimental-strip-types src/cli/open-social-life-demo.ts"
+    "open-social-life-demo": "node --experimental-strip-types src/cli/open-social-life-demo.ts",
+    "competing-obligations-demo": "node --experimental-strip-types src/cli/competing-obligations-demo.ts"
   },
   "dependencies": {
     "bitecs": "0.4.0"
