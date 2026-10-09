@@ -18,7 +18,7 @@ test('#27: a foundation timetable teaches the full 20 / 19 core blocks to each p
   assert.equal(s.foundationSpaces.length,13);
   assert.equal(s.foundationAssignments.length,156);
   assert.equal(s.professors.length,25);
-  assert.equal(s.sessions.length,356);
+  assert.equal(s.sessions.length,352); // 196 upper-year legacy sessions + 156 foundation
   for(const pupil of s.students.filter(p=>p.year<=2)){
     const personal=s.world.attendance(pupil.id);
     assert.equal(personal.length,pupil.year===1?20:19);
