@@ -28,6 +28,7 @@ export type RuntimeSnapshot = {
   locations: [number, number][];
   broken: [number, boolean][];
   doors: [number, boolean][];
+  knownPassages?:[number,[number,number][]][];
   flags: [number, StateFlags][];
   trusts: [number, number, Trust][];
   helpedBy: [number, number][];
@@ -62,6 +63,7 @@ function remapEvent(event: WorldEvent, at: (id: number) => number): WorldEvent {
     case 'entity_moved': return { ...event, actor: at(event.actor), from: at(event.from), to: at(event.to) };
     case 'object_broken': return { ...event, actor: at(event.actor), target: at(event.target), room: at(event.room) };
     case 'door_opened': return { ...event, actor: at(event.actor), door: at(event.door) };
+    case 'passage_discovered':return {...event,actor:at(event.actor),from:at(event.from),to:at(event.to)};
     case 'testimony_delivered': return { ...event, actor: at(event.actor), listener: at(event.listener),
       claim: { ...event.claim, culprit: at(event.claim.culprit), object: at(event.claim.object) } };
     case 'object_inspected': return { ...event, actor: at(event.actor), target: at(event.target) };
@@ -126,6 +128,10 @@ export function remapRuntimeSnapshot(snapshot: RuntimeSnapshot, at: (id: number)
     locations: snapshot.locations.map(([id, room]) => [at(id), at(room)]),
     broken: snapshot.broken.map(([id, value]) => [at(id), value]),
     doors: snapshot.doors.map(([id, value]) => [at(id), value]),
+    ...(snapshot.knownPassages===undefined?{}:{knownPassages:snapshot.knownPassages.map(
+      ([actor,pairs]):[number,[number,number][]]=>[
+        at(actor),pairs.map(([a,b]):[number,number]=>[at(a),at(b)])
+      ])}),
     flags: snapshot.flags.map(([id, flags]) => [at(id), { ...flags }]),
     trusts: snapshot.trusts.map(([observer, source, value]) => [at(observer), at(source), value]),
     helpedBy: snapshot.helpedBy.map(([student, helper]) => [at(student), at(helper)]),
