@@ -1,6 +1,6 @@
 {
   "name": "marauders-simulation",
-  "version": "0.22.0",
+  "version": "0.23.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -29,7 +29,8 @@
     "unified-intentions-demo": "node --experimental-strip-types src/cli/unified-intentions-demo.ts",
     "rollout-demo": "node --experimental-strip-types src/cli/rollout-demo.ts",
     "points-demo": "node --experimental-strip-types src/cli/points-demo.ts",
-    "patrol-demo": "node --experimental-strip-types src/cli/patrol-demo.ts"
+    "patrol-demo": "node --experimental-strip-types src/cli/patrol-demo.ts",
+    "investigation-demo": "node --experimental-strip-types src/cli/investigation-demo.ts"
   },
   "dependencies": {
     "bitecs": "0.4.0"
