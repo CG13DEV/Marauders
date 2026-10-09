@@ -4,34 +4,38 @@
  * All locomotion is validated through the world (including intermediate rooms).
  */
 import type {Command,CommandResult} from './Simulation.ts';
-import {shortestWeightedRoute,nextWeightedRoom} from './weighted-navigation.ts';
+import {shortestWeightedRoute,type WeightedRoute} from './weighted-navigation.ts';
 import {followPhysicalPassages,type MicroStep} from './physical-travel.ts';
 
 export type ActorTravelWorld={
   knownExits(actor:number,room:number):readonly number[];
   passageMinutes(actor:number,from:number,to:number):number|null;
+  /** Optional topology-versioned memoizer owned by a single ECS world. */
+  planActorRoute?(actor:number,from:number,to:number):WeightedRoute|null;
   passageAction(actor:number,room:number,next:number):Command;
   currentRoom(actor:number):number|null;
   execute(command:Command):CommandResult;
 };
-export function actorJourneyDuration(world:Pick<ActorTravelWorld,
-  'knownExits'|'passageMinutes'>,actor:number,from:number,to:number):number|null{
+export function getActorRoute(world:Pick<ActorTravelWorld,
+  'knownExits'|'passageMinutes'|'planActorRoute'>,
+  actor:number,from:number,to:number):WeightedRoute|null{
+  if(world.planActorRoute)return world.planActorRoute(actor,from,to);
   return shortestWeightedRoute(from,to,
     room=>world.knownExits(actor,room),
-    (a,b)=>world.passageMinutes(actor,a,b))?.minutes??null;
+    (a,b)=>world.passageMinutes(actor,a,b));
+}
+export function actorJourneyDuration(world:Pick<ActorTravelWorld,
+  'knownExits'|'passageMinutes'|'planActorRoute'>,actor:number,from:number,to:number):number|null{
+  return getActorRoute(world,actor,from,to)?.minutes??null;
 }
 export function actorNextRoom(world:Pick<ActorTravelWorld,
-  'knownExits'|'passageMinutes'>,actor:number,from:number,to:number):number|null{
-  return nextWeightedRoom(from,to,
-    room=>world.knownExits(actor,room),
-    (a,b)=>world.passageMinutes(actor,a,b));
+  'knownExits'|'passageMinutes'|'planActorRoute'>,actor:number,from:number,to:number):number|null{
+  return getActorRoute(world,actor,from,to)?.rooms[1]??null;
 }
 export function traverseActorJourney(
   world:ActorTravelWorld,actor:number,from:number,to:number
 ):MicroStep[]{
-  const cachedRoute=shortestWeightedRoute(from,to,
-    room=>world.knownExits(actor,room),
-    (a,b)=>world.passageMinutes(actor,a,b));
+  const cachedRoute=getActorRoute(world,actor,from,to);
   if(!cachedRoute)return [];
   return followPhysicalPassages({
     actor,startingRoom:from,destination:to,
