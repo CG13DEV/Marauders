@@ -32,10 +32,11 @@ test('after examining damage, anyone can question a local witness without knowin
   const question=w.execute({type:'ask_about',actor:seeker,listener:witness,object:cup});
   assert.equal(question.ok,true);
   assert.equal(question.events.some(e=>e.type==='question_asked'&&e.answered),true);
-  assert.equal(w.beliefs(seeker)[0]?.claim.culprit,pupil);
-  assert.equal(w.beliefs(seeker)[0]?.evidence.kind,'testimony');
-  if(w.beliefs(seeker)[0]?.evidence.kind==='testimony')
-    assert.deepEqual(w.beliefs(seeker)[0]?.evidence.origin,{kind:'vision'});
+  const belief=w.beliefs(seeker)[0]!;
+  assert.equal(belief.claim.culprit,pupil);
+  assert.equal(belief.evidence.kind,'testimony');
+  if(belief.evidence.kind==='testimony')
+    assert.deepEqual(belief.evidence.origin,{kind:'vision'});
 });
 
 test('an animal cannot answer even when it personally witnessed wrongdoing',()=>{
