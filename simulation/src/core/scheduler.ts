@@ -39,6 +39,7 @@ export type SchedulerContext = {
   execute(command: Command): CommandResult;
   currentRoom(actor: EntityId): EntityId | null;
   occupants(room: EntityId): EntityId[];
+  canAnswerWitnessQuestion(actor:EntityId):boolean;
   observations(actor: EntityId): Observation[];
   assessment(observer: EntityId, object: EntityId): Assessment;
   trustOf(observer: EntityId, source: EntityId): Trust;
@@ -74,7 +75,7 @@ export type SchedulerContext = {
 export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
   const {
     advanceClock, actors, has, visibleFragiles, passageAction,
-    exits, execute, currentRoom, occupants, observations, assessment,
+    exits, execute, currentRoom, occupants, canAnswerWitnessQuestion,observations, assessment,
     trustOf, knowledgeGaps, pendingTutoring, attemptedTutors, searches,
     timetables, routines, dailyPlans, meals, conversations, rests,
     commitments, commitmentMemories, intentions, bodilyNeeds,toiletNeeds,
@@ -321,6 +322,9 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       // Reconcile a goal only against personal knowledge or an accepted
       // agreement the character actually participated in.
       for(const goal of goals.filter(isOpenIntention)){
+        if(goal.kind==='inquire' && goal.object!==undefined&&
+           beliefsByCharacter.read(actor).some(b=>b.claim.object===goal.object))
+          transitionIntention(actor,goal.id,'completed');
         if(goal.kind==='learn_concept' && goal.spell &&
            spellKnowledge.stage(actor,goal.spell)!=='unaware')
           transitionIntention(actor,goal.id,'completed');
@@ -359,7 +363,8 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
              b.claim.object===goal.object))return false;
           const asked=new Set(goal.questioned??[]);
           return occupants(room).some(other=>other!==actor&&!asked.has(other)&&
-            has(other,'hearing')&&!has(other,'manual')&&
+            has(other,'hearing')&&canAnswerWitnessQuestion(other)&&
+            !has(other,'manual')&&
             !occupiedBySchool.has(other)&&!socialParticipants.has(other)&&
             !decisions.some(d=>d.actor===other));
         }
@@ -479,7 +484,8 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
             continue;
           }
           const people=occupants(room).filter(other=>
-            other!==actor&&has(other,'hearing')&&!has(other,'manual')&&
+            other!==actor&&has(other,'hearing')&&
+            canAnswerWitnessQuestion(other)&&!has(other,'manual')&&
             !occupiedBySchool.has(other)&&!socialParticipants.has(other)&&
             !decisions.some(d=>d.actor===other));
           const inquiry=nextWitnessInquiry([goal.object],people,
@@ -495,7 +501,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
             (goal.questioned??=[]).push(inquiry.listener);
             if(beliefsByCharacter.read(actor).some(b=>b.claim.object===goal.object))
               transitionIntention(actor,goal.id,'completed');
-            else transitionIntention(actor,goal.id,'active');
+            else transitionIntention(actor,goal.id,'paused','waiting');
           }else transitionIntention(actor,goal.id,'paused','waiting');
           continue;
         }
