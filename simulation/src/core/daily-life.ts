@@ -19,7 +19,7 @@ export type DailyLifePlan = {
   /** Opt-in distance-aware scheduling. Absent means legacy 20-minute lead. */
   schoolPlanning?: 'adaptive';
   /** #28 [GAME] Opt-in validated micro-passage traversal for school trips. */
-  schoolTravel?: 'micro-28';
+  schoolTravel?: 'micro-28' | 'weighted-29';
   /** Default protects academic commitments; alternative models character choice. */
   commitmentPriority?: CommitmentPriority;
   /** Opt-in, world-scoped autonomous invitation & response policy. */
