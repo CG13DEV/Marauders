@@ -179,7 +179,8 @@ export type MeetingRejection =
   | 'invalid_purpose' | 'already_committed' | 'not_colocated'
   | 'listener_cannot_hear' | 'no_pending_offer' | 'not_invited'
   | 'offer_timed_out' | 'not_study_meeting' | 'appointment_not_ready'
-  | 'appointment_already_taught' | 'not_missing_concept';
+  | 'appointment_already_taught' | 'not_missing_concept'
+  | 'no_personal_lapse_to_repair' | 'wrong_repair_purpose';
 
 export type IntentionRejection='no_intention_planner'|'invalid_intention'|
   'too_many_intentions'|'missing_intention'|'invalid_deadline'|'duplicate_intention'|
