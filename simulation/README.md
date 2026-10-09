@@ -516,3 +516,10 @@ The opt-in policy is per-character `setTravelMode(actor,'unified-30')` (or `null
 Run `npm run unified-demo -- 96` to simulate 16 in-world hours for the full 600-pupil school, reporting moves, doors, patrol activity, meals, class attendance, and multi-passage ticks. Tests check route selection, personally known shortcuts, caretaker and animal behavior, dining-room meals, manual override and persistence.
 
 **Remaining limits:** [GAME] passage weights approximate travel, not 3D meters; all *public* passages are currently presumed known to all residents, while secret passages require discovery. Not yet modelled: crowd queues, dynamic stairs, school-wide individual map acquisition for public corridors, risk-aware route preference, per-minute events, changing gait/form, door traversal overhead in the planning heuristic, or Unreal character locomotion. A successful unit test or 16-hour headless run does not prove week-long performance.
+
+
+## Experiment #30.5 — scheduler phase diagnostics (no behavior changes)
+
+Use `MARAUDERS_SCHEDULER_PROFILE=1 npm run unified-demo -- 96` to collect time spent in 19 sequential phases inside `runWorldStep()`, from needs and commitment priority through school travel, intentions, tutoring, investigations, conversations, routines, and attendance/rest. The JSON `schedulerProfile` includes phase total milliseconds, run counts and worst phase duration, plus a **separately measured, overlapping** count/time of authoritative `execute()` calls. Do **not** add command time to phase totals: those calls execute *inside* their phases. Compare with `MARAUDERS_TICK_PROFILE=1` and `MARAUDERS_ROUTE_PROFILE=1` for scheduler/patrol split and route cache hit rate.
+
+This is opt-in diagnostic instrumentation, not a new NPC policy or an event-driven scheduler. All phase checkpoints must fire exactly once per tick. CI runs a 96-tick combined diagnostic after the ordinary regressions; compare fixed world outcomes, and use uninstrumented runs for wall-clock speed claims. Timing from hosted CI/Node 22 is not directly comparable with local Windows/Node 24 measurements.
