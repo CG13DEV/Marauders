@@ -816,8 +816,11 @@ export function createSimulation() {
 
   function assessment(observer: EntityId, object: EntityId): Assessment {
     if (!isCharacter(observer)) throw new Error('Assessment requires a character');
+    // R4: reliability of testimony is epistemic. Missed social promises
+    // change companionship preferences, not the truth value of unrelated claims.
+    // Only explicit source reliability influences the evidence ranking here.
     return assessReports(object, beliefsByCharacter.read(observer),
-      speaker => trustOf(observer, speaker));
+      speaker => explicitTrustOf(observer, speaker));
   }
 
   function emit(event: WorldEvent): void {

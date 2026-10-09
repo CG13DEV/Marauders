@@ -44,7 +44,8 @@
     "spontaneous-demo": "node --experimental-strip-types src/cli/spontaneous-demo.ts",
     "lived-motivation-demo": "node --experimental-strip-types src/cli/lived-motivation-demo.ts",
     "social-choice-demo": "node --experimental-strip-types src/cli/social-choice-demo.ts",
-    "relationship-evidence-demo": "node --experimental-strip-types src/cli/relationship-evidence-demo.ts"
+    "relationship-evidence-demo": "node --experimental-strip-types src/cli/relationship-evidence-demo.ts",
+    "checkpoint-profile": "node --experimental-strip-types src/cli/checkpoint-profile.ts"
   },
   "dependencies": {
     "bitecs": "0.4.0"
