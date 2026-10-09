@@ -30,6 +30,8 @@ jobs:
         run: npm run social-choice-demo
       - name: Experiment 31.5 relationship evidence choices
         run: npm run relationship-evidence-demo
+      - name: R4 checkpoint cost diagnostic (48, 144, 634 residents)
+        run: npm run checkpoint-profile
       - run: npm run demo
       - run: npm run perception-demo
       - run: npm run social-demo
