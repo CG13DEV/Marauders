@@ -232,6 +232,8 @@ export function createSimulation() {
   const weightedPassages=new Map<string,{
     a:number;b:number;minutes:number;hidden:boolean
   }>();
+  // Derived room-local index: hidden links never become public ECS edges.
+  const hiddenPassagesByRoom=new Map<number,Array<{key:string;to:number}>>();
   const knownHidden=new Map<number,Set<string>>();
   // World-local, derived memo. Routes are shared ONLY when the character's
   // known hidden links are identical. Topology mutations invalidate all plans.
@@ -336,6 +338,13 @@ export function createSimulation() {
     if(options?.hidden!==undefined&&typeof options.hidden!=='boolean')
       throw new Error('Invalid hidden passage setting');
     weightedPassages.set(key,{a,b,minutes,hidden});
+    if(hidden){
+      for(const [room,to] of [[a,b],[b,a]]){
+        const exits=hiddenPassagesByRoom.get(room)??[];
+        exits.push({key,to});
+        hiddenPassagesByRoom.set(room,exits);
+      }
+    }
     routeMemo.clear();
     // Concealed entrances do NOT enter the public ECS PassageTo relation,
     // which is what legacy actors use for ordinary navigation.
@@ -371,10 +380,10 @@ export function createSimulation() {
     if(!isCharacter(actor)||!isRoom(room))return [];
     const known=knownHidden.get(actor);
     const publicExits=getRelationTargets(ecs,room,PassageTo);
-    const secrets=[...weightedPassages.entries()].flatMap(([key,p])=>
-      p.hidden&&known?.has(key)
-        ?p.a===room?[p.b]:p.b===room?[p.a]:[]
-        :[]);
+    const secrets=known
+      ?(hiddenPassagesByRoom.get(room)??[])
+        .filter(p=>known.has(p.key)).map(p=>p.to)
+      :[];
     return [...new Set([...publicExits,...secrets])].sort((a,b)=>a-b);
   }
 
