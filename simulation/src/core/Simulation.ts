@@ -1720,6 +1720,29 @@ export function createSimulation() {
     }
   }
 
+  // #30.5: non-authoritative timing data; used only in diagnostic runs.
+  const schedulerDiagnostics=process.env.MARAUDERS_SCHEDULER_PROFILE==='1';
+  const schedulerPhases=new Map<string,{calls:number;ms:number;maxMs:number}>();
+  const schedulerCommands={calls:0,ms:0,maxMs:0};
+  const schedulerProfiler=schedulerDiagnostics?{
+    phase:(name:string,ms:number)=>{
+      const stat=schedulerPhases.get(name)??{calls:0,ms:0,maxMs:0};
+      stat.calls++;
+      stat.ms+=ms;
+      stat.maxMs=Math.max(stat.maxMs,ms);
+      schedulerPhases.set(name,stat);
+    },
+    command:(ms:number)=>{
+      schedulerCommands.calls++;
+      schedulerCommands.ms+=ms;
+      schedulerCommands.maxMs=Math.max(schedulerCommands.maxMs,ms);
+    }
+  }:undefined;
+  function schedulerProfile(){
+    return {phases:[...schedulerPhases.entries()].map(([name,stat])=>
+      ({name,...stat})).sort((a,b)=>b.ms-a.ms||a.name.localeCompare(b.name)),
+      commands:{...schedulerCommands}};
+  }
   const tickDiagnostics=process.env.MARAUDERS_TICK_PROFILE==='1';
   const tickCosts={ticks:0,schedulerMs:0,patrolMs:0,decisions:0,
     schedulerDecisions:0,patrolDecisions:0,maxSchedulerMs:0,maxPatrolMs:0};
@@ -1755,7 +1778,8 @@ export function createSimulation() {
       toiletNeeds,transitionIntention,
       resolveMeetings,
       spellKnowledge, beliefsByCharacter, setRoutine, emit,
-      recordDailyRest
+      recordDailyRest,
+      profile:schedulerProfiler
     });
     const schedulerEnd=tickDiagnostics?performance.now():0;
     const schedulerDecisionCount=decisions.length;
@@ -2233,7 +2257,7 @@ export function createSimulation() {
     clock: () => schoolTime(tick),
     beliefs: (observer: EntityId): Belief[] => beliefsByCharacter.read(observer),
     currentRoom, locationOf, occupants, observations,
-    knownExits,passageMinutes,planActorRoute,passageDiscoveries,routeProfile,tickProfile,
+    knownExits,passageMinutes,planActorRoute,passageDiscoveries,routeProfile,tickProfile,schedulerProfile,
     isBroken: (eid: EntityId) => hasComponent(ecs, eid, Fragile) && Fragile.broken[eid] === 1,
     doorIsOpen: (eid: EntityId) => hasComponent(ecs, eid, Door) ? Door.open[eid] === 1 : null,
     id: (key: string) => keys.get(key),
