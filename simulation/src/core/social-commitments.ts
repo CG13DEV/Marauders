@@ -62,7 +62,9 @@ export function hasMeetingConflict(
 export function personallyAvoids(
   history: readonly CommitmentMemory[], partner: number
 ): boolean {
-  const records = history.filter(x => x.partner === partner);
+  // Offers, replies and chats are not a completed reconciliation.
+  const records = history.filter(x => x.partner === partner &&
+    (x.kind === 'waited_alone' || x.kind === 'met'));
   const last = records.at(-1);
   return last?.kind === 'waited_alone';
 }

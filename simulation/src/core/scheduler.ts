@@ -452,14 +452,15 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       if(needs&&(needs.hunger>=60||needs.fatigue>=85))continue;
       if(mealAt(minute)!==null||
          talkedToday(conversations.get(actor)??[],dayOf(minute)))continue;
-      const locals=occupants(room).filter(other=>other!==actor&&
+      const nearbyPeople=occupants(room).filter(other=>other!==actor);
+      const locals=nearbyPeople.filter(other=>
         dailyPlans.has(other)&&has(other,'hearing')&&!has(other,'manual')&&
         !occupiedBySchool.has(other)&&!socialParticipants.has(other)&&
         !decidedActors.has(other)&&
         !talkedToday(conversations.get(other)??[],dayOf(minute)));
       const choice=chooseSocialResponse({
         actor,minute,history:commitmentMemories.get(actor)??[],
-        people:locals,trust:other=>trustOf(actor,other),
+        people:locals,nearbyPeople,trust:other=>trustOf(actor,other),
         knownExits:knownExits(actor,room)
       });
       if(choice.kind==='chat'){

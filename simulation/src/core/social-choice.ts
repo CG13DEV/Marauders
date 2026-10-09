@@ -17,10 +17,13 @@ export function chooseSocialResponse(input:{
   minute:number;
   history:readonly CommitmentMemory[];
   people:readonly number[];
+  /** All physically co-located people, even if unavailable for chat. */
+  nearbyPeople?:readonly number[];
   trust:(person:number)=>Trust;
   knownExits:readonly number[];
 }):SocialResponse {
   const {actor,minute,history,people,trust,knownExits}=input;
+  const nearby=new Set((input.nearbyPeople??people).filter(p=>p!==actor));
   const local=[...new Set(people)].filter(p=>p!==actor).sort((a,b)=>a-b);
   const rank=(t:Trust)=>t==='trusted'?2:t==='neutral'?1:0;
   const alternatives=(excluded?:number)=>local
@@ -35,7 +38,7 @@ export function chooseSocialResponse(input:{
       return {kind:'chat',listener:other,reason:'other_company'};
     // Withdrawal needs a person to withdraw *from*, not an endless loop
     // of wandering between empty rooms during a lingering grievance.
-    if(!local.includes(grievance.partner))
+    if(!nearby.has(grievance.partner))
       return {kind:'idle',reason:'no_opportunity'};
     const exit=[...new Set(knownExits)].sort((a,b)=>a-b)[0];
     return exit===undefined
