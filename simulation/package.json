@@ -1,0 +1,39 @@
+{
+  "name": "marauders-simulation",
+  "version": "0.20.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.16.0"
+  },
+  "scripts": {
+    "start": "node --experimental-strip-types src/cli/main.ts",
+    "demo": "node --experimental-strip-types src/cli/main.ts --demo",
+    "perception-demo": "node --experimental-strip-types src/cli/perception-demo.ts",
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "social-demo": "node --experimental-strip-types src/cli/social-demo.ts",
+    "agency-demo": "node --experimental-strip-types src/cli/agency-demo.ts",
+    "living-demo": "node --experimental-strip-types src/cli/living-world-demo.ts",
+    "school-day-demo": "node --experimental-strip-types src/cli/school-day-demo.ts",
+    "learning-demo": "node --experimental-strip-types src/cli/learning-demo.ts",
+    "help-demo": "node --experimental-strip-types src/cli/help-demo.ts",
+    "play": "node --experimental-strip-types src/cli/play.ts",
+    "play-demo": "node --experimental-strip-types src/cli/play.ts --demo",
+    "week-demo": "node --experimental-strip-types src/cli/week-demo.ts",
+    "planner-demo": "node --experimental-strip-types src/cli/planner-demo.ts",
+    "commitment-demo": "node --experimental-strip-types src/cli/commitment-demo.ts",
+    "invitations-demo": "node --experimental-strip-types src/cli/invitations-demo.ts",
+    "learning-purpose-demo": "node --experimental-strip-types src/cli/learning-purpose-demo.ts",
+    "intentions-demo": "node --experimental-strip-types src/cli/intentions-demo.ts",
+    "unified-intentions-demo": "node --experimental-strip-types src/cli/unified-intentions-demo.ts",
+    "rollout-demo": "node --experimental-strip-types src/cli/rollout-demo.ts"
+  },
+  "dependencies": {
+    "bitecs": "0.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.16.0",
+    "typescript": "^5.9.3"
+  }
+}
