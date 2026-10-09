@@ -73,8 +73,13 @@ export function createSchoolWeek(
   rollout: IntentionRolloutStage = 'control',
   expansion: 'baseline' | 'expanded' = 'baseline',
   scale: 'fixture-84' | 'research-600' = 'fixture-84',
-  curriculum: 'legacy' | 'foundations-27' = 'legacy'
+  curriculum: 'legacy' | 'foundations-27' = 'legacy',
+  travel: 'legacy' | 'micro-28' = 'legacy'
 ) {
+  if(travel!=='legacy'&&travel!=='micro-28')
+    throw Error('Unknown school travel mode');
+  if(travel==='micro-28'&&curriculum!=='foundations-27')
+    throw Error('Micro travel requires foundations curriculum');
   if(curriculum!=='legacy'&&curriculum!=='foundations-27')
     throw Error('Unknown curriculum');
   if(curriculum==='foundations-27'&&scale!=='research-600')
@@ -194,7 +199,8 @@ export function createSchoolWeek(
           ...(social === 'autonomous' ? { socialInvitations: true } : {}),
           ...(year === 1 ? { learningAppointments: true } : {}),
           ...(students.length<=population.pupils?{intentionPlanning:true}:{}),
-          ...(planning === 'adaptive' ? {schoolPlanning:'adaptive' as const} : {})
+          ...(planning === 'adaptive' ? {schoolPlanning:'adaptive' as const} : {}),
+          ...(travel==='micro-28'&&year<=2?{schoolTravel:'micro-28' as const}:{})
         });
         // The first year notices their *own* gaps after a missed explanation.
         // They only invite help if social invitations are enabled.
@@ -324,7 +330,8 @@ export function createSchoolWeek(
           homeRoom:staffRoom,diningRoom:greatHall,
           style:index%2===0?'reserved':'outgoing',interest:'lessons',
           ...(population.teachers===12?{intentionPlanning:true}:{ }),
-          ...(planning==='adaptive'?{schoolPlanning:'adaptive' as const}:{})
+          ...(planning==='adaptive'?{schoolPlanning:'adaptive' as const}:{}),
+          ...(travel==='micro-28'?{schoolTravel:'micro-28' as const}:{})
         });
         professors.push({id:teacher,subject});
         staffSchedule.set(teacher,[]);
@@ -399,7 +406,7 @@ export function createSchoolWeek(
     ):null;
 
   return {
-    world, rollout, population, expansion, scale, curriculum, residents, layout, hall, staffRoom, greatHall, library, courtyard, hospital,
+    world, rollout, population, expansion, scale, curriculum, travel, residents, layout, hall, staffRoom, greatHall, library, courtyard, hospital,
     dorms, dormitoryRooms, classrooms, electiveRooms, professors, students, teachingGroups,
     foundationTeachers,foundationSpaces,foundationAssignments,
     sessions, pupilSchedule, staffSchedule

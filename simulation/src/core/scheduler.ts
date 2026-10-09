@@ -5,6 +5,7 @@
 import type { EntityId, Command, CommandResult, WorldEvent, Observation } from './Simulation.ts';
 import { currentLesson, registerAttendance } from './school-time.ts';
 import { nextSchoolJourney, feasibleMealJourney, shortestHops } from './school-planner.ts';
+import {followPhysicalPassages,MICRO_PASSAGE_MINUTES} from './physical-travel.ts';
 import { isActivePromise, personallyAvoids,
   type MeetingCommitment, type CommitmentMemory
 } from './social-commitments.ts';
@@ -114,8 +115,25 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
         promisePriorities.add(actor);
     }
 
+    function estimateSchoolJourney(actor:EntityId,records:readonly import('./school-time.ts').AttendanceRecord[],
+      room:EntityId){
+      const micro=dailyPlans.get(actor)?.schoolTravel==='micro-28';
+      return nextSchoolJourney(records,minute,room,exits,10,
+        micro?MICRO_PASSAGE_MINUTES:10);
+    }
+
     function travelTowardLesson(actor: EntityId, room: EntityId, goal: EntityId): void {
       if (room === goal) return;
+      if(dailyPlans.get(actor)?.schoolTravel==='micro-28'){
+        // Each intermediate edge (and closed door) executes through the
+        // authoritative world command handler. One actor gets only ten
+        // in-world minutes of movement, never an instant teleport.
+        for(const {action,result} of followPhysicalPassages({
+          actor,startingRoom:room,destination:goal,
+          exits,nextRoom:nextRoomOnRoute,passageAction,currentRoom,execute
+        }))decisions.push({actor,action,result});
+        return;
+      }
       const next = nextRoomOnRoute(room, goal,
         location => exits(location));
       if (next === null) return;
@@ -132,7 +150,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       if (!timetable || room === null || timetable.priority !== 'lesson_first' ||
           has(actor, 'manual') || promisePriorities.has(actor)) continue;
       if (dailyPlans.get(actor)?.schoolPlanning === 'adaptive') {
-        const journey = nextSchoolJourney(timetable.records, minute, room, exits);
+        const journey = estimateSchoolJourney(actor,timetable.records,room);
         if (!journey || !journey.committed) continue;
         const plan = dailyPlans.get(actor);
         const meal = plan && !journey.inClass
@@ -160,8 +178,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       if(need.urgency<68)continue;
       const room=currentRoom(actor);
       if(room===null)continue;
-      const lesson=nextSchoolJourney(timetables.get(actor)?.records??[],
-        minute,room,exits);
+      const lesson=estimateSchoolJourney(actor,timetables.get(actor)?.records??[],room);
       if(lesson?.committed)continue;
       const destination=closestBathroom(room,need.bathrooms,
         (from,to)=>shortestHops(from,to,exits));
@@ -383,8 +400,8 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       // Meal service is a window, not instantaneous food wherever hunger
       // strikes. Plan the actual journey *before* the serving window closes,
       // reusing the same path/time feasibility rules as the academic planner.
-      const nextSchool=nextSchoolJourney(
-        timetables.get(actor)?.records??[],minute,room,exits);
+      const nextSchool=estimateSchoolJourney(
+        actor,timetables.get(actor)?.records??[],room);
       const mealJourney=feasibleMealJourney(
         minute,room,plan.diningRoom,
         meals.get(actor)??[],nextSchool?.lesson??null,exits);
@@ -597,7 +614,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       if (plan.schoolPlanning === 'adaptive') {
         const timeline = timetables.get(actor);
         const journey = timeline
-          ? nextSchoolJourney(timeline.records, minute, room, exits) : null;
+          ? estimateSchoolJourney(actor,timeline.records,room) : null;
         const opportunity = feasibleMealJourney(minute, room,
           plan.diningRoom, knownMeals, journey?.lesson ?? null, exits);
         if (opportunity) {

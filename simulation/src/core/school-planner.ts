@@ -57,14 +57,18 @@ export function nextSchoolJourney(
   minute: number,
   location: number,
   exits: Exits,
-  bufferMinutes = MINUTES_PER_TICK
+  bufferMinutes = MINUTES_PER_TICK,
+  minutesPerHop = MINUTES_PER_TICK
 ): ScheduledJourney | null {
+  if(!Number.isSafeInteger(minutesPerHop)||minutesPerHop<1||
+     minutesPerHop>MINUTES_PER_TICK)
+    throw Error('Invalid passage time');
   const lesson=lessons.find(lesson => minute < lesson.endsAt);
   if(!lesson) return null;
   const hops=shortestHops(location,lesson.room,exits);
   // A single movement starts at this tick; arrival is registered at its end.
   const departAt=hops===null ? null :
-    lesson.startsAt - hops*MINUTES_PER_TICK - bufferMinutes;
+    lesson.startsAt - hops*minutesPerHop - bufferMinutes;
   const inClass=minute>=lesson.startsAt && minute<lesson.endsAt;
   return {
     lesson,hops,departAt,
