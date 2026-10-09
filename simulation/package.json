@@ -39,7 +39,8 @@
     "weighted-passages-demo": "node --experimental-strip-types src/cli/weighted-passages-demo.ts",
     "unified-demo": "node --experimental-strip-types src/cli/unified-navigation-demo.ts",
     "week-soak-demo": "node --experimental-strip-types src/cli/week-soak-demo.ts",
-    "memory-audit-demo": "node --expose-gc --experimental-strip-types src/cli/memory-audit-demo.ts"
+    "memory-audit-demo": "node --expose-gc --experimental-strip-types src/cli/memory-audit-demo.ts",
+    "causality-demo": "node --experimental-strip-types src/cli/causality-demo.ts"
   },
   "dependencies": {
     "bitecs": "0.4.0"
