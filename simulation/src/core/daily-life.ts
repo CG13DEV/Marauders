@@ -36,6 +36,10 @@ export type DailyLifePlan = {
   socialChoice?:'reflective';
   /** [GAME] #31.5: expose evidence-grounded directed trust from personal memory. */
   relationshipLearning?:boolean;
+  /** [GAME] #31.8: act on evidence of one's OWN missed social obligation. */
+  repairInitiative?:boolean;
+  /** [GAME] #31.8: may consider a concrete offer, or refuse it. */
+  repairResponse?:'open'|'guarded';
 };
 export type MealMemory = { day: number; kind: MealKind; minute: number };
 export type ConversationMemory = {
