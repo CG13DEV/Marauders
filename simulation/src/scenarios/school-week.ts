@@ -390,9 +390,13 @@ export function createSchoolWeek(
   // Opt-in fixture: named leaders, house heads, spirits and caretaker do not
   // change the experiment #20 population gates or artificial pupil cohorts.
   const residents = expansion === 'expanded'
-    ? createCastleResidents(world,layout,professors.filter(
-      (p):p is Teacher & {subject:Subject}=>p.subject!=='Flying'
-    )):null;
+    ? createCastleResidents(world,layout,
+      // Foundational assistants cannot overwrite the named House Heads
+      // or replace Professor Binns in the identity map.
+      professors.slice(0,SUBJECTS.length+ELECTIVES.length).map(p=>({
+        id:p.id,subject:p.subject as Subject
+      }))
+    ):null;
 
   return {
     world, rollout, population, expansion, scale, curriculum, residents, layout, hall, staffRoom, greatHall, library, courtyard, hospital,
