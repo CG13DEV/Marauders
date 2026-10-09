@@ -26,6 +26,8 @@ test('a face-to-face Norris alarm causes Filch to leave his fixed beat, inspect 
   const norris=w.character('norris','Миссис Норрис',hall);
   const pupil=w.character('pupil','Ученик',hall);
   const cup=w.fragileObject('cup','Разбитая кружка',hall);
+  // The culprit alone was present, and guarded pupils need not confess.
+  w.setGuarded(pupil,true);
   w.configurePatrol(filch,'caretaker',[office]); // normally never leaves office
   w.configurePatrol(norris,'animal',[hall,office],filch,office);
   assert.equal(w.execute({type:'break_object',actor:pupil,target:cup}).ok,true);
