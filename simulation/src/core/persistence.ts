@@ -35,6 +35,7 @@ type Operation = EntityCreation
   | { kind: 'setRoutine'; actor: number; destinations: number[] }
   | { kind: 'setTimetable'; actor: number; lessons: Lesson[]; priority?: SchoolPriority }
   | { kind: 'setDailyLife'; actor: number; plan: DailyLifePlan | null }
+  | { kind: 'setTravelMode'; actor:number; mode:'unified-30'|null }
   | { kind: 'seedSpellKnowledge'; actor: number; spell: SpellId; stage: Exclude<SpellStage, 'unaware'> };
 
 export type SavedCheckpointV2 = {
@@ -152,6 +153,7 @@ function auditOf(world: Simulation, operations: readonly Operation[]): string {
       rests: world.restHistory(c.id),
       ...(world.toiletState(c.id)?{toilet:world.toiletState(c.id)}:{}),
       ...(world.patrolState(c.id)?{patrol:world.patrolState(c.id)}:{}),
+      ...(world.usesUnifiedTravel(c.id)?{unifiedTravel:true}:{}),
       ...(world.passageDiscoveries(c.id).length
         ?{passageDiscoveries:world.passageDiscoveries(c.id)}:{}),
       ...(world.houseOf(c.id)===null?{}:{house:world.houseOf(c.id)}),
@@ -265,6 +267,10 @@ function createFacade(world: Simulation, operations: Operation[]) {
     setRoutine(actor: number, destinations: readonly number[]) {
       world.setRoutine(actor, destinations);
       operations.push({ kind: 'setRoutine', actor, destinations: [...destinations] });
+    },
+    setTravelMode(actor:number,mode:'unified-30'|null){
+      world.setTravelMode(actor,mode);
+      operations.push({kind:'setTravelMode',actor,mode});
     },
     setDailyLife(actor: number, plan: DailyLifePlan | null) {
       world.setDailyLife(actor, plan);
@@ -393,6 +399,7 @@ export function restoreSimulation(serialized: string | SavedSimulationV1 | Saved
         break;
       }
       case 'step': restored.step(); break;
+      case 'setTravelMode':restored.setTravelMode(at(op.actor),op.mode);break;
       case 'registerHouse':restored.registerHouse(at(op.actor),op.house);break;
       case 'grantPointAuthority':restored.grantPointAuthority(at(op.actor),op.role);break;
       case 'setTrust': restored.setTrust(at(op.observer), at(op.source), op.value); break;
