@@ -61,9 +61,15 @@ function profileRuntime():SectionProfile{
   for(const section of ['observations','beliefs','learning','meals',
       'conversations','rests','intentions','commitmentMemories',
       'pointNews','assistance'] as const){
-    const pairs=s[section]??[];
-    personalHistoryEntries[section]=pairs.reduce((n,[,items])=>
-      n+items.length,0);
+    // Snapshot sections have heterogeneous item types; only their lengths
+    // matter for the census, never the content of someone's private memory.
+    const pairs:unknown=(s as unknown as Record<string,unknown>)[section];
+    let count=0;
+    if(Array.isArray(pairs))
+      for(const entry of pairs)
+        if(Array.isArray(entry)&&Array.isArray(entry[1]))
+          count+=entry[1].length;
+    personalHistoryEntries[section]=count;
   }
   return {sectionsBytes,componentCounts,entities:s.entityKeys.length,
     events:s.events.length,eventKinds,personalHistoryEntries};
