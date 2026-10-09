@@ -10,6 +10,7 @@ import { createSimulation, type Command, type EntityId, type Simulation, type Ro
 import type { DoorOptions } from './Simulation.ts';
 import type { Trust } from './cognition.ts';
 import type { HouseId, PointAuthority } from './house-points.ts';
+import type { PatrolKind } from './resident-life.ts';
 import type { SpellId, SpellStage } from './spellcraft.ts';
 import type { Lesson, SchoolPriority } from './school-time.ts';
 import type { DailyLifePlan } from './daily-life.ts';
@@ -24,6 +25,9 @@ type EntityCreation =
 type Operation = EntityCreation
   | { kind: 'execute'; command: Command }
   | { kind: 'step' }
+  | {kind:'configureToilet';actor:number;rooms:number[];urgency:number}
+  | {kind:'configurePatrol';actor:number;role:PatrolKind;waypoints:number[];
+      partner?:number;rendezvous?:number}
   | { kind:'registerHouse'; actor:number; house:HouseId }
   | { kind:'grantPointAuthority'; actor:number; role:PointAuthority }
   | { kind: 'setTrust'; observer: number; source: number; value: Trust }
@@ -73,6 +77,8 @@ function remapCommand(command: Command, ids: Map<number, number>): Command {
     case 'practice_spell': return { ...command, actor: at(command.actor),
       ...(command.guide === undefined ? {} : { guide: at(command.guide) }) };
     case 'cast_spell': return { ...command, actor: at(command.actor) };
+    case 'use_toilet':case 'signal_incident':return {...command,actor:at(command.actor),
+      ...('listener' in command?{listener:at(command.listener)}:{})};
     case 'eat_meal': return { ...command, actor: at(command.actor) };
     case 'intend_visit': return {...command,actor:at(command.actor),destination:at(command.destination)};
     case 'cancel_intention': case 'intend_study': return {...command,actor:at(command.actor)};
@@ -141,6 +147,8 @@ function auditOf(world: Simulation, operations: readonly Operation[]): string {
       meals: world.mealHistory(c.id),
       conversations: world.conversationHistory(c.id),
       rests: world.restHistory(c.id),
+      ...(world.toiletState(c.id)?{toilet:world.toiletState(c.id)}:{}),
+      ...(world.patrolState(c.id)?{patrol:world.patrolState(c.id)}:{}),
       ...(world.houseOf(c.id)===null?{}:{house:world.houseOf(c.id)}),
       ...(world.knownPointNews(c.id).length?{pointNews:world.knownPointNews(c.id)}:{}),
       ...(world.intentionHistory(c.id).length?{intentions:world.intentionHistory(c.id)}:{}),
@@ -237,6 +245,17 @@ function createFacade(world: Simulation, operations: Operation[]) {
     setExperimenter(actor: number, enabled: boolean) {
       world.setExperimenter(actor, enabled);
       operations.push({ kind: 'setExperimenter', actor, enabled });
+    },
+    configureToilet(actor:number,rooms:readonly number[],urgency=0){
+      world.configureToilet(actor,rooms,urgency);
+      operations.push({kind:'configureToilet',actor,rooms:[...rooms],urgency});
+    },
+    configurePatrol(actor:number,role:PatrolKind,waypoints:readonly number[],
+      partner?:number,rendezvous?:number){
+      world.configurePatrol(actor,role,waypoints,partner,rendezvous);
+      operations.push({kind:'configurePatrol',actor,role,waypoints:[...waypoints],
+        ...(partner===undefined?{}:{partner}),
+        ...(rendezvous===undefined?{}:{rendezvous})});
     },
     setRoutine(actor: number, destinations: readonly number[]) {
       world.setRoutine(actor, destinations);
@@ -379,6 +398,12 @@ export function restoreSimulation(serialized: string | SavedSimulationV1 | Saved
       case 'setHelpSeeking': restored.setHelpSeeking(at(op.actor), op.enabled); break;
       case 'setHelpful': restored.setHelpful(at(op.actor), op.enabled); break;
       case 'setExperimenter': restored.setExperimenter(at(op.actor), op.enabled); break;
+      case 'configureToilet':restored.configureToilet(at(op.actor),
+        op.rooms.map(at),op.urgency);break;
+      case 'configurePatrol':restored.configurePatrol(at(op.actor),op.role,
+        op.waypoints.map(at),
+        op.partner===undefined?undefined:at(op.partner),
+        op.rendezvous===undefined?undefined:at(op.rendezvous));break;
       case 'setRoutine': restored.setRoutine(at(op.actor), op.destinations.map(at)); break;
       case 'setTimetable': restored.setTimetable(at(op.actor), op.lessons.map(l => ({ ...l, room: at(l.room), ...(l.teacher === undefined ? {} : { teacher: at(l.teacher) }) })), op.priority); break;
       case 'setDailyLife': restored.setDailyLife(at(op.actor), op.plan

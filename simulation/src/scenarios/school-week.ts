@@ -120,6 +120,13 @@ export function createSchoolWeek(
           HOUSE_LABELS[house] + ', ' + year + ' курс, ученик ' + (index + 1),
           sleepingRoom);
         world.registerHouse(id,house);
+        if(expansion==='expanded'){
+          // One bathroom per model floor, selected by each student's usual
+          // dormitory facilities. Path choice itself is runtime distance-based.
+          const bathrooms=Object.values(layout.bathrooms)
+            .map(b=>b[dormGroup]);
+          world.configureToilet(id,bathrooms,(year*11+index*13)%40);
+        }
         const pair = Math.floor(HOUSES.indexOf(house) / 2);
         const group = teachingGroups[(year - 1) * 2 + pair]!;
         const electives = electiveChoices(year, house, index);
