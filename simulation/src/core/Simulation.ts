@@ -456,7 +456,8 @@ export function createSimulation() {
     patrolPlans.set(actor,{kind:role,waypoints:[...waypoints],waypoint:0,
       ...(partner===undefined?{}:{partner}),
       ...(rendezvous===undefined?{}:{rendezvous}),
-      sentSignals:0,reportedClaims:[],interviewed:[]});
+      sentSignals:0,reportedClaims:[],
+      ...(role==='caretaker'?{interviewed:[]}:{})});
   }
   function patrolState(actor:EntityId):PatrolPlan|null{
     const plan=patrolPlans.get(actor);
@@ -1637,9 +1638,13 @@ export function createSimulation() {
         const people=occupants(room).filter(id=>id!==actor&&
           hasComponent(ecs,id,Hearing)&&
           patrolPlans.get(id)?.kind!=='animal');
+        // A direct eyewitness or an already-informed caretaker needn't
+        // keep interviewing everyone about the same identified incident.
+        const knownObjects=new Set(beliefsByCharacter.read(actor)
+          .map(b=>b.claim.object));
         const inquiry=nextWitnessInquiry(obs.filter(o=>
-          o.kind==='inspected_object'&&o.broken).map(o=>
-            o.kind==='inspected_object'?o.target:-1),
+          o.kind==='inspected_object'&&o.broken&&!knownObjects.has(o.target))
+          .map(o=>o.kind==='inspected_object'?o.target:-1),
           people,patrol.interviewed??[]);
         if(inquiry){
           action={type:'ask_about',actor,listener:inquiry.listener,
