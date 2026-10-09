@@ -121,6 +121,13 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
     for(const [actor,need] of toiletNeeds)
       toiletNeeds.set(actor,advanceToiletNeed(need,isSleepTime(minute)));
     const decisions: { actor: EntityId; action: Command; result: CommandResult }[] = [];
+    // #30.6: track decided actors in O(1) instead of rescanning a growing
+    // per-tick action array. Record EVERY sub-step, preserving action order.
+    const decidedActors=new Set<EntityId>();
+    const recordDecision=(record:StepDecision):void=>{
+      decisions.push(record);
+      decidedActors.add(record.actor);
+    };
     const occupiedBySchool = new Set<EntityId>();
     const socialParticipants = new Set<EntityId>();
     const sleeping = new Set<EntityId>();
@@ -135,7 +142,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       if(from===to)return null;
       if(usesUnifiedTravel(actor)){
         const steps=traverseActorJourney(travelWorld,actor,from,to);
-        for(const {action,result} of steps)decisions.push({actor,action,result});
+        for(const {action,result} of steps)recordDecision({actor,action,result});
         const last=steps.at(-1);
         return last?{actor,action:last.action,result:last.result}:null;
       }
@@ -144,7 +151,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       const action=passageAction(actor,from,next);
       const result=execute(action);
       const record={actor,action,result};
-      decisions.push(record);
+      recordDecision(record);
       return record;
     };
     const mealFor=(actor:number,room:number,diningRoom:number,
@@ -197,7 +204,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
           actor,startingRoom:room,destination:goal,
           exits:actorExits,nextRoom:next,passageAction,currentRoom,execute,
           ...(travel==='weighted-29'?{passageMinutes:cost}:{})
-        }))decisions.push({actor,action,result});
+        }))recordDecision({actor,action,result});
         return;
       }
       const next = nextRoomOnRoute(room, goal,
@@ -205,7 +212,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       if (next === null) return;
       const action: Command = passageAction(actor, room, next);
       const result = execute(action);
-      decisions.push({ actor, action, result });
+      recordDecision({ actor, action, result });
     }
 
     phase('promise-priority-and-helpers');
@@ -242,7 +249,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
     // An assigned bathroom is a destination, never a magical instant relief.
     for(const [actor,need] of toiletNeeds){
       if(has(actor,'manual')||occupiedBySchool.has(actor)||
-         decisions.some(d=>d.actor===actor))continue;
+         decidedActors.has(actor))continue;
       if(need.urgency<68)continue;
       const room=currentRoom(actor);
       if(room===null)continue;
@@ -257,7 +264,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       }else{
         const action:Command={type:'use_toilet',actor};
         const result=execute(action);
-        decisions.push({actor,action,result});
+        recordDecision({actor,action,result});
         if(result.ok)occupiedBySchool.add(actor);
       }
     }
@@ -271,12 +278,12 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       const actor=meeting.beneficiary, learner=meeting.promisor;
       if(has(actor,'manual') || has(learner,'manual') ||
         occupiedBySchool.has(actor) || occupiedBySchool.has(learner) ||
-        decisions.some(d=>d.actor===actor || d.actor===learner)) continue;
+        (decidedActors.has(actor)||decidedActors.has(learner))) continue;
       if(currentRoom(actor)!==meeting.room || currentRoom(learner)!==meeting.room)
         continue;
       const action:Command={type:'tutor_appointment',actor,meetingId:meeting.id};
       const result=execute(action);
-      decisions.push({actor,action,result});
+      recordDecision({actor,action,result});
       if(result.ok){
         socialParticipants.add(actor);
         socialParticipants.add(learner);
@@ -291,7 +298,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
     // Each actor considers only their own participation, not others' plans.
     for(const actor of actors('dailyLife')) {
       if(has(actor,'manual') || occupiedBySchool.has(actor) ||
-        decisions.some(d=>d.actor===actor) ||
+        decidedActors.has(actor) ||
         dailyPlans.get(actor)?.intentionPlanning) continue;
       const promise=upcomingFor(actor);
       const room=currentRoom(actor);
@@ -313,7 +320,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
     // be physically together, so neither can communicate at arbitrary range.
     for(const actor of actors('dailyLife')){
       if(has(actor,'manual') || occupiedBySchool.has(actor) ||
-         socialParticipants.has(actor) || decisions.some(d=>d.actor===actor)) continue;
+         socialParticipants.has(actor) || decidedActors.has(actor)) continue;
       const plan=dailyPlans.get(actor);
       if(plan?.socialInvitations !== true || !has(actor,'hearing')) continue;
       const offer=commitments.find(m=>m.status==='offered' &&
@@ -337,7 +344,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
         !(plan.style==='reserved' && offer.purpose==='explore');
       const action:Command={type:'answer_meeting',actor,meetingId:offer.id,accept};
       const result=execute(action);
-      decisions.push({actor,action,result});
+      recordDecision({actor,action,result});
       if(result.ok){
         socialParticipants.add(actor);
         socialParticipants.add(offer.promisor);
@@ -425,7 +432,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       const promise=upcomingFor(actor);
       const blocked=has(actor,'manual')?'manual':
         (occupiedBySchool.has(actor) ? (promise?'promise':'lesson') :
-        (decisions.some(d=>d.actor===actor) || socialParticipants.has(actor)
+        (decidedActors.has(actor) || socialParticipants.has(actor)
           ? (promise?'promise':'lesson'):null));
       if(blocked){
         for(const goal of remaining)
@@ -449,7 +456,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
             has(other,'hearing')&&canAnswerWitnessQuestion(other)&&
             !has(other,'manual')&&
             !occupiedBySchool.has(other)&&!socialParticipants.has(other)&&
-            !decisions.some(d=>d.actor===other));
+            !decidedActors.has(other));
         }
         if(goal.kind==='attend_meeting'){
           const meeting=commitments.find(m=>m.id===goal.meetingId);
@@ -498,7 +505,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
         else{
           const action:Command={type:'eat_meal',actor,kind:choice.meal};
           const result=execute(action);
-          decisions.push({actor,action,result});
+          recordDecision({actor,action,result});
         }
         continue;
       }
@@ -519,7 +526,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
             trust:other=>trustOf(actor,other),
             available:other=>has(other,'hearing') && !has(other,'manual') &&
               !occupiedBySchool.has(other) && !socialParticipants.has(other) &&
-              !decisions.some(d=>d.actor===other),
+              !decidedActors.has(other),
             minute
           });
           if(!intention){
@@ -530,7 +537,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
               listener:intention.helper,room:intention.room,
               atMinute:intention.atMinute,purpose:'study',spell:intention.spell};
             const result=execute(action);
-            decisions.push({actor,action,result});
+            recordDecision({actor,action,result});
             if(result.ok){
               transitionIntention(actor,goal.id,'active');
               socialParticipants.add(actor);
@@ -551,7 +558,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
             other!==actor&&has(other,'hearing')&&
             canAnswerWitnessQuestion(other)&&!has(other,'manual')&&
             !occupiedBySchool.has(other)&&!socialParticipants.has(other)&&
-            !decisions.some(d=>d.actor===other));
+            !decidedActors.has(other));
           const inquiry=nextWitnessInquiry([goal.object],people,
             (goal.questioned??[]).map(id=>goal.object+':'+id));
           if(!inquiry){
@@ -560,7 +567,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
           }
           const action:Command={type:'ask_about',actor,
             listener:inquiry.listener,object:inquiry.object};
-          const result=execute(action);decisions.push({actor,action,result});
+          const result=execute(action);recordDecision({actor,action,result});
           if(result.ok){
             (goal.questioned??=[]).push(inquiry.listener);
             if(beliefsByCharacter.read(actor).some(b=>b.claim.object===goal.object))
@@ -579,7 +586,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
           }
           const action:Command={type:'inspect_object',actor,target:goal.object};
           const result=execute(action);
-          decisions.push({actor,action,result});
+          recordDecision({actor,action,result});
           if(!result.ok)transitionIntention(actor,goal.id,'cancelled');
           continue;
         }
@@ -629,7 +636,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
     // No character has to know where any other character is to eat or go home.
     for (const actor of actors('dailyLife')) {
       if (has(actor, 'manual') || occupiedBySchool.has(actor) ||
-          decisions.some(d => d.actor === actor)) continue;
+          decidedActors.has(actor)) continue;
       const plan = dailyPlans.get(actor);
       const room = currentRoom(actor);
       if (!plan || room === null || plan.intentionPlanning) continue;
@@ -652,7 +659,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
           else if(meal===opportunity.kind){
             const action:Command={type:'eat_meal',actor,kind:opportunity.kind};
             const result=execute(action);
-            decisions.push({actor,action,result});
+            recordDecision({actor,action,result});
           }
           continue;
         }
@@ -661,7 +668,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
         else{
           const action:Command={type:'eat_meal',actor,kind:meal};
           const result=execute(action);
-          decisions.push({actor,action,result});
+          recordDecision({actor,action,result});
         }
         continue;
       }
@@ -679,7 +686,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
     for (const request of [...pendingTutoring.values()]) {
       const helper = request.helper;
       if (has(helper, 'manual') || occupiedBySchool.has(helper) || sleeping.has(helper) ||
-          decisions.some(d => d.actor === helper)) continue;
+          decidedActors.has(helper)) continue;
       if (currentRoom(helper) === null ||
           currentRoom(helper) !== currentRoom(request.requester)) continue;
       const accept = willingToTutor({
@@ -693,7 +700,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
         spell: request.spell, accept
       };
       const result = execute(action);
-      decisions.push({ actor: helper, action, result });
+      recordDecision({ actor: helper, action, result });
       if (result.ok) {
         socialParticipants.add(helper);
         socialParticipants.add(request.requester);
@@ -705,7 +712,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
     for (const actor of actors('seeksHelp')) {
       if (dailyPlans.get(actor)?.learningAppointments === true) continue;
       if (has(actor, 'manual') || occupiedBySchool.has(actor) || sleeping.has(actor) ||
-          socialParticipants.has(actor) || decisions.some(d => d.actor === actor) ||
+          socialParticipants.has(actor) || decidedActors.has(actor) ||
           pendingTutoring.has(actor) || !has(actor, 'hearing')) continue;
       const room = currentRoom(actor);
       if (room === null) continue;
@@ -731,7 +738,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
         type: 'ask_tutoring', actor, listener: target.helper, spell: target.spell
       };
       const result = execute(action);
-      decisions.push({ actor, action, result });
+      recordDecision({ actor, action, result });
       if (result.ok) {
         socialParticipants.add(actor);
         socialParticipants.add(target.helper);
@@ -744,7 +751,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
     for (const actor of actors('inquisitive')) {
       if (dailyPlans.get(actor)?.intentionPlanning) continue;
       if (has(actor, 'manual') || occupiedBySchool.has(actor) || sleeping.has(actor) ||
-          socialParticipants.has(actor) || decisions.some(d => d.actor === actor)) continue;
+          socialParticipants.has(actor) || decidedActors.has(actor)) continue;
       if (!has(actor, 'vision')) continue;
       const room = currentRoom(actor);
       if (room === null) continue;
@@ -759,13 +766,13 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       if (target === null) continue;
       const action: Command = { type: 'inspect_object', actor, target };
       const result = execute(action);
-      decisions.push({ actor, action, result });
+      recordDecision({ actor, action, result });
     }
     // A separate opt-in social policy keeps the original inspection policy
     // independent. One physical/social action per NPC per tick.
     for (const actor of actors('socialInvestigator')) {
       if (has(actor, 'manual') || occupiedBySchool.has(actor) || sleeping.has(actor) ||
-          socialParticipants.has(actor) || decisions.some(d => d.actor === actor)) continue;
+          socialParticipants.has(actor) || decidedActors.has(actor)) continue;
       if (!has(actor, 'hearing')) continue;
       const room = currentRoom(actor);
       if (room === null) continue;
@@ -804,7 +811,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
         const action: Command = { type: 'ask_about', actor, listener: interview, object: target };
         const result = execute(action);
         if (result.ok) search.asked.add(interview);
-        decisions.push({ actor, action, result });
+        recordDecision({ actor, action, result });
         continue;
       }
 
@@ -839,7 +846,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
     // Remaining within a lesson's room takes priority over leisure routines.
     for (const actor of actors('timetable')) {
       if (has(actor, 'manual') || socialParticipants.has(actor) || sleeping.has(actor) ||
-          decisions.some(d => d.actor === actor)) continue;
+          decidedActors.has(actor)) continue;
       const timetable = timetables.get(actor);
       const room = currentRoom(actor);
       if (!timetable || room === null || timetable.priority !== 'inquiry_first') continue;
@@ -855,7 +862,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
     for (const actor of actors('dailyLife')) {
       if (!isLeisure(minute) || has(actor, 'manual') || sleeping.has(actor) ||
           occupiedBySchool.has(actor) || socialParticipants.has(actor) ||
-          decisions.some(d => d.actor === actor)) continue;
+          decidedActors.has(actor)) continue;
       const plan = dailyPlans.get(actor);
       const room = currentRoom(actor);
       if (!plan || room === null || room !== leisureDestination(plan, minute) ||
@@ -867,7 +874,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
         dailyPlans.has(other) && has(other, 'hearing') &&
         !has(other, 'manual') && !sleeping.has(other) &&
         !occupiedBySchool.has(other) && !socialParticipants.has(other) &&
-        !decisions.some(d => d.actor === other) &&
+        !decidedActors.has(other) &&
         !talkedToday(conversations.get(other) ?? [], dayOf(minute)));
       const listener = chooseLocalCompanion(actor, available, memories,
         dayOf(minute), other => personallyAvoids(
@@ -878,7 +885,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
         type: 'chat', actor, listener, topic: plan.interest
       };
       const result = execute(action);
-      decisions.push({ actor, action, result });
+      recordDecision({ actor, action, result });
       if (result.ok) {
         socialParticipants.add(actor);
         socialParticipants.add(listener);
@@ -895,7 +902,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       if(!plan?.learningAppointments || !plan.socialInvitations ||
         has(actor,'manual') || !has(actor,'hearing') ||
         occupiedBySchool.has(actor) || socialParticipants.has(actor) ||
-        decisions.some(d=>d.actor===actor)) continue;
+        decidedActors.has(actor)) continue;
       const room=currentRoom(actor);
       if(room===null || !isLeisure(minute)) continue;
       const gaps=knowledgeGaps(actor);
@@ -909,7 +916,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
         trust:other=>trustOf(actor,other),
         available:other=>has(other,'hearing') && !has(other,'manual') &&
           !occupiedBySchool.has(other) && !socialParticipants.has(other) &&
-          !decisions.some(d=>d.actor===other),
+          !decidedActors.has(other),
         minute
       });
       if(!intention)continue;
@@ -917,7 +924,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
         listener:intention.helper,room:intention.room,
         atMinute:intention.atMinute,purpose:'study',spell:intention.spell};
       const result=execute(action);
-      decisions.push({actor,action,result});
+      recordDecision({actor,action,result});
       if(result.ok){
         socialParticipants.add(actor);
         socialParticipants.add(intention.helper);
@@ -936,7 +943,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
         room!==leisureDestination(plan,minute) || !has(actor,'hearing') ||
         has(actor,'manual') || occupiedBySchool.has(actor) ||
         socialParticipants.has(actor) || sleeping.has(actor) ||
-        decisions.some(d=>d.actor===actor)) continue;
+        decidedActors.has(actor)) continue;
       const ownHistory=commitmentMemories.get(actor)??[];
       if(ownHistory.some(m=>m.kind==='offered' &&
         dayOf(m.minute)>=dayOf(minute)-6)) continue;
@@ -946,7 +953,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
         local.has(other) && other!==actor && has(other,'hearing') &&
         !has(other,'manual') && !socialParticipants.has(other) &&
         !occupiedBySchool.has(other) &&
-        !decisions.some(d=>d.actor===other) &&
+        !decidedActors.has(other) &&
         trustOf(actor,other)!=='distrusted' &&
         !personallyAvoids(ownHistory,other));
       if(candidate===undefined) continue;
@@ -957,7 +964,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       };
       const result=execute(action);
       if(result.ok){
-        decisions.push({actor,action,result});
+        recordDecision({actor,action,result});
         socialParticipants.add(actor);
         socialParticipants.add(candidate);
       }
@@ -970,7 +977,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       if(!dailyPlans.get(actor)?.evidenceInquiry||has(actor,'manual')||
          !has(actor,'vision')||occupiedBySchool.has(actor)||
          sleeping.has(actor)||socialParticipants.has(actor)||
-         decisions.some(d=>d.actor===actor))continue;
+         decidedActors.has(actor))continue;
       const room=currentRoom(actor);
       if(room===null)continue;
       const seen=new Set(observations(actor).filter(o=>
@@ -980,7 +987,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       if(object===undefined)continue;
       const action:Command={type:'inspect_object',actor,target:object};
       const result=execute(action);
-      decisions.push({actor,action,result});
+      recordDecision({actor,action,result});
     }
 
     phase('evidence-inspection');
@@ -988,7 +995,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
     // They must previously have performed guided practice; no secret unlock.
     for (const actor of actors('experimental')) {
       if (has(actor, 'manual') || occupiedBySchool.has(actor) || sleeping.has(actor) ||
-          socialParticipants.has(actor) || decisions.some(d => d.actor === actor)) continue;
+          socialParticipants.has(actor) || decidedActors.has(actor)) continue;
       const ready = spellKnowledge.history(actor)
         .filter(r => r.stage === 'guided')
         .map(r => r.spell)
@@ -1001,7 +1008,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
         incantation: definition.incantation
       };
       const result = execute(action);
-      decisions.push({ actor, action, result });
+      recordDecision({ actor, action, result });
     }
 
     phase('spell-practice');
@@ -1009,7 +1016,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
     // They use the castle's public topology, never hidden character locations.
     for (const actor of actors('routine')) {
       if (has(actor, 'manual') || occupiedBySchool.has(actor) ||
-          socialParticipants.has(actor) || decisions.some(d => d.actor === actor)) continue;
+          socialParticipants.has(actor) || decidedActors.has(actor)) continue;
       const pending = routines.get(actor);
       const room = currentRoom(actor);
       if (!pending || room === null) continue;
