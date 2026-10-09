@@ -24,7 +24,7 @@ import {
 } from './social-commitments.ts';
 import { runWorldStep, type StepDecision } from './scheduler.ts';
 import { nextRoomOnRoute } from './navigation.ts';
-import {nearbySearchRooms,type ToiletNeed,type PatrolKind,type PatrolPlan} from './resident-life.ts';
+import {nearbySearchRooms,nextWitnessInquiry,type ToiletNeed,type PatrolKind,type PatrolPlan} from './resident-life.ts';
 import { INITIAL_NEEDS, afterMeal, isOpenIntention,
   type BodilyNeeds,type PersonalIntention,type IntentionImportance,
   type IntentionStatus,type Interruption } from './intentions.ts';
@@ -180,7 +180,7 @@ export type CommandResult =
   | { ok: true; events: readonly WorldEvent[] }
   | { ok: false; reason: MoveRejection | BreakRejection | SocialRejection | DoorRejection | InspectRejection | QuestionRejection | SpellRejection | HelpRejection | DailyRejection | MeetingRejection | IntentionRejection | PointRejection | 'no_toilet_need' | 'wrong_toilet' |
       'not_urgent' | 'no_animal_signal' | 'not_partner' | 'no_sighting' |
-      'animal_cannot_speak' | 'animal_action_unavailable'; events: readonly [] };
+      'animal_cannot_speak' | 'animal_action_unavailable' | 'listener_cannot_speak'; events: readonly [] };
 
 export type DoorOptions = {
   door: { key: string; label: string; open: boolean };
@@ -456,12 +456,13 @@ export function createSimulation() {
     patrolPlans.set(actor,{kind:role,waypoints:[...waypoints],waypoint:0,
       ...(partner===undefined?{}:{partner}),
       ...(rendezvous===undefined?{}:{rendezvous}),
-      sentSignals:0,reportedClaims:[]});
+      sentSignals:0,reportedClaims:[],interviewed:[]});
   }
   function patrolState(actor:EntityId):PatrolPlan|null{
     const plan=patrolPlans.get(actor);
     return plan?{...plan,waypoints:[...plan.waypoints],
       reportedClaims:[...plan.reportedClaims],
+      ...(plan.interviewed===undefined?{}:{interviewed:[...plan.interviewed]}),
       ...(plan.search===undefined?{}:{search:{...plan.search,
         pending:[...plan.search.pending],checked:[...plan.search.checked]}})}:null;
   }
@@ -1384,8 +1385,20 @@ export function createSimulation() {
         listener: command.listener, claim: copyClaim(command.claim)
       };
       emit(event);
+      // Preserve a personally known claim's original source. If the actor
+      // invents a statement, there is no fabricated source to attach.
+      const personalSource=beliefsByCharacter.read(command.actor)
+        .find(b=>b.claim.kind===command.claim.kind&&
+          b.claim.object===command.claim.object&&
+          b.claim.culprit===command.claim.culprit);
+      const origin=personalSource?.evidence.kind==='vision'
+        ? {kind:'vision' as const}
+        : personalSource?.evidence.kind==='testimony'
+          ? {kind:'testimony' as const,speaker:personalSource.evidence.speaker}
+          : undefined;
       beliefsByCharacter.remember(command.listener, command.claim,
-        { kind: 'testimony', speaker: command.actor, eventSequence: events.length }
+        { kind: 'testimony', speaker: command.actor, eventSequence: events.length,
+          ...(origin===undefined?{}:{origin}) }
       );
       return { ok: true, events: [copyEvent(event)] };
     }
@@ -1396,9 +1409,17 @@ export function createSimulation() {
       if (command.actor === command.listener) return { ok: false, reason: 'cannot_talk_to_self', events: [] };
       if (!entityExists(ecs, command.object)) return { ok: false, reason: 'unknown_target', events: [] };
       if (!hasComponent(ecs, command.object, Fragile)) return { ok: false, reason: 'not_inspectable', events: [] };
-      if (!beliefsByCharacter.read(command.actor).some(b => b.claim.object === command.object)) {
-        return { ok: false, reason: 'not_known', events: [] };
+      // Actually inspecting damage establishes grounds to ask about it;
+      // someone need not know the culprit before seeking a witness.
+      const witnessedClaim=beliefsByCharacter.read(command.actor)
+        .some(b=>b.claim.object===command.object);
+      const examinedDamage=(observationsByCharacter.get(command.actor)??[])
+        .some(o=>o.kind==='inspected_object'&&o.target===command.object&&o.broken);
+      if(!witnessedClaim&&!examinedDamage){
+        return {ok:false,reason:'not_known',events:[]};
       }
+      if(patrolPlans.get(command.listener)?.kind==='animal')
+        return {ok:false,reason:'listener_cannot_speak',events:[]};
       if (currentRoom(command.actor) === null || currentRoom(command.actor) !== currentRoom(command.listener)) {
         return { ok: false, reason: 'not_colocated', events: [] };
       }
@@ -1586,8 +1607,10 @@ export function createSimulation() {
           if(next!==null)action=passageAction(actor,room,next);
         }
       }else if(patrol.kind==='caretaker'){
+        // Either direct sight or genuinely acquired testimony may be reported.
+        // Reporting never assigns points and never upgrades testimony to sight.
         const claims=beliefsByCharacter.read(actor).filter(b=>
-          b.evidence.kind==='vision'&&b.claim.kind==='broke_object');
+          b.claim.kind==='broke_object');
         const teachers=occupants(room).filter(id=>id!==actor&&pointAuthorities.has(id));
         outer:for(const claim of claims)for(const teacher of teachers){
           const fingerprint=claim.claim.object+':'+teacher+':'+claim.claim.culprit;
@@ -1606,6 +1629,22 @@ export function createSimulation() {
       if(!action)for(const object of query(ecs,[Fragile,LocatedIn(room)])){
         if(!obs.some(o=>o.kind==='inspected_object'&&o.target===object)){
           action={type:'inspect_object',actor,target:object};break;
+        }
+      }
+      // Experiment #24: damaged objects are evidence that an incident happened,
+      // NOT evidence of a culprit. Ask only people we physically encounter.
+      if(!action&&patrol.kind==='caretaker'){
+        const people=occupants(room).filter(id=>id!==actor&&
+          hasComponent(ecs,id,Hearing)&&
+          patrolPlans.get(id)?.kind!=='animal');
+        const inquiry=nextWitnessInquiry(obs.filter(o=>
+          o.kind==='inspected_object'&&o.broken).map(o=>
+            o.kind==='inspected_object'?o.target:-1),
+          people,patrol.interviewed??[]);
+        if(inquiry){
+          action={type:'ask_about',actor,listener:inquiry.listener,
+            object:inquiry.object};
+          (patrol.interviewed??=[]).push(inquiry.key);
         }
       }
       // Experiment #23: investigate nearby passages before resuming the
@@ -1826,6 +1865,14 @@ export function createSimulation() {
         (plan.partner!==undefined&&!isCharacter(plan.partner))||
         (plan.rendezvous!==undefined&&!isRoom(plan.rendezvous)))
         throw new Error('Invalid saved patrol');
+      if(plan.interviewed!==undefined&&
+        (plan.kind!=='caretaker'||!Array.isArray(plan.interviewed)||
+         plan.interviewed.some(key=>{
+           const pair=key.split(':').map(Number);
+           return pair.length!==2||!hasComponent(ecs,pair[0]!,Fragile)||
+             !isCharacter(pair[1]!);
+         })))
+        throw new Error('Invalid saved witness inquiry');
       if(plan.search!==undefined&&
         (plan.kind!=='caretaker'||!isRoom(plan.search.origin)||
          !Array.isArray(plan.search.pending)||
@@ -1834,6 +1881,7 @@ export function createSimulation() {
         throw new Error('Invalid saved caretaker investigation');
       patrolPlans.set(actor,{...plan,waypoints:[...plan.waypoints],
         reportedClaims:[...plan.reportedClaims],
+        ...(plan.interviewed===undefined?{}:{interviewed:[...plan.interviewed]}),
         ...(plan.search===undefined?{}:{search:{...plan.search,
           pending:[...plan.search.pending],checked:[...plan.search.checked]}})});
     }
