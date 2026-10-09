@@ -69,7 +69,10 @@ test('600 students inhabit bounded year/sex bedrooms and classes without double-
       pupils.add(key);
     }
   }
-  assert.equal(sessions.filter(x=>x.subject==='Charms'&&x.groupId.startsWith('y1_')).length,4);
+  // A cohort on the 8-period track may study Charms twice. All four
+  // first-year Houses must nonetheless get the introductory lesson.
+  assert.equal(new Set(sessions.filter(x=>x.subject==='Charms'&&
+    x.groupId.startsWith('y1_')).map(x=>x.groupId)).size,4);
   assert.equal(students.filter(x=>x.year===1&&
     world.attendance(x.id).some(l=>l.spell==='lumos')).length,86);
 });
