@@ -24,6 +24,7 @@ import {
 } from './social-commitments.ts';
 import { runWorldStep, type StepDecision } from './scheduler.ts';
 import { nextRoomOnRoute } from './navigation.ts';
+import {actorNextRoom,traverseActorJourney} from './actor-navigation.ts';
 import {nearbySearchRooms,nextWitnessInquiry,type ToiletNeed,type PatrolKind,type PatrolPlan} from './resident-life.ts';
 import { INITIAL_NEEDS, afterMeal, isOpenIntention,
   type BodilyNeeds,type PersonalIntention,type IntentionImportance,
@@ -1699,7 +1700,21 @@ export function createSimulation() {
       spellKnowledge, beliefsByCharacter, setRoutine, emit,
       recordDailyRest
     });
-    // One validated action per patroller per ten-minute tick. Observations
+    // Patrollers share the exact same physics and personal graph as pupils.
+    const patrolTravelWorld={knownExits,passageMinutes,passageAction:
+      (actor:EntityId,room:EntityId,next:EntityId):Command=>{
+        const door=doors.get(pairKey(room,next));
+        return door!==undefined&&Door.open[door]===0
+          ?{type:'open_door',actor,door}:{type:'move',actor,destination:next};
+      },currentRoom,execute};
+    const patrolNext=(actor:EntityId,room:EntityId,goal:EntityId)=>
+      usesUnifiedTravel(actor)
+        ?actorNextRoom(patrolTravelWorld,actor,room,goal)
+        :nextRoomOnRoute(room,goal,
+          place=>getRelationTargets(ecs,place,PassageTo));
+    // One policy action per patroller per ten-minute tick. A locomotion
+    // policy action may perform multiple independently validated passages.
+    // Observations
     // are personal; nobody reads world.events() to discover a remote crime.
     const passageAction=(actor:EntityId,room:EntityId,next:EntityId):Command=>{
       const door=doors.get(pairKey(room,next));
@@ -1714,13 +1729,16 @@ export function createSimulation() {
       const obs=observationsByCharacter.get(actor)??[];
       const sightings=incidentSightings(actor);
       let action:Command|null=null;
+      let navigationGoal:EntityId|null=null;
       if(patrol.kind==='animal'&&sightings>patrol.sentSignals){
         if(room===currentRoom(patrol.partner!))
           action={type:'signal_incident',actor,listener:patrol.partner!};
         else if(room!==patrol.rendezvous){
-          const next=nextRoomOnRoute(room,patrol.rendezvous!,
-            place=>getRelationTargets(ecs,place,PassageTo));
-          if(next!==null)action=passageAction(actor,room,next);
+          const next=patrolNext(actor,room,patrol.rendezvous!);
+          if(next!==null){
+            action=passageAction(actor,room,next);
+            navigationGoal=patrol.rendezvous!;
+          }
         }
       }else if(patrol.kind==='caretaker'){
         // Either direct sight or genuinely acquired testimony may be reported.
@@ -1777,10 +1795,11 @@ export function createSimulation() {
         }
         while(!action&&search.pending.length){
           const goal=search.pending[0]!;
-          const next=nextRoomOnRoute(room,goal,
-            place=>getRelationTargets(ecs,place,PassageTo));
-          if(next!==null)action=passageAction(actor,room,next);
-          else search.checked.push(search.pending.shift()!);
+          const next=patrolNext(actor,room,goal);
+          if(next!==null){
+            action=passageAction(actor,room,next);
+            navigationGoal=goal;
+          }else search.checked.push(search.pending.shift()!);
         }
         if(search.pending.length===0)patrol.search=undefined;
       }
@@ -1790,14 +1809,22 @@ export function createSimulation() {
           patrol.waypoint=(patrol.waypoint+1)%patrol.waypoints.length;
         const goal=patrol.waypoints[patrol.waypoint]!;
         if(room!==goal){
-          const next=nextRoomOnRoute(room,goal,
-            place=>getRelationTargets(ecs,place,PassageTo));
-          if(next!==null)action=passageAction(actor,room,next);
+          const next=patrolNext(actor,room,goal);
+          if(next!==null){
+            action=passageAction(actor,room,next);
+            navigationGoal=goal;
+          }
         }
       }
       if(action){
-        const result=execute(action);
-        decisions.push({actor,action,result});
+        if(usesUnifiedTravel(actor)&&navigationGoal!==null){
+          for(const {action:stepAction,result} of traverseActorJourney(
+            patrolTravelWorld,actor,room,navigationGoal))
+            decisions.push({actor,action:stepAction,result});
+        }else{
+          const result=execute(action);
+          decisions.push({actor,action,result});
+        }
       }
     }
     return decisions;
