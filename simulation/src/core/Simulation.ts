@@ -1720,7 +1720,12 @@ export function createSimulation() {
     }
   }
 
+  const tickDiagnostics=process.env.MARAUDERS_TICK_PROFILE==='1';
+  const tickCosts={ticks:0,schedulerMs:0,patrolMs:0,decisions:0,
+    schedulerDecisions:0,patrolDecisions:0,maxSchedulerMs:0,maxPatrolMs:0};
+  function tickProfile(){return {...tickCosts};}
   function step(): StepDecision[] {
+    const tickStart=tickDiagnostics?performance.now():0;
     const flags = {
       manual: ManuallyControlled, vision: Vision, hearing: Hearing, helpful: Helpful
     };
@@ -1752,6 +1757,8 @@ export function createSimulation() {
       spellKnowledge, beliefsByCharacter, setRoutine, emit,
       recordDailyRest
     });
+    const schedulerEnd=tickDiagnostics?performance.now():0;
+    const schedulerDecisionCount=decisions.length;
     // Patrollers share the exact same physics and personal graph as pupils.
     const patrolTravelWorld={knownExits,passageMinutes,planActorRoute,passageAction:
       (actor:EntityId,room:EntityId,next:EntityId):Command=>{
@@ -1878,6 +1885,19 @@ export function createSimulation() {
           decisions.push({actor,action,result});
         }
       }
+    }
+    if(tickDiagnostics){
+      const patrolEnd=performance.now();
+      const schedulerMs=schedulerEnd-tickStart;
+      const patrolMs=patrolEnd-schedulerEnd;
+      tickCosts.ticks++;
+      tickCosts.schedulerMs+=schedulerMs;
+      tickCosts.patrolMs+=patrolMs;
+      tickCosts.schedulerDecisions+=schedulerDecisionCount;
+      tickCosts.patrolDecisions+=decisions.length-schedulerDecisionCount;
+      tickCosts.decisions+=decisions.length;
+      tickCosts.maxSchedulerMs=Math.max(tickCosts.maxSchedulerMs,schedulerMs);
+      tickCosts.maxPatrolMs=Math.max(tickCosts.maxPatrolMs,patrolMs);
     }
     return decisions;
   }
@@ -2213,7 +2233,7 @@ export function createSimulation() {
     clock: () => schoolTime(tick),
     beliefs: (observer: EntityId): Belief[] => beliefsByCharacter.read(observer),
     currentRoom, locationOf, occupants, observations,
-    knownExits,passageMinutes,planActorRoute,passageDiscoveries,routeProfile,
+    knownExits,passageMinutes,planActorRoute,passageDiscoveries,routeProfile,tickProfile,
     isBroken: (eid: EntityId) => hasComponent(ecs, eid, Fragile) && Fragile.broken[eid] === 1,
     doorIsOpen: (eid: EntityId) => hasComponent(ecs, eid, Door) ? Door.open[eid] === 1 : null,
     id: (key: string) => keys.get(key),
