@@ -91,8 +91,9 @@ test('#27: resource shortages fail loudly and never silently delete a required c
 });
 
 test('#27: restored full foundation term state resumes deterministically',()=>{
-  const s=scene();
-  const {world}=s;
+  const world=createPersistentSimulation();
+  const s=createSchoolWeek(world,'adaptive','autonomous',
+    '96-all','expanded','research-600','foundations-27');
   for(let tick=0;tick<24;tick++)world.step();
   const report=reportSchoolWeek(s);
   assert.ok(report.attendance.on_time>0);
