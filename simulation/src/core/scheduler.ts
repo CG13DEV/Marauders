@@ -21,6 +21,7 @@ import { advanceNeeds,chooseNeedOrIntention,pickIntention,isOpenIntention,
 } from './intentions.ts';
 import { decideInvestigation, type Assessment, type Trust } from './cognition.ts';
 import { chooseMischiefTarget, livedMischiefMotive } from './mischief.ts';
+import {chooseSocialResponse} from './social-choice.ts';
 import { spellDefinitions, type SpellId, type LearningRecord } from './spellcraft.ts';
 import type { Belief } from './beliefs.ts';
 import { willingToTutor, type TutoringRequest } from './social-learning.ts';
@@ -434,6 +435,45 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
     }
 
     phase('goal-generation');
+    // #31.4: choose ONE ordinary social action from firsthand memory,
+    // directional trust and currently available people, not a scripted plot.
+    // This occurs before routine wandering, but after lessons and commitments.
+    for(const actor of actors('dailyLife')){
+      const plan=dailyPlans.get(actor);
+      if(plan?.socialChoice!=='reflective'||!isLeisure(minute)||
+         has(actor,'manual')||!has(actor,'hearing')||
+         occupiedBySchool.has(actor)||socialParticipants.has(actor)||
+         decidedActors.has(actor)||sleeping.has(actor)||
+         promisePriorities.has(actor)||upcomingFor(actor))continue;
+      const room=currentRoom(actor);
+      if(room===null||currentLesson(timetables.get(actor)?.records??[],minute)||
+         (intentions.get(actor)??[]).some(isOpenIntention))continue;
+      const needs=bodilyNeeds.get(actor);
+      if(needs&&(needs.hunger>=60||needs.fatigue>=85))continue;
+      if(mealAt(minute)!==null||
+         talkedToday(conversations.get(actor)??[],dayOf(minute)))continue;
+      const locals=occupants(room).filter(other=>other!==actor&&
+        dailyPlans.has(other)&&has(other,'hearing')&&!has(other,'manual')&&
+        !occupiedBySchool.has(other)&&!socialParticipants.has(other)&&
+        !decidedActors.has(other)&&
+        !talkedToday(conversations.get(other)??[],dayOf(minute)));
+      const choice=chooseSocialResponse({
+        actor,minute,history:commitmentMemories.get(actor)??[],
+        people:locals,trust:other=>trustOf(actor,other),
+        knownExits:knownExits(actor,room)
+      });
+      if(choice.kind==='chat'){
+        const action:Command={type:'chat',actor,listener:choice.listener,
+          topic:plan.interest};
+        const result=execute(action);
+        recordDecision({actor,action,result});
+        if(result.ok){
+          socialParticipants.add(actor);
+          socialParticipants.add(choice.listener);
+        }
+      }else if(choice.kind==='leave')
+        travelTo(actor,room,choice.destination);
+    }
     // Opt-in intention arbitration. Scheduling, commitments and bodily needs
     // all compete through observed obligations, not a global RPG action score.
     // State transitions themselves do not consume an extra physical action.
@@ -677,6 +717,12 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       const plan = dailyPlans.get(actor);
       const room = currentRoom(actor);
       if (!plan || room === null || plan.intentionPlanning) continue;
+      // A locally chosen retreat isn't undone by automatic hub relocation
+      // on the very next tick. Once the remembered impulse expires, normal
+      // daily habits resume without an extra global avoidance state.
+      if(plan.socialChoice==='reflective' && isLeisure(minute) &&
+         livedMischiefMotive(commitmentMemories.get(actor)??[],minute) &&
+         room!==leisureDestination(plan,minute))continue;
 
       if (isSleepTime(minute) && room === plan.homeRoom) {
         sleeping.add(actor);
@@ -902,7 +948,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
           decidedActors.has(actor)) continue;
       const plan = dailyPlans.get(actor);
       const room = currentRoom(actor);
-      if (!plan || room === null || room !== leisureDestination(plan, minute) ||
+      if (!plan || plan.socialChoice==='reflective' || room === null || room !== leisureDestination(plan, minute) ||
           !has(actor, 'hearing') ||
           (plan.style === 'reserved' && !isWeekend(minute))) continue;
       const memories = conversations.get(actor) ?? [];

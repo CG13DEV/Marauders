@@ -42,7 +42,8 @@
     "memory-audit-demo": "node --expose-gc --experimental-strip-types src/cli/memory-audit-demo.ts",
     "causality-demo": "node --experimental-strip-types src/cli/causality-demo.ts",
     "spontaneous-demo": "node --experimental-strip-types src/cli/spontaneous-demo.ts",
-    "lived-motivation-demo": "node --experimental-strip-types src/cli/lived-motivation-demo.ts"
+    "lived-motivation-demo": "node --experimental-strip-types src/cli/lived-motivation-demo.ts",
+    "social-choice-demo": "node --experimental-strip-types src/cli/social-choice-demo.ts"
   },
   "dependencies": {
     "bitecs": "0.4.0"

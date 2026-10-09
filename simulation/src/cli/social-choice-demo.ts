@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {runSocialChoiceFork} from '../scenarios/social-choice-counterfactual.ts';
+const baseline={experience:'waited' as const,friendTrust:'neutral' as const,companionPresent:true};
+const repair=runSocialChoiceFork({...baseline,friendTrust:'trusted'});
+const alternate=runSocialChoiceFork(baseline);
+const retreat=runSocialChoiceFork({...baseline,companionPresent:false});
+const kept=runSocialChoiceFork({...baseline,experience:'kept',companionPresent:false});
+assert.deepEqual(repair.outcome.chattedWith,['friend']);
+assert.deepEqual(alternate.outcome.chattedWith,['companion']);
+assert.equal(retreat.outcome.leftGallery,true);
+assert.deepEqual(kept.outcome.chattedWith,['friend']);
+console.log(JSON.stringify({experiment:'31.4',repair,alternate,retreat,kept},null,2));
