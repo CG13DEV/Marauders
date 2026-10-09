@@ -68,6 +68,7 @@ export function createCastleResidents(
     const home = layout.places.get(spec.roomKey)?.id;
     if (home === undefined) throw new Error('Missing resident location: ' + spec.roomKey);
     const id = world.character(spec.key, spec.label, home);
+    if(spec.kind==='headmaster')world.grantPointAuthority(id,'headmaster');
     return { id, key: spec.key, kind: spec.kind, home,
       ...(spec.house ? { house: spec.house } : {}) };
   });

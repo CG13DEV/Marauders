@@ -39,3 +39,4 @@ jobs:
       - run: npm run intentions-demo
       - run: npm run unified-intentions-demo
       - run: npm run rollout-demo
+      - run: npm run points-demo

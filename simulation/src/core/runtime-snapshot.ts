@@ -7,6 +7,7 @@ import type { TutoringRequest, AssistanceMemory } from './social-learning.ts';
 import type { Trust } from './cognition.ts';
 import type { MeetingCommitment, CommitmentMemory } from './social-commitments.ts';
 import type { PersonalIntention, BodilyNeeds } from './intentions.ts';
+import type { HouseId, PointAuthority, PointDecision, PointNews } from './house-points.ts';
 import type {
   DailyLifePlan, MealMemory, ConversationMemory, RestMemory
 } from './daily-life.ts';
@@ -41,6 +42,10 @@ export type RuntimeSnapshot = {
   commitmentMemories?: [number, CommitmentMemory[]][];
   intentions?: [number,PersonalIntention[]][];
   bodilyNeeds?: [number,BodilyNeeds][];
+  houseMembership?: [number,HouseId][];
+  pointAuthorities?: [number,PointAuthority][];
+  pointLedger?: PointDecision[];
+  pointNews?: [number,PointNews[]][];
   routines: [number, number[]][];
   searches: [number, PersistedSearch][];
   requests: [number, TutoringRequest][];
@@ -62,6 +67,8 @@ function remapEvent(event: WorldEvent, at: (id: number) => number): WorldEvent {
       return { ...event, actor: at(event.actor) };
     case 'tutoring_requested': return { ...event, actor: at(event.actor), listener: at(event.listener) };
     case 'tutoring_answered': return { ...event, actor: at(event.actor), requester: at(event.requester) };
+    case 'house_points_changed':return {...event,actor:at(event.actor),pupil:at(event.pupil)};
+    case 'house_points_shared':return {...event,actor:at(event.actor),listener:at(event.listener)};
     case 'meal_eaten': case 'rest_recorded': case 'intention_changed':
       return { ...event, actor: at(event.actor) };
     case 'conversation_shared':
@@ -78,6 +85,8 @@ function remapObservation(record: Observation, at: (id: number) => number): Obse
     case 'heard_crash': return { ...record };
     case 'witnessed_breakage': return { ...record, actor: at(record.actor), target: at(record.target) };
     case 'inspected_object': return { ...record, target: at(record.target) };
+    case 'heard_house_points':return {...record,
+      ...(record.speaker===undefined?{}:{speaker:at(record.speaker)})};
   }
 }
 function remapBelief(record: Belief, at: (id: number) => number): Belief {
@@ -149,6 +158,27 @@ export function remapRuntimeSnapshot(snapshot: RuntimeSnapshot, at: (id: number)
     ...(snapshot.bodilyNeeds===undefined?{}:{bodilyNeeds:snapshot.bodilyNeeds.map(
       ([actor,needs])=>[at(actor),{...needs}] as [number,BodilyNeeds]
     )}),
+    ...(snapshot.houseMembership===undefined?{}:{
+      houseMembership:snapshot.houseMembership.map(([id,h])=>[at(id),h] as [number,HouseId])
+    }),
+    ...(snapshot.pointAuthorities===undefined?{}:{
+      pointAuthorities:snapshot.pointAuthorities.map(([id,role])=>[at(id),role] as [number,PointAuthority])
+    }),
+    ...(snapshot.pointLedger===undefined?{}:{
+      pointLedger:snapshot.pointLedger.map(d=>({
+        ...d,actor:at(d.actor),pupil:at(d.pupil),
+        evidence:d.evidence.kind==='testimony'
+          ?{...d.evidence,object:at(d.evidence.object),speaker:at(d.evidence.speaker)}
+          :d.evidence.kind==='vision'?{...d.evidence,object:at(d.evidence.object)}
+          :{...d.evidence}
+      }))
+    }),
+    ...(snapshot.pointNews===undefined?{}:{
+      pointNews:snapshot.pointNews.map(([id,items])=>[at(id),
+        items.map(n=>({...n,announcer:at(n.announcer),pupil:at(n.pupil),
+          ...(n.speaker===undefined?{}:{speaker:at(n.speaker)})}))
+      ] as [number,PointNews[]])
+    }),
     routines: snapshot.routines.map(([id, path]) => [at(id), path.map(at)]),
     searches: snapshot.searches.map(([id, search]) => [at(id), {
       object: at(search.object), asked: search.asked.map(at),

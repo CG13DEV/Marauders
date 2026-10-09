@@ -15,6 +15,9 @@ import { copyClaim, type Claim, type Belief } from './beliefs.ts';
 import { assessReports, type Assessment, type Trust } from './cognition.ts';
 
 import { createRuntimeStores } from './runtime-stores.ts';
+import { isHouseId, calculatePoints, respondToNews,
+  type HouseId, type PointAuthority, type PointBasis, type PointEvidence,
+  type PointDecision, type PointNews, type PointRejection } from './house-points.ts';
 import {
   validMeetingTime, hasMeetingConflict,
   type MeetingPurpose, type MeetingCommitment, type CommitmentMemory
@@ -77,7 +80,10 @@ export type Command =
       importance:IntentionImportance; deadlineMinute?:number }
   | { type: 'cancel_intention'; actor:EntityId; intentionId:number }
   | { type: 'intend_study'; actor:EntityId; spell:SpellId }
-  | { type: 'intend_investigate'; actor:EntityId; object:EntityId };
+  | { type: 'intend_investigate'; actor:EntityId; object:EntityId }
+  | {type:'decide_house_points';actor:EntityId;pupil:EntityId;delta:number;
+     reason:string;basis:PointBasis}
+  | {type:'share_house_points';actor:EntityId;listener:EntityId;decisionId:number};
 
 export type WorldEvent =
   | { type: 'entity_moved'; actor: EntityId; from: EntityId; to: EntityId }
@@ -105,7 +111,11 @@ export type WorldEvent =
   | { type: 'tutoring_appointment_completed'; actor: EntityId; listener: EntityId;
       meetingId: number; room: EntityId; spell: SpellId; minute: number }
   | { type: 'intention_changed'; actor: EntityId; intentionId:number;
-      status:IntentionStatus; minute:number; interruptedBy?:Interruption };
+      status:IntentionStatus; minute:number; interruptedBy?:Interruption }
+  | {type:'house_points_changed';actor:EntityId;pupil:EntityId;house:HouseId;
+     decisionId:number;delta:number;reason:string;minute:number}
+  | {type:'house_points_shared';actor:EntityId;listener:EntityId;
+     decisionId:number;minute:number};
 
 /**
  * What a character is ALLOWED to know.
@@ -116,7 +126,9 @@ export type WorldEvent =
 export type Observation =
   | { kind: 'witnessed_breakage'; source: 'vision'; actor: EntityId; target: EntityId }
   | { kind: 'heard_crash'; source: 'hearing' }
-  | { kind: 'inspected_object'; source: 'vision'; target: EntityId; broken: boolean };
+  | { kind: 'inspected_object'; source: 'vision'; target: EntityId; broken: boolean }
+  | {kind:'heard_house_points';source:'hearing'|'testimony';decisionId:number;
+      speaker?:EntityId};
 
 export type BreakRejection =
   | 'unknown_actor'
@@ -159,7 +171,7 @@ export type IntentionRejection='no_intention_planner'|'invalid_intention'|
 
 export type CommandResult =
   | { ok: true; events: readonly WorldEvent[] }
-  | { ok: false; reason: MoveRejection | BreakRejection | SocialRejection | DoorRejection | InspectRejection | QuestionRejection | SpellRejection | HelpRejection | DailyRejection | MeetingRejection | IntentionRejection; events: readonly [] };
+  | { ok: false; reason: MoveRejection | BreakRejection | SocialRejection | DoorRejection | InspectRejection | QuestionRejection | SpellRejection | HelpRejection | DailyRejection | MeetingRejection | IntentionRejection | PointRejection; events: readonly [] };
 
 export type DoorOptions = {
   door: { key: string; label: string; open: boolean };
@@ -203,7 +215,8 @@ export function createSimulation() {
     keys, doors, events, observationsByCharacter, beliefsByCharacter, roomDetails,
     spellKnowledge, pendingTutoring, attemptedTutors, assistanceHistory,
     searches, routines, timetables, dailyPlans, meals, conversations, rests,
-    commitments, commitmentMemories, intentions, bodilyNeeds
+    commitments, commitmentMemories, intentions, bodilyNeeds,
+    houseMembership, pointAuthorities, pointLedger, pointNews
   } = createRuntimeStores();
   let tick = 0;
 
@@ -260,6 +273,7 @@ export function createSimulation() {
     rests.set(eid, []);
     commitmentMemories.set(eid, []);
     intentions.set(eid, []);
+    pointNews.set(eid, []);
     return eid;
   }
 
@@ -321,6 +335,44 @@ export function createSimulation() {
 
   function isCharacter(eid: EntityId): boolean {
     return entityExists(ecs, eid) && hasComponent(ecs, eid, Character);
+  }
+
+  /** Explicit institutional roles; a staff member is not enrolled as a pupil. */
+  function registerHouse(actor:EntityId,house:HouseId):void{
+    if(!isCharacter(actor)||!isHouseId(house)||pointAuthorities.has(actor))
+      throw new Error('Invalid house enrollment');
+    houseMembership.set(actor,house);
+  }
+  function grantPointAuthority(actor:EntityId,role:PointAuthority):void{
+    if(!isCharacter(actor)||houseMembership.has(actor)||
+       (role!=='teacher'&&role!=='headmaster'))
+      throw new Error('Invalid staff point authority');
+    pointAuthorities.set(actor,role);
+  }
+  function houseOf(actor:EntityId):HouseId|null{return houseMembership.get(actor)??null;}
+  function housePoints(){return calculatePoints(pointLedger);}
+  function pointHistory():PointDecision[]{
+    return pointLedger.map(d=>({...d,evidence:{...d.evidence}}));
+  }
+  function knownPointNews(actor:EntityId):PointNews[]{
+    return (pointNews.get(actor)??[]).map(n=>({...n}));
+  }
+  function pointReactions(actor:EntityId){
+    return knownPointNews(actor).flatMap(news=>{
+      const response=respondToNews(actor,houseMembership.get(actor),news);
+      return response?[response]:[];
+    });
+  }
+  function learnPointNews(actor:EntityId,decision:PointDecision,
+    source:'hearing'|'testimony',speaker?:EntityId):void{
+    const ledger=pointNews.get(actor);
+    if(!ledger||ledger.some(n=>n.decisionId===decision.id))return;
+    ledger.push({decisionId:decision.id,minute:schoolTime(tick).absoluteMinute,
+      announcer:decision.actor,pupil:decision.pupil,house:decision.house,
+      delta:decision.delta,reason:decision.reason,source,
+      ...(speaker===undefined?{}:{speaker})});
+    observationsByCharacter.get(actor)?.push({kind:'heard_house_points',source,
+      decisionId:decision.id,...(speaker===undefined?{}:{speaker})});
   }
 
   function setTrust(observer: EntityId, source: EntityId, value: Trust): void {
@@ -584,6 +636,14 @@ export function createSimulation() {
 
   function emit(event: WorldEvent): void {
     events.push(copyEvent(event));
+    if(event.type==='house_points_changed'){
+      const decision=pointLedger.find(d=>d.id===event.decisionId);
+      const room=currentRoom(event.actor);
+      if(decision&&room!==null)for(const listener of query(ecs,[Character]))
+        if(currentRoom(listener)===room&&hasComponent(ecs,listener,Hearing))
+          learnPointNews(listener,decision,'hearing');
+      return;
+    }
     if (event.type !== 'object_broken') return;
 
     // An authoritative event becomes *different* observations per observer.
@@ -640,6 +700,77 @@ export function createSimulation() {
     }
     if (!hasComponent(ecs, command.actor, Character)) {
       return { ok: false, reason: 'not_character', events: [] };
+    }
+    if(command.type==='decide_house_points'){
+      if(!pointAuthorities.has(command.actor))
+        return {ok:false,reason:'no_point_authority',events:[]};
+      const house=houseMembership.get(command.pupil);
+      if(!isCharacter(command.pupil)||!house)
+        return {ok:false,reason:'not_enrolled',events:[]};
+      if(!Number.isSafeInteger(command.delta)||command.delta===0||
+        Math.abs(command.delta)>50)
+        return {ok:false,reason:'invalid_points',events:[]};
+      if(typeof command.reason!=='string'||command.reason.trim().length<3||
+        command.reason.length>240)
+        return {ok:false,reason:'invalid_reason',events:[]};
+      let evidence:PointEvidence;
+      if(command.delta<0){
+        if(command.basis?.kind!=='breakage_claim')
+          return {ok:false,reason:'wrong_basis',events:[]};
+        const object=command.basis.object;
+        const belief=beliefsByCharacter.read(command.actor).find(b=>
+          b.claim.kind==='broke_object'&&b.claim.culprit===command.pupil&&
+          b.claim.object===object);
+        if(!belief)return {ok:false,reason:'missing_evidence',events:[]};
+        evidence=belief.evidence.kind==='vision'
+          ?{kind:'vision',object}
+          :{kind:'testimony',object,speaker:belief.evidence.speaker};
+      }else{
+        if(command.basis?.kind!=='observed_merit')
+          return {ok:false,reason:'wrong_basis',events:[]};
+        if(currentRoom(command.actor)!==currentRoom(command.pupil)||
+          !hasComponent(ecs,command.actor,Vision))
+          return {ok:false,reason:'missing_evidence',events:[]};
+        evidence={kind:'direct_merit'};
+      }
+      if(pointLedger.some(d=>d.actor===command.actor&&d.pupil===command.pupil&&
+        d.delta===command.delta&&d.reason===command.reason.trim()&&
+        d.evidence.kind===evidence.kind&&
+        ('object' in d.evidence?d.evidence.object:undefined)===
+        ('object' in evidence?evidence.object:undefined)))
+        return {ok:false,reason:'duplicate_decision',events:[]};
+      const minute=schoolTime(tick).absoluteMinute;
+      const decision:PointDecision={id:pointLedger.length+1,minute,
+        actor:command.actor,pupil:command.pupil,house,delta:command.delta,
+        reason:command.reason.trim(),evidence};
+      pointLedger.push(decision);
+      const event:WorldEvent={type:'house_points_changed',actor:command.actor,
+        pupil:command.pupil,house,delta:decision.delta,reason:decision.reason,
+        decisionId:decision.id,minute};
+      emit(event);
+      return {ok:true,events:[event]};
+    }
+    if(command.type==='share_house_points'){
+      if(!isCharacter(command.listener)||command.actor===command.listener)
+        return {ok:false,reason:'cannot_talk_to_self',events:[]};
+      if(currentRoom(command.actor)===null||
+        currentRoom(command.actor)!==currentRoom(command.listener))
+        return {ok:false,reason:'not_colocated',events:[]};
+      if(!hasComponent(ecs,command.actor,Hearing)||
+        !hasComponent(ecs,command.listener,Hearing))
+        return {ok:false,reason:'listener_cannot_hear',events:[]};
+      const decision=pointLedger.find(d=>d.id===command.decisionId);
+      if(!decision)return {ok:false,reason:'unknown_decision',events:[]};
+      if(!pointNews.get(command.actor)?.some(n=>n.decisionId===decision.id))
+        return {ok:false,reason:'news_not_known',events:[]};
+      if(pointNews.get(command.listener)?.some(n=>n.decisionId===decision.id))
+        return {ok:false,reason:'already_knows',events:[]};
+      learnPointNews(command.listener,decision,'testimony',command.actor);
+      const event:WorldEvent={type:'house_points_shared',actor:command.actor,
+        listener:command.listener,decisionId:decision.id,
+        minute:schoolTime(tick).absoluteMinute};
+      emit(event);
+      return {ok:true,events:[event]};
     }
     if (command.type === 'offer_meeting') {
       if (!isCharacter(command.listener) || command.listener === command.actor)
@@ -932,6 +1063,24 @@ export function createSimulation() {
         listener: command.listener, topic: command.topic, minute
       };
       emit(event);
+      // Ordinary conversations pass one known incident, not a global log.
+      const learnedByActor=[...(pointNews.get(command.actor)??[])].reverse()
+        .find(n=>!pointNews.get(command.listener)?.some(x=>x.decisionId===n.decisionId));
+      const learnedByListener=[...(pointNews.get(command.listener)??[])].reverse()
+        .find(n=>!pointNews.get(command.actor)?.some(x=>x.decisionId===n.decisionId));
+      const speaker=learnedByActor?command.actor:learnedByListener?command.listener:null;
+      const listener=learnedByActor?command.listener:learnedByListener?command.actor:null;
+      const known=learnedByActor??learnedByListener;
+      if(speaker!==null&&listener!==null&&known){
+        const decision=pointLedger.find(d=>d.id===known.decisionId);
+        if(decision){
+          learnPointNews(listener,decision,'testimony',speaker);
+          const rumor:WorldEvent={type:'house_points_shared',actor:speaker,
+            listener,decisionId:decision.id,minute};
+          emit(rumor);
+          return {ok:true,events:[event,rumor]};
+        }
+      }
       return { ok: true, events: [event] };
     }
 
@@ -1396,6 +1545,13 @@ export function createSimulation() {
       requests: [...pendingTutoring.entries()],
       attemptedTutors: [...attemptedTutors.entries()].map(([id, values]) => [id, [...values]]),
       assistance: [...assistanceHistory.entries()],
+      ...(houseMembership.size?{houseMembership:[...houseMembership.entries()]}:{}),
+      ...(pointAuthorities.size?{pointAuthorities:[...pointAuthorities.entries()]}:{}),
+      ...(pointLedger.length?{pointLedger:pointHistory()}:{}),
+      ...([...pointNews.values()].some(items=>items.length)?{
+        pointNews:[...pointNews.entries()].filter(([,news])=>news.length)
+          .map(([id,news])=>[id,news.map(n=>({...n}))] as [number,PointNews[]])
+      }:{}),
       events: events.map(copyEvent)
     };
     return JSON.parse(JSON.stringify(state)) as RuntimeSnapshot;
@@ -1430,6 +1586,36 @@ export function createSimulation() {
     for (const [id, open] of state.doors) {
       if (!hasComponent(ecs, id, Door)) throw new Error('Checkpoint references missing door');
       Door.open[id] = open ? 1 : 0;
+    }
+    houseMembership.clear();
+    for(const [id,house] of state.houseMembership??[]){
+      if(!isCharacter(id)||!isHouseId(house))throw new Error('Invalid saved house');
+      houseMembership.set(id,house);
+    }
+    pointAuthorities.clear();
+    for(const [id,role] of state.pointAuthorities??[]){
+      if(!isCharacter(id)||houseMembership.has(id)||
+        (role!=='teacher'&&role!=='headmaster'))
+        throw new Error('Invalid saved authority');
+      pointAuthorities.set(id,role);
+    }
+    pointLedger.splice(0,pointLedger.length);
+    for(const d of state.pointLedger??[]){
+      if(!isCharacter(d.actor)||!pointAuthorities.has(d.actor)||
+         !houseMembership.has(d.pupil)||houseMembership.get(d.pupil)!==d.house||
+         d.id!==pointLedger.length+1||!Number.isSafeInteger(d.delta)||
+         d.delta===0||Math.abs(d.delta)>50)
+        throw new Error('Invalid saved point decision');
+      pointLedger.push({...d,evidence:{...d.evidence}});
+    }
+    pointNews.clear();
+    for(const id of Array.from(query(ecs,[Character])))pointNews.set(id,[]);
+    for(const [id,items] of state.pointNews??[]){
+      if(!isCharacter(id)||items.some(n=>
+        !pointLedger.some(d=>d.id===n.decisionId)||
+        (n.speaker!==undefined&&!isCharacter(n.speaker))))
+        throw new Error('Invalid saved house news');
+      pointNews.set(id,items.map(n=>({...n})));
     }
     const componentFlags = {
       vision: Vision, hearing: Hearing, inquisitive: Inquisitive,
@@ -1511,6 +1697,8 @@ export function createSimulation() {
 
   return {
     room, roomInfo, character, fragileObject, connect, execute, step,
+    registerHouse, grantPointAuthority, houseOf, housePoints, pointHistory,
+    knownPointNews, pointReactions,
     captureRuntime, hydrateRuntime,
     setTrust, trustOf, setInquisitive, setSocialInvestigator, setGuarded, setRoutine, assessment,
     setTimetable, setManualControl, attendance, learningDebt, knowledgeGaps,
