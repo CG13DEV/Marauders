@@ -31,7 +31,7 @@ export type DailyLifePlan = {
   /** [GAME] Opt-in: personally inspected damage can generate witness inquiry goals. */
   evidenceInquiry?:boolean;
   /** [GAME] #31.2: autonomous local mischief, without a scripted target or event. */
-  mischief?:'reckless'|'cautious';
+  mischief?:'reckless'|'cautious'|'reactive';
 };
 export type MealMemory = { day: number; kind: MealKind; minute: number };
 export type ConversationMemory = {

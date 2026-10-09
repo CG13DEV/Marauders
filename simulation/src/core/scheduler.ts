@@ -20,7 +20,7 @@ import { advanceNeeds,chooseNeedOrIntention,pickIntention,isOpenIntention,
   type PersonalIntention,type BodilyNeeds,type IntentionStatus,type Interruption
 } from './intentions.ts';
 import { decideInvestigation, type Assessment, type Trust } from './cognition.ts';
-import { chooseMischiefTarget } from './mischief.ts';
+import { chooseMischiefTarget, livedMischiefMotive } from './mischief.ts';
 import { spellDefinitions, type SpellId, type LearningRecord } from './spellcraft.ts';
 import type { Belief } from './beliefs.ts';
 import { willingToTutor, type TutoringRequest } from './social-learning.ts';
@@ -379,6 +379,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       if((intentions.get(actor)??[]).some(isOpenIntention))continue;
       const target=chooseMischiefTarget({
         disposition:plan.mischief,
+        motive:livedMischiefMotive(commitmentMemories.get(actor)??[],minute),
         intactObjects:intactFragiles(room),
         bystanders:occupants(room).filter(other=>other!==actor)
       });

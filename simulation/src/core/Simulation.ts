@@ -608,7 +608,8 @@ export function createSimulation() {
         (plan.evidenceInquiry !== undefined &&
           typeof plan.evidenceInquiry !== 'boolean') ||
         (plan.mischief !== undefined &&
-          plan.mischief!=='reckless' && plan.mischief!=='cautious') ||
+          plan.mischief!=='reckless' && plan.mischief!=='cautious' &&
+          plan.mischief!=='reactive') ||
         (plan.schoolTravel !== undefined &&
           plan.schoolTravel !== 'micro-28'&&plan.schoolTravel!=='weighted-29') ||
         ((plan.schoolTravel === 'micro-28'||plan.schoolTravel==='weighted-29') &&
