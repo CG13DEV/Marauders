@@ -19,6 +19,8 @@ export type PatrolPlan = {
   sentSignals:number;
   /** Caretaker's reports already delivered to a specific staff witness. */
   reportedClaims:string[];
+  /** Local people personally questioned about a known damaged object. */
+  interviewed?:string[];
   /** Only a caretaker can investigate. The cat never transmits a location. */
   search?:PatrolSearch;
 };
@@ -54,4 +56,19 @@ export function nearbySearchRooms(origin:number,exits:(room:number)=>readonly nu
     }
   }
   return rooms;
+}
+
+/** [GAME] Deterministic local witness selection from *personal* inspection
+ * records and co-located people. Does not inspect anyone's private beliefs.
+ */
+export function nextWitnessInquiry(
+  brokenObjects:readonly number[],peopleHere:readonly number[],
+  interviewed:readonly string[]):{object:number;listener:number;key:string}|null{
+  const asked=new Set(interviewed);
+  for(const object of [...new Set(brokenObjects)].sort((a,b)=>a-b))
+    for(const listener of [...new Set(peopleHere)].sort((a,b)=>a-b)){
+      const key=object+':'+listener;
+      if(!asked.has(key))return {object,listener,key};
+    }
+  return null;
 }

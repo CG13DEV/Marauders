@@ -196,6 +196,12 @@ export function remapRuntimeSnapshot(snapshot: RuntimeSnapshot, at: (id: number)
           if(parts.length!==3||parts.some(v=>!Number.isSafeInteger(v)))throw new Error('Invalid patrol report');
           return parts.map(at).join(':');
         }),
+        ...(plan.interviewed===undefined?{}:{interviewed:plan.interviewed.map(key=>{
+          const parts=key.split(':').map(Number);
+          if(parts.length!==2||parts.some(v=>!Number.isSafeInteger(v)))
+            throw new Error('Invalid patrol inquiry');
+          return parts.map(at).join(':');
+        })}),
         ...(plan.search===undefined?{}:{search:{
           origin:at(plan.search.origin),
           pending:plan.search.pending.map(at),
