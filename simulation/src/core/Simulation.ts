@@ -545,8 +545,10 @@ export function createSimulation() {
           typeof plan.intentionPlanning !== 'boolean') ||
         (plan.evidenceInquiry !== undefined &&
           typeof plan.evidenceInquiry !== 'boolean') ||
-        (plan.schoolTravel !== undefined && plan.schoolTravel !== 'micro-28') ||
-        (plan.schoolTravel === 'micro-28' && plan.schoolPlanning !== 'adaptive') ||
+        (plan.schoolTravel !== undefined &&
+          plan.schoolTravel !== 'micro-28'&&plan.schoolTravel!=='weighted-29') ||
+        ((plan.schoolTravel === 'micro-28'||plan.schoolTravel==='weighted-29') &&
+          plan.schoolPlanning !== 'adaptive') ||
         (plan.evidenceInquiry===true && plan.intentionPlanning!==true) ||
         (plan.learningAppointments !== undefined &&
           typeof plan.learningAppointments !== 'boolean') ||
