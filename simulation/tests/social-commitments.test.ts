@@ -66,8 +66,10 @@ test('if one waits alone, ONLY that witness can conclude they were abandoned',()
   assert.equal(w.currentRoom(pupil),library);
   assert.equal(w.meetingLedger()[0]?.status,'expired');
   assert.equal(w.promiseHistory(pupil).at(-1)?.kind,'waited_alone');
-  assert.equal(w.promiseHistory(remus).length,1);
+  assert.deepEqual(w.promiseHistory(remus).map(x=>x.kind),
+    ['promised','missed_my_promise']);
   assert.ok(!w.promiseHistory(remus).some(x=>x.kind==='waited_alone'));
+  // Self-knowledge of absence does NOT reveal if the other person waited.
 });
 
 test('an absence nobody witnesses does not fabricate a personal grudge',()=>{
@@ -78,8 +80,12 @@ test('an absence nobody witnesses does not fabricate a personal grudge',()=>{
     room:library,atMinute:540,purpose:'study'});
   for(let i=0;i<9;i++)w.step();
   assert.equal(w.meetingLedger()[0]?.status,'expired');
-  assert.equal(w.promiseHistory(remus).length,1);
-  assert.equal(w.promiseHistory(pupil).length,1);
+  assert.deepEqual(w.promiseHistory(remus).map(x=>x.kind),
+    ['promised','missed_my_promise']);
+  assert.deepEqual(w.promiseHistory(pupil).map(x=>x.kind),['heard_promise']);
+  assert.ok(!w.promiseHistory(remus).some(x=>x.kind==='waited_alone'));
+  assert.ok(!w.promiseHistory(pupil).some(x=>x.kind==='waited_alone'));
+  // Nobody witnessed abandonment, but the promisor knows their OWN absence.
 });
 
 test('a person can prioritize a promise over class, or consciously keep school first',()=>{
