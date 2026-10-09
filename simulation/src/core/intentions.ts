@@ -12,12 +12,14 @@ export type IntentionStatus='queued'|'active'|'paused'|'completed'|'expired'|'ca
 export type Interruption='lesson'|'promise'|'manual'|'hunger'|'fatigue'|'higher_priority'|'waiting';
 export type PersonalIntention={
   id:number;
-  kind:'visit'|'learn_concept'|'attend_meeting'|'investigate';
+  kind:'visit'|'learn_concept'|'attend_meeting'|'investigate'|'inquire';
   /** Visit destination; for other kinds, only a personally disclosed or physically perceived room. */
   destination:number;
   spell?:SpellId;
   meetingId?:number;
   object?:number;
+  /** People this character personally questioned about the object. */
+  questioned?:number[];
   importance:IntentionImportance;
   createdMinute:number;
   deadlineMinute?:number;

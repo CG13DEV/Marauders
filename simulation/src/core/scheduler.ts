@@ -9,7 +9,7 @@ import { isActivePromise, personallyAvoids,
   type MeetingCommitment, type CommitmentMemory
 } from './social-commitments.ts';
 import { nextRoomOnRoute } from './navigation.ts';
-import { advanceToiletNeed,closestBathroom,type ToiletNeed } from './resident-life.ts';
+import {advanceToiletNeed,closestBathroom,nextWitnessInquiry,type ToiletNeed} from './resident-life.ts';
 import { planStudyIntention } from './learning-intentions.ts';
 import { advanceNeeds,chooseNeedOrIntention,pickIntention,isOpenIntention,
   type PersonalIntention,type BodilyNeeds,type IntentionStatus,type Interruption
@@ -39,6 +39,7 @@ export type SchedulerContext = {
   execute(command: Command): CommandResult;
   currentRoom(actor: EntityId): EntityId | null;
   occupants(room: EntityId): EntityId[];
+  canAnswerWitnessQuestion(actor:EntityId):boolean;
   observations(actor: EntityId): Observation[];
   assessment(observer: EntityId, object: EntityId): Assessment;
   trustOf(observer: EntityId, source: EntityId): Trust;
@@ -74,7 +75,7 @@ export type SchedulerContext = {
 export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
   const {
     advanceClock, actors, has, visibleFragiles, passageAction,
-    exits, execute, currentRoom, occupants, observations, assessment,
+    exits, execute, currentRoom, occupants, canAnswerWitnessQuestion,observations, assessment,
     trustOf, knowledgeGaps, pendingTutoring, attemptedTutors, searches,
     timetables, routines, dailyPlans, meals, conversations, rests,
     commitments, commitmentMemories, intentions, bodilyNeeds,toiletNeeds,
@@ -288,6 +289,23 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
         visibleFragiles(room),inspected,true);
       if(target!==null)execute({type:'intend_investigate',actor,object:target});
     }
+    // #25: any character's firsthand inspection can generate a causal goal.
+    for(const actor of actors('dailyLife')){
+      const plan=dailyPlans.get(actor);
+      if(!plan?.evidenceInquiry||!plan.intentionPlanning||
+         !has(actor,'hearing')||has(actor,'manual'))continue;
+      const room=currentRoom(actor);
+      if(room===null)continue;
+      const known=new Set(beliefsByCharacter.read(actor).map(b=>b.claim.object));
+      for(const observed of observations(actor)){
+        if(observed.kind!=='inspected_object'||!observed.broken||
+           known.has(observed.target)||
+           !visibleFragiles(room).includes(observed.target)||
+           (intentions.get(actor)??[]).some(g=>
+             g.kind==='inquire'&&g.object===observed.target))continue;
+        execute({type:'intend_inquire',actor,object:observed.target});
+      }
+    }
 
     // Opt-in intention arbitration. Scheduling, commitments and bodily needs
     // all compete through observed obligations, not a global RPG action score.
@@ -304,6 +322,9 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       // Reconcile a goal only against personal knowledge or an accepted
       // agreement the character actually participated in.
       for(const goal of goals.filter(isOpenIntention)){
+        if(goal.kind==='inquire' && goal.object!==undefined&&
+           beliefsByCharacter.read(actor).some(b=>b.claim.object===goal.object))
+          transitionIntention(actor,goal.id,'completed');
         if(goal.kind==='learn_concept' && goal.spell &&
            spellKnowledge.stage(actor,goal.spell)!=='unaware')
           transitionIntention(actor,goal.id,'completed');
@@ -336,6 +357,16 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
           return isLeisure(minute)&&!commitments.some(m=>
             m.promisor===actor&&m.spell===goal.spell &&
             (m.status==='offered'||m.status==='pending'));
+        }
+        if(goal.kind==='inquire'&&room===goal.destination){
+          if(goal.object===undefined||beliefsByCharacter.read(actor).some(b=>
+             b.claim.object===goal.object))return false;
+          const asked=new Set(goal.questioned??[]);
+          return occupants(room).some(other=>other!==actor&&!asked.has(other)&&
+            has(other,'hearing')&&canAnswerWitnessQuestion(other)&&
+            !has(other,'manual')&&
+            !occupiedBySchool.has(other)&&!socialParticipants.has(other)&&
+            !decisions.some(d=>d.actor===other));
         }
         if(goal.kind==='attend_meeting'){
           const meeting=commitments.find(m=>m.id===goal.meetingId);
@@ -438,6 +469,40 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
               socialParticipants.add(intention.helper);
             }
           }
+          continue;
+        }
+        if(goal.kind==='inquire'&&goal.object!==undefined){
+          // Shared with Filch: finite local candidates, no access to anyone's
+          // private thoughts and no omniscient remote object tracking.
+          if(room!==goal.destination){
+            const next=nextRoomOnRoute(room,goal.destination,exits);
+            if(next!==null){
+              transitionIntention(actor,goal.id,'active');
+              const action=passageAction(actor,room,next);
+              const result=execute(action);decisions.push({actor,action,result});
+            }
+            continue;
+          }
+          const people=occupants(room).filter(other=>
+            other!==actor&&has(other,'hearing')&&
+            canAnswerWitnessQuestion(other)&&!has(other,'manual')&&
+            !occupiedBySchool.has(other)&&!socialParticipants.has(other)&&
+            !decisions.some(d=>d.actor===other));
+          const inquiry=nextWitnessInquiry([goal.object],people,
+            (goal.questioned??[]).map(id=>goal.object+':'+id));
+          if(!inquiry){
+            transitionIntention(actor,goal.id,'paused','waiting');
+            continue;
+          }
+          const action:Command={type:'ask_about',actor,
+            listener:inquiry.listener,object:inquiry.object};
+          const result=execute(action);decisions.push({actor,action,result});
+          if(result.ok){
+            (goal.questioned??=[]).push(inquiry.listener);
+            if(beliefsByCharacter.read(actor).some(b=>b.claim.object===goal.object))
+              transitionIntention(actor,goal.id,'completed');
+            else transitionIntention(actor,goal.id,'paused','waiting');
+          }else transitionIntention(actor,goal.id,'paused','waiting');
           continue;
         }
         if(goal.kind==='investigate' && goal.object!==undefined){
@@ -856,6 +921,25 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
         socialParticipants.add(actor);
         socialParticipants.add(candidate);
       }
+    }
+
+    // Any opt-in character can physically inspect their nearby environment,
+    // independent of caretaker-specific hardcoded routines.
+    for(const actor of actors('dailyLife')){
+      if(!dailyPlans.get(actor)?.evidenceInquiry||has(actor,'manual')||
+         !has(actor,'vision')||occupiedBySchool.has(actor)||
+         sleeping.has(actor)||socialParticipants.has(actor)||
+         decisions.some(d=>d.actor===actor))continue;
+      const room=currentRoom(actor);
+      if(room===null)continue;
+      const seen=new Set(observations(actor).filter(o=>
+        o.kind==='inspected_object').map(o=>o.target));
+      const object=visibleFragiles(room).filter(id=>!seen.has(id))
+        .sort((a,b)=>a-b)[0];
+      if(object===undefined)continue;
+      const action:Command={type:'inspect_object',actor,target:object};
+      const result=execute(action);
+      decisions.push({actor,action,result});
     }
 
     // A curious experimenter can apply a genuinely learned pattern.

@@ -82,7 +82,7 @@ function remapCommand(command: Command, ids: Map<number, number>): Command {
     case 'eat_meal': return { ...command, actor: at(command.actor) };
     case 'intend_visit': return {...command,actor:at(command.actor),destination:at(command.destination)};
     case 'cancel_intention': case 'intend_study': return {...command,actor:at(command.actor)};
-    case 'intend_investigate': return {...command,actor:at(command.actor),object:at(command.object)};
+    case 'intend_investigate': case 'intend_inquire': return {...command,actor:at(command.actor),object:at(command.object)};
     case 'chat': case 'share_house_points':return {...command,
       actor:at(command.actor),listener:at(command.listener)};
     case 'decide_house_points':return {...command,actor:at(command.actor),
@@ -101,10 +101,10 @@ function remapCommand(command: Command, ids: Map<number, number>): Command {
 function canonicalize(value: unknown, idToKey: Map<number, string>): unknown {
   const entityFields = new Set([
     'actor', 'listener', 'requester', 'helper', 'teacher', 'culprit', 'object',
-    'target', 'door', 'from', 'to', 'room', 'destination', 'source', 'observer', 'partner', 'promisor', 'beneficiary', 'pupil', 'speaker', 'announcer'
+    'target', 'door', 'from', 'to', 'room', 'destination', 'source', 'observer', 'partner', 'promisor', 'beneficiary', 'pupil', 'speaker', 'announcer', 'questioned'
   ]);
   function recur(input: unknown, parent?: string): unknown {
-    if (Array.isArray(input)) return input.map(x => recur(x));
+    if (Array.isArray(input)) return input.map(x => recur(x, parent));
     if (input !== null && typeof input === 'object') {
       return Object.fromEntries(Object.entries(input).map(([key, item]) =>
         [key, recur(item, key)]));
