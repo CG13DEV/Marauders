@@ -36,8 +36,12 @@ export function traverseActorJourney(
   return followPhysicalPassages({
     actor,startingRoom:from,destination:to,
     exits:room=>world.knownExits(actor,room),
-    nextRoom:(a,b,exits)=>nextWeightedRoom(a,b,exits,
-      (x,y)=>world.passageMinutes(actor,x,y)),
+    nextRoom:(room,_goal,exits)=>{
+      const i=cachedRoute.rooms.indexOf(room);
+      if(i<0||i>=cachedRoute.rooms.length-1)return null;
+      const next=cachedRoute.rooms[i+1]!;
+      return exits(room).includes(next)?next:null;
+    },
     passageAction:world.passageAction,
     currentRoom:world.currentRoom,
     execute:world.execute,
