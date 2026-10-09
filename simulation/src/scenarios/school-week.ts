@@ -14,8 +14,8 @@ import {
 import {cohortSize,dormGroupFor,RESEARCH_DORM_CAPACITY,
   RESEARCH_SCHOOL_POPULATION} from './school-population.ts';
 import {planFoundationTimetable,FOUNDATION_PROFILE,FOUNDATION_SUBJECTS,
-  FOUNDATION_STARTS,FOUNDATION_ROOM_CAPACITY,FOUNDATION_TEACHER_LIMIT,
-  type FoundationSubject,type FoundationTeacher,type FoundationSpace,
+  FOUNDATION_ROOM_CAPACITY,FOUNDATION_TEACHER_LIMIT,
+  type FoundationTeacher,type FoundationSpace,
   type FoundationAssignment,weeklyFoundationSlots} from './foundation-timetable.ts';
 
 export { HOUSES, SUBJECTS, ELECTIVES } from './curriculum.ts';
