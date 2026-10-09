@@ -42,6 +42,8 @@ export type SchedulerContext = {
   exits(room: EntityId): EntityId[];
   knownExits(actor:EntityId,room:EntityId):EntityId[];
   passageMinutes(actor:EntityId,from:EntityId,to:EntityId):number|null;
+  planActorRoute(actor:EntityId,from:EntityId,to:EntityId):
+    import('./weighted-navigation.ts').WeightedRoute|null;
   usesUnifiedTravel(actor:EntityId):boolean;
   execute(command: Command): CommandResult;
   currentRoom(actor: EntityId): EntityId | null;
@@ -82,7 +84,7 @@ export type SchedulerContext = {
 export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
   const {
     advanceClock, actors, has, visibleFragiles, passageAction,
-    exits, knownExits, passageMinutes, usesUnifiedTravel,
+    exits, knownExits, passageMinutes, planActorRoute, usesUnifiedTravel,
     execute, currentRoom, occupants, canAnswerWitnessQuestion,observations, assessment,
     trustOf, knowledgeGaps, pendingTutoring, attemptedTutors, searches,
     timetables, routines, dailyPlans, meals, conversations, rests,
@@ -106,7 +108,8 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
     const socialParticipants = new Set<EntityId>();
     const sleeping = new Set<EntityId>();
     const promisePriorities = new Set<EntityId>();
-    const travelWorld={knownExits,passageMinutes,passageAction,currentRoom,execute};
+    const travelWorld={knownExits,passageMinutes,planActorRoute,
+      passageAction,currentRoom,execute};
     const travelTime=(actor:number,from:number,to:number):number|null=>
       usesUnifiedTravel(actor)
         ?actorJourneyDuration(travelWorld,actor,from,to)
