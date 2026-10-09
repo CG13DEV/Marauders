@@ -29,6 +29,10 @@ export function actorNextRoom(world:Pick<ActorTravelWorld,
 export function traverseActorJourney(
   world:ActorTravelWorld,actor:number,from:number,to:number
 ):MicroStep[]{
+  const cachedRoute=shortestWeightedRoute(from,to,
+    room=>world.knownExits(actor,room),
+    (a,b)=>world.passageMinutes(actor,a,b));
+  if(!cachedRoute)return [];
   return followPhysicalPassages({
     actor,startingRoom:from,destination:to,
     exits:room=>world.knownExits(actor,room),
