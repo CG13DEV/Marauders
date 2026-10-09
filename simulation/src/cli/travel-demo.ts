@@ -47,11 +47,21 @@ function run(travel:'legacy'|'micro-28'){
     verifiedTravelActions,multiPassageTicks
   };
 }
+const baseline=run('legacy');
+const optIn=run('micro-28');
+const served=(x:ReturnType<typeof run>)=>
+  Number(x.visitedSchoolBlocks.on_time)+
+  Number(x.visitedSchoolBlocks.late)+
+  Number(x.visitedSchoolBlocks.missed);
+if(served(baseline)!==served(optIn)||
+   Number(optIn.visitedSchoolBlocks.on_time)<=Number(baseline.visitedSchoolBlocks.on_time)||
+   Number(optIn.visitedSchoolBlocks.late)>Number(baseline.visitedSchoolBlocks.late)||
+   Number(optIn.visitedSchoolBlocks.missed)>Number(baseline.visitedSchoolBlocks.missed))
+  throw Error('Granular school traversal did not improve attendance without hiding missed lessons');
 console.log(JSON.stringify({
   experiment:28,
   assumptions:{planningTickMinutes:10,microPassageMinutes:MICRO_PASSAGE_MINUTES,
     microPathCanCrossClosedDoorAutomatically:false,
     attendanceResolutionMinutes:10},
-  baseline:run('legacy'),
-  optIn:run('micro-28')
+  baseline,optIn
 },null,2));
