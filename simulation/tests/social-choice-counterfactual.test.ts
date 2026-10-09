@@ -31,3 +31,28 @@ test('31.4 kept promise with the same future opportunity favors contact',()=>{
   assert.deepEqual(a.outcome.chattedWith,['friend']);
   assert.equal(b.outcome.leftGallery,true);
 });
+
+test('31.4 neither absence nor an unmade promise creates imagined grievance',()=>{
+  const input={friendTrust:'neutral' as const,companionPresent:false};
+  const unwitnessed=runSocialChoiceFork({...input,experience:'both_absent'});
+  assert.equal(unwitnessed.opportunity.meetingStatus,'expired');
+  assert.equal(unwitnessed.outcome.brokenPromiseRemembered,false);
+  assert.deepEqual(unwitnessed.outcome.chattedWith,['friend']);
+  const unpromised=runSocialChoiceFork({...input,
+    experience:'no_promise',friendPresent:false});
+  assert.equal(unpromised.outcome.leftGallery,false);
+  assert.equal(unpromised.outcome.brokenPromiseRemembered,false);
+});
+test('31.4 social choices are subordinate to player control and classes',()=>{
+  for(const mode of ['manual','lesson'] as const){
+    const result=runSocialChoiceFork({experience:'waited',friendTrust:'neutral',
+      companionPresent:true,[mode]:true});
+    assert.deepEqual(result.outcome.chattedWith,[]);
+    assert.equal(result.outcome.leftGallery,false);
+  }
+});
+test('31.4 fixed initial conditions repeat deterministically',()=>{
+  const input={experience:'waited' as const,friendTrust:'neutral' as const,
+    companionPresent:false};
+  assert.deepEqual(runSocialChoiceFork(input),runSocialChoiceFork(input));
+});
