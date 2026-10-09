@@ -74,7 +74,10 @@ test('caretaker cannot infer a distant wrong from an unsignalled cat sighting',(
   w.configurePatrol(cat,'animal',[corridor,office],filch,office);
   w.execute({type:'break_object',actor:pupil,target:cup});
   assert.equal(w.patrolState(filch)?.search,undefined);
-  assert.equal(w.observations(filch).length,0);
+  // A crash may be heard in an adjacent corridor, but hearing is NOT an
+  // eyewitness identification and cannot substitute for the cat's alert.
+  assert.equal(w.observations(filch).some(o=>o.kind==='witnessed_breakage'),false);
+  assert.equal(w.beliefs(filch).length,0);
   assert.equal(w.execute({type:'signal_incident',actor:cat,listener:filch}).ok,false);
   assert.equal(w.patrolState(filch)?.search,undefined);
 });
