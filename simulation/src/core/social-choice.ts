@@ -6,6 +6,7 @@
 import type {CommitmentMemory} from './social-commitments.ts';
 import type {Trust} from './cognition.ts';
 import {livedMischiefMotive} from './mischief.ts';
+import {latestPersonalOutcome} from './personal-outcomes.ts';
 
 export type SocialResponse =
   | {kind:'chat';listener:number;reason:'reconnect'|'other_company'|'habit'}
@@ -48,7 +49,8 @@ export function chooseSocialResponse(input:{
   // A personally recorded successful meeting is a concrete reason to speak
   // again, but neither friendship nor another person's mood is inferred.
   const reunited=[...history].reverse().find(m=>m.kind==='met'&&
-    local.includes(m.partner)&&trust(m.partner)!=='distrusted');
+    local.includes(m.partner)&&trust(m.partner)!=='distrusted'&&
+    latestPersonalOutcome(history,m.partner)?.kind==='met');
   if(reunited)return {kind:'chat',listener:reunited.partner,reason:'habit'};
   const other=alternatives()[0];
   return other===undefined?{kind:'idle',reason:'no_opportunity'}

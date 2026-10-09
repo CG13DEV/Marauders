@@ -3,6 +3,7 @@
  * No global event log or authoritative meeting status enters this policy.
  */
 import type {CommitmentMemory} from './social-commitments.ts';
+import {unresolvedPersonalAbsence} from './personal-outcomes.ts';
 
 export type MischiefDisposition='reckless'|'cautious'|'reactive';
 export type LivedMotive={kind:'unreconciled_absence';partner:number;meetingId:number};
@@ -15,16 +16,9 @@ export type LivedMotive={kind:'unreconciled_absence';partner:number;meetingId:nu
 export function livedMischiefMotive(
   history:readonly CommitmentMemory[],minute:number
 ):LivedMotive|null{
-  for(let i=history.length-1;i>=0;i--){
-    const memory=history[i]!;
-    if(memory.kind!=='waited_alone' || memory.minute>minute ||
-      minute-memory.minute>180)continue;
-    if(history.slice(i+1).some(later=>
-      later.partner===memory.partner && later.kind==='met'))continue;
-    return {kind:'unreconciled_absence',partner:memory.partner,
-      meetingId:memory.meetingId};
-  }
-  return null;
+  const memory=unresolvedPersonalAbsence(history,minute,180);
+  return memory?{kind:'unreconciled_absence',partner:memory.partner,
+    meetingId:memory.meetingId}:null;
 }
 
 export function chooseMischiefTarget(input:{
