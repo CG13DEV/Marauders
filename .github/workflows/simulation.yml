@@ -46,3 +46,4 @@ jobs:
       - run: npm run evidence-goals-demo
       - run: npm run population-demo -- 144
       - run: npm run foundation-demo -- 144
+      - run: npm run travel-demo -- 144
