@@ -607,6 +607,7 @@ export function createSimulation() {
           typeof plan.intentionPlanning !== 'boolean') ||
         (plan.evidenceInquiry !== undefined &&
           typeof plan.evidenceInquiry !== 'boolean') ||
+        (plan.socialChoice!==undefined && plan.socialChoice!=='reflective') ||
         (plan.mischief !== undefined &&
           plan.mischief!=='reckless' && plan.mischief!=='cautious' &&
           plan.mischief!=='reactive') ||
