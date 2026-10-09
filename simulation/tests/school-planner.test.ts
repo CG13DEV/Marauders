@@ -135,3 +135,49 @@ test('#30.6: cached weighted school estimate matches legacy search without expos
   assert.equal(nextWeightedSchoolJourney([],510,1,connections,passage,
     10,()=>{throw Error('No lesson should not request a route');}),null);
 });
+
+
+test('#30.7: weighted meal feasibility avoids public BFS for rejected candidates',()=>{
+  const publicExits=():number[]=>{
+    throw Error('A rejected personal meal route must not enumerate the public graph');
+  };
+  // 07:50: breakfast can be reached, but returning for class would be late.
+  const classAtNine={...lesson(3),startsAt:540,endsAt:590};
+  const blocked=feasibleMealJourney(470,1,2,[],classAtNine,publicExits,
+    (from,to)=>from===2&&to===3?70:10);
+  assert.equal(blocked,null);
+  // At night all serving windows are too far away regardless of topology.
+  assert.equal(feasibleMealJourney(100,1,2,[],null,publicExits,
+    ()=>10),null);
+  // A personally unreachable dining room must not trigger a public BFS.
+  assert.equal(feasibleMealJourney(480,1,2,[],null,publicExits,
+    ()=>null),null);
+});
+
+test('#30.7: weighted meal still preserves public hop metadata when selected',()=>{
+  const publicGraph=new Map<number,number[]>([
+    [1,[2]],[2,[1,3]],[3,[2]]
+  ]);
+  let traversals=0;
+  const exits=(room:number)=>{
+    traversals++;
+    return publicGraph.get(room)??[];
+  };
+  // The actor knows a direct personal shortcut (10min), but legacy reporting
+  // returns two PUBLIC hops. This public metadata must remain stable.
+  const weighted=feasibleMealJourney(470,1,3,[],null,exits,()=>10);
+  assert.equal(weighted?.kind,'breakfast');
+  assert.equal(weighted?.eatingAt,480);
+  assert.equal(weighted?.hops,2);
+  assert.ok(traversals>0);
+  // An isolated dining room reached by a personally known passage keeps the
+  // existing cost-to-tick fallback if no public hops exist.
+  const isolated=feasibleMealJourney(470,1,99,[],null,
+    (room)=>publicGraph.get(room)??[],()=>4);
+  assert.equal(isolated?.hops,1);
+  // Unweighted legacy callers retain their original public shortest path.
+  const legacy=feasibleMealJourney(470,1,3,[],null,
+    (room)=>publicGraph.get(room)??[]);
+  assert.equal(legacy?.hops,2);
+  assert.equal(legacy?.eatingAt,500);
+});
