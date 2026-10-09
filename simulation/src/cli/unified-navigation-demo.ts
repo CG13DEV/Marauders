@@ -55,3 +55,11 @@ console.log(JSON.stringify({
 },null,2));
 if(!ticksWithMultiMovement||!moves||!patrolMoves)
   throw Error('Unified physics must produce real multi-passage and patrol movement');
+// Diagnostic bookkeeping is validated separately from authoritative gameplay.
+if(process.env.MARAUDERS_SCHEDULER_PROFILE==='1'){
+  const profile=s.world.schedulerProfile();
+  if(profile.phases.length!==19 || profile.phases.some(p=>p.calls!==ticks))
+    throw Error('Scheduler phase profile must cover every phase on every tick');
+  if(profile.commands.calls<moves)
+    throw Error('Scheduler profile must account for physical movement commands');
+}
