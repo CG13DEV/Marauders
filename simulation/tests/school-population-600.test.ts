@@ -4,7 +4,7 @@ import {createSchoolWeek,reportSchoolWeek} from '../src/scenarios/school-week.ts
 import {HOUSES} from '../src/scenarios/curriculum.ts';
 import {RESEARCH_SCHOOL_POPULATION,RESEARCH_DORM_CAPACITY,
   cohortSize,populationSummary} from '../src/scenarios/school-population.ts';
-import {createPersistentSimulation,restoreCheckpoint}
+import {createPersistentSimulation,restoreCheckpoint,restoreSimulation}
   from '../src/core/persistence.ts';
 
 const research=(world=createPersistentSimulation())=>
@@ -91,6 +91,16 @@ test('real 600-person world advances, attends classes and restores a V2 checkpoi
   assert.deepEqual(cp.captureRuntime(),world.captureRuntime());
   for(let i=0;i<6;i++){world.step();cp.step();}
   assert.deepEqual(cp.captureRuntime(),world.captureRuntime());
+});
+
+test('600-person V1 journal replays the exact school and carries it forward',()=>{
+  const world=createPersistentSimulation();
+  research(world);
+  for(let i=0;i<4;i++)world.step();
+  const replay=restoreSimulation(world.snapshot());
+  assert.deepEqual(replay.captureRuntime(),world.captureRuntime());
+  for(let i=0;i<2;i++){world.step();replay.step();}
+  assert.deepEqual(replay.captureRuntime(),world.captureRuntime());
 });
 
 test('old 84-pupil teaching fixture is unchanged when new scale is not requested',()=>{
