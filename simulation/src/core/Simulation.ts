@@ -13,6 +13,7 @@ import { validateMovement, type MoveRejection } from './movement-rules.ts';
 import { perceiveCrash } from './perception-rules.ts';
 import { copyClaim, type Claim, type Belief } from './beliefs.ts';
 import { assessReports, type Assessment, type Trust } from './cognition.ts';
+import {relationshipFromExperience} from './relationship-evidence.ts';
 
 import { createRuntimeStores } from './runtime-stores.ts';
 import { isHouseId, calculatePoints, respondToNews,
@@ -508,11 +509,26 @@ export function createSimulation() {
     if (value === 'distrusted') addComponent(ecs, observer, Distrusts(source));
   }
 
-  function trustOf(observer: EntityId, source: EntityId): Trust {
+  /** The explicit ECS relation is authoritative; never store a derived value. */
+  function explicitTrustOf(observer: EntityId, source: EntityId): Trust {
     if (!isCharacter(observer) || !isCharacter(source)) return 'neutral';
     if (hasComponent(ecs, observer, Trusts(source))) return 'trusted';
     if (hasComponent(ecs, observer, Distrusts(source))) return 'distrusted';
     return 'neutral';
+  }
+
+  function relationshipOf(observer:EntityId,source:EntityId) {
+    const baseline=explicitTrustOf(observer,source);
+    if(!isCharacter(observer)||!isCharacter(source)||
+       !dailyPlans.get(observer)?.relationshipLearning)
+      return {trust:baseline,basis:'explicit' as const};
+    return relationshipFromExperience(baseline,
+      commitmentMemories.get(observer)??[],source);
+  }
+
+  /** This projection affects only opt-in observers, never their partners. */
+  function trustOf(observer:EntityId,source:EntityId):Trust{
+    return relationshipOf(observer,source).trust;
   }
 
   function setInquisitive(character: EntityId, enabled: boolean): void {
@@ -608,6 +624,8 @@ export function createSimulation() {
         (plan.evidenceInquiry !== undefined &&
           typeof plan.evidenceInquiry !== 'boolean') ||
         (plan.socialChoice!==undefined && plan.socialChoice!=='reflective') ||
+        (plan.relationshipLearning!==undefined &&
+          typeof plan.relationshipLearning!=='boolean') ||
         (plan.mischief !== undefined &&
           plan.mischief!=='reckless' && plan.mischief!=='cautious' &&
           plan.mischief!=='reactive') ||
@@ -1975,7 +1993,7 @@ export function createSimulation() {
     for (const receiver of characters) {
       for (const other of characters) {
         if (receiver === other) continue;
-        const relation = trustOf(receiver, other);
+        const relation = explicitTrustOf(receiver, other);
         if (relation !== 'neutral') trust.push([receiver, other, relation]);
         if (hasComponent(ecs, receiver, HelpedBy(other))) helped.push([receiver, other]);
       }
@@ -2255,7 +2273,7 @@ export function createSimulation() {
     registerHouse, grantPointAuthority, houseOf, housePoints, pointHistory,
     knownPointNews, pointReactions,
     captureRuntime, hydrateRuntime,
-    setTrust, trustOf, setInquisitive, setSocialInvestigator, setGuarded, setRoutine, assessment,
+    setTrust, trustOf, explicitTrustOf, relationshipOf, setInquisitive, setSocialInvestigator, setGuarded, setRoutine, assessment,
     setTimetable, setManualControl, attendance, learningDebt, knowledgeGaps,
     setDailyLife,setTravelMode,usesUnifiedTravel,
     mealHistory, conversationHistory, restHistory,

@@ -43,7 +43,8 @@
     "causality-demo": "node --experimental-strip-types src/cli/causality-demo.ts",
     "spontaneous-demo": "node --experimental-strip-types src/cli/spontaneous-demo.ts",
     "lived-motivation-demo": "node --experimental-strip-types src/cli/lived-motivation-demo.ts",
-    "social-choice-demo": "node --experimental-strip-types src/cli/social-choice-demo.ts"
+    "social-choice-demo": "node --experimental-strip-types src/cli/social-choice-demo.ts",
+    "relationship-evidence-demo": "node --experimental-strip-types src/cli/relationship-evidence-demo.ts"
   },
   "dependencies": {
     "bitecs": "0.4.0"
