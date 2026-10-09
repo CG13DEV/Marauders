@@ -37,7 +37,8 @@
     "foundation-demo": "node --experimental-strip-types src/cli/foundation-timetable-demo.ts",
     "travel-demo": "node --experimental-strip-types src/cli/travel-demo.ts",
     "weighted-passages-demo": "node --experimental-strip-types src/cli/weighted-passages-demo.ts",
-    "unified-demo": "node --experimental-strip-types src/cli/unified-navigation-demo.ts"
+    "unified-demo": "node --experimental-strip-types src/cli/unified-navigation-demo.ts",
+    "week-soak-demo": "node --experimental-strip-types src/cli/week-soak-demo.ts"
   },
   "dependencies": {
     "bitecs": "0.4.0"
