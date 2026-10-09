@@ -11,7 +11,7 @@ import {createSchoolWeek} from '../src/scenarios/school-week.ts';
 
 test('#29: more rooms can be faster than fewer rooms',()=>{
   const cost=new Map(['1:2','2:4'].map(k=>[k,8]));
-  cost.set('1:3',2);cost.set('3:5',2);cost.set('5:4',2);
+  cost.set('1:3',2);cost.set('3:5',2);cost.set('4:5',2);
   const graph=new Map([[1,[2,3]],[2,[1,4]],[3,[1,5]],[5,[3,4]],[4,[2,5]]]);
   const minutes=(a:number,b:number)=>cost.get(Math.min(a,b)+':'+Math.max(a,b))??null;
   const exits=(id:number)=>graph.get(id)??[];
