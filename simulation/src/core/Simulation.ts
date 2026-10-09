@@ -83,6 +83,7 @@ export type Command =
   | { type: 'cancel_intention'; actor:EntityId; intentionId:number }
   | { type: 'intend_study'; actor:EntityId; spell:SpellId }
   | { type: 'intend_investigate'; actor:EntityId; object:EntityId }
+  | { type: 'intend_inquire'; actor:EntityId; object:EntityId }
   | {type:'decide_house_points';actor:EntityId;pupil:EntityId;delta:number;
      reason:string;basis:PointBasis}
   | {type:'share_house_points';actor:EntityId;listener:EntityId;decisionId:number}
@@ -495,6 +496,9 @@ export function createSimulation() {
         (plan.leisureRoom !== undefined && !isRoom(plan.leisureRoom)) ||
         (plan.intentionPlanning !== undefined &&
           typeof plan.intentionPlanning !== 'boolean') ||
+        (plan.evidenceInquiry !== undefined &&
+          typeof plan.evidenceInquiry !== 'boolean') ||
+        (plan.evidenceInquiry===true && plan.intentionPlanning!==true) ||
         (plan.learningAppointments !== undefined &&
           typeof plan.learningAppointments !== 'boolean') ||
         (plan.socialInvitations !== undefined &&
@@ -521,7 +525,8 @@ export function createSimulation() {
     const duplicate=personal.find(g=>isOpenIntention(g)&&g.kind===details.kind &&
       (details.kind==='learn_concept'?g.spell===details.spell:
        details.kind==='attend_meeting'?g.meetingId===details.meetingId:
-       details.kind==='investigate'?g.object===details.object:
+       (details.kind==='investigate'||details.kind==='inquire')?
+         g.object===details.object:
        g.destination===details.destination));
     if(duplicate)return duplicate;
     if(personal.filter(isOpenIntention).length>=8)return null;
@@ -547,7 +552,8 @@ export function createSimulation() {
   }
 
   function intentionHistory(actor:EntityId):PersonalIntention[]{
-    return (intentions.get(actor)??[]).map(goal=>({...goal}));
+    return (intentions.get(actor)??[]).map(goal=>({...goal,
+      ...(goal.questioned===undefined?{}:{questioned:[...goal.questioned]})}));
   }
   function needsOf(actor:EntityId):BodilyNeeds|null{
     const v=bodilyNeeds.get(actor);return v?{...v}:null;
@@ -1078,6 +1084,32 @@ export function createSimulation() {
         object:command.object
       });
       if(!goal)return {ok:false,reason:'too_many_intentions',events:[]};
+      return {ok:true,events:[copyEvent(events.at(-1)!)]};
+    }
+    // #25: evidence -> a personal, time-bounded intention. No NPC may
+    // infer the culprit or remote object position from the world event log.
+    if(command.type==='intend_inquire'){
+      if(!isCharacter(command.actor)||
+         !dailyPlans.get(command.actor)?.intentionPlanning)
+        return {ok:false,reason:'no_intention_planner',events:[]};
+      const room=currentRoom(command.actor);
+      if(room===null||!hasComponent(ecs,command.actor,Hearing)||
+         !hasComponent(ecs,command.object,Fragile)||
+         locationOf(command.object)!==room ||
+         !(observationsByCharacter.get(command.actor)??[]).some(o=>
+           o.kind==='inspected_object'&&o.target===command.object&&o.broken))
+        return {ok:false,reason:'no_local_evidence',events:[]};
+      // A finished or expired investigation of the same physical incident
+      // is not generated again on every ten-minute simulation tick.
+      if((intentions.get(command.actor)??[]).some(g=>
+         g.kind==='inquire'&&g.object===command.object))
+        return {ok:false,reason:'duplicate_intention',events:[]};
+      const goal=queueIntention(command.actor,{
+        kind:'inquire',object:command.object,destination:room,
+        importance:'casual',deadlineMinute:schoolTime(tick).absoluteMinute+180
+      });
+      if(!goal)return {ok:false,reason:'too_many_intentions',events:[]};
+      goal.questioned=[];
       return {ok:true,events:[copyEvent(events.at(-1)!)]};
     }
     if(command.type==='intend_visit'){
@@ -1705,7 +1737,8 @@ export function createSimulation() {
   function intentionEntries():[number,PersonalIntention[]][] {
     return [...intentions.entries()].filter(([,goals])=>goals.length>0)
       .map(([actor,goals]):[number,PersonalIntention[]]=>[
-        actor,goals.map(g=>({...g}))
+        actor,goals.map(g=>({...g,
+          ...(g.questioned===undefined?{}:{questioned:[...g.questioned]})}))
       ]);
   }
   function captureRuntime(): RuntimeSnapshot {
@@ -1930,9 +1963,13 @@ export function createSimulation() {
     intentions.clear();
     for(const id of Array.from(query(ecs,[Character]))) intentions.set(id,[]);
     for(const [actor,goals] of state.intentions??[]){
-      if(!isCharacter(actor)||goals.some(g=>!isRoom(g.destination)))
+      if(!isCharacter(actor)||goals.some(g=>!isRoom(g.destination)||
+         (g.kind==='inquire'&&(!hasComponent(ecs,g.object!,Fragile)||
+           !Array.isArray(g.questioned)||g.questioned.some(id=>!isCharacter(id))))||
+         (g.kind!=='inquire'&&g.questioned!==undefined)))
         throw new Error('Invalid checkpoint intention owner or destination');
-      intentions.set(actor,goals.map(g=>({...g})));
+      intentions.set(actor,goals.map(g=>({...g,
+        ...(g.questioned===undefined?{}:{questioned:[...g.questioned]})})));
     }
     bodilyNeeds.clear();
     for(const [actor,needs] of state.bodilyNeeds??[]){
