@@ -18,7 +18,13 @@ test('#27: a foundation timetable teaches the full 20 / 19 core blocks to each p
   assert.equal(s.foundationSpaces.length,13);
   assert.equal(s.foundationAssignments.length,156);
   assert.equal(s.professors.length,25);
-  assert.equal(s.sessions.length,352); // 196 upper-year legacy sessions + 156 foundation
+  assert.equal(s.sessions.length,352);
+  assert.equal(s.residents!.heads.gryffindor,
+    s.professors.find(t=>s.world.label(t.id).includes('Макгонагалл'))?.id);
+  assert.equal(s.residents!.heads.slytherin,
+    s.professors.find(t=>s.world.label(t.id).includes('Слизнорт'))?.id);
+  assert.match(s.world.label(s.residents!.ghostProfessor),/Биннс/);
+  assert.equal(s.world.needsOf(s.residents!.ghostProfessor),null); // 196 upper-year legacy sessions + 156 foundation
   for(const pupil of s.students.filter(p=>p.year<=2)){
     const personal=s.world.attendance(pupil.id);
     assert.equal(personal.length,pupil.year===1?20:19);
