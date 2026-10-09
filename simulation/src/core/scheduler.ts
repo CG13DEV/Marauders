@@ -21,6 +21,7 @@ import { advanceNeeds,chooseNeedOrIntention,pickIntention,isOpenIntention,
 } from './intentions.ts';
 import { decideInvestigation, type Assessment, type Trust } from './cognition.ts';
 import { chooseMischiefTarget, livedMischiefMotive } from './mischief.ts';
+import {arbitrateAutonomousAction} from './action-arbitration.ts';
 import {chooseSocialResponse} from './social-choice.ts';
 import { spellDefinitions, type SpellId, type LearningRecord } from './spellcraft.ts';
 import type { Belief } from './beliefs.ts';
@@ -361,34 +362,8 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
     }
 
     phase('invitation-replies');
-    // #31.2 [GAME]: first physical incident can originate from an actor's
-    // disposition and local opportunity, rather than a scenario command.
-    // Observe ONLY co-located objects and people. Never inspect event history,
-    // hidden witness minds or omniscient positions to make this choice.
-    // The ordinary validated break_object command remains authoritative.
-    for(const actor of actors('dailyLife')){
-      const plan=dailyPlans.get(actor);
-      if(!plan?.mischief || !has(actor,'vision') || has(actor,'manual') ||
-         occupiedBySchool.has(actor) || socialParticipants.has(actor) ||
-         decidedActors.has(actor) || promisePriorities.has(actor) ||
-         isSleepTime(minute) || upcomingFor(actor))continue;
-      const room=currentRoom(actor);
-      if(room===null || currentLesson(timetables.get(actor)?.records??[],minute))
-        continue;
-      const needs=bodilyNeeds.get(actor);
-      if(needs && (needs.hunger>=60 || needs.fatigue>=85))continue;
-      if((intentions.get(actor)??[]).some(isOpenIntention))continue;
-      const target=chooseMischiefTarget({
-        disposition:plan.mischief,
-        motive:livedMischiefMotive(commitmentMemories.get(actor)??[],minute),
-        intactObjects:intactFragiles(room),
-        bystanders:occupants(room).filter(other=>other!==actor)
-      });
-      if(target===null)continue;
-      const action:Command={type:'break_object',actor,target};
-      const result=execute(action);
-      recordDecision({actor,action,result});
-    }
+    // R3: both initiative policies now propose candidates in one later
+    // arbitration pass. Keep the historic phase marker for diagnostics.
     phase('mischief-initiative');
     // The same personal queue now admits the *causes* behind learning and
     // investigation. No goal is invented from someone else's private mind.
@@ -435,45 +410,58 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
     }
 
     phase('goal-generation');
-    // #31.4: choose ONE ordinary social action from firsthand memory,
-    // directional trust and currently available people, not a scripted plot.
-    // This occurs before routine wandering, but after lessons and commitments.
+    // R3: common gates first. Policies only propose, the arbitrator chooses
+    // exactly one voluntary local action. No hidden global knowledge enters.
     for(const actor of actors('dailyLife')){
       const plan=dailyPlans.get(actor);
-      if(plan?.socialChoice!=='reflective'||!isLeisure(minute)||
-         has(actor,'manual')||!has(actor,'hearing')||
-         occupiedBySchool.has(actor)||socialParticipants.has(actor)||
-         decidedActors.has(actor)||sleeping.has(actor)||
-         promisePriorities.has(actor)||upcomingFor(actor))continue;
+      if(!plan||(!plan.mischief&&plan.socialChoice!=='reflective')||
+        has(actor,'manual')||occupiedBySchool.has(actor)||
+        socialParticipants.has(actor)||decidedActors.has(actor)||
+        promisePriorities.has(actor)||sleeping.has(actor)||
+        isSleepTime(minute)||upcomingFor(actor))continue;
       const room=currentRoom(actor);
       if(room===null||currentLesson(timetables.get(actor)?.records??[],minute)||
-         (intentions.get(actor)??[]).some(isOpenIntention))continue;
+        (intentions.get(actor)??[]).some(isOpenIntention))continue;
       const needs=bodilyNeeds.get(actor);
       if(needs&&(needs.hunger>=60||needs.fatigue>=85))continue;
-      if(mealAt(minute)!==null||
-         talkedToday(conversations.get(actor)??[],dayOf(minute)))continue;
       const nearbyPeople=occupants(room).filter(other=>other!==actor);
-      const locals=nearbyPeople.filter(other=>
+      const canSocial=plan.socialChoice==='reflective'&&isLeisure(minute)&&
+        has(actor,'hearing')&&mealAt(minute)===null&&
+        !talkedToday(conversations.get(actor)??[],dayOf(minute));
+      const locals=canSocial?nearbyPeople.filter(other=>
         dailyPlans.has(other)&&has(other,'hearing')&&!has(other,'manual')&&
         !occupiedBySchool.has(other)&&!socialParticipants.has(other)&&
         !decidedActors.has(other)&&
-        !talkedToday(conversations.get(other)??[],dayOf(minute)));
-      const choice=chooseSocialResponse({
+        !talkedToday(conversations.get(other)??[],dayOf(minute))):[];
+      const social=canSocial?chooseSocialResponse({
         actor,minute,history:commitmentMemories.get(actor)??[],
         people:locals,nearbyPeople,trust:other=>trustOf(actor,other),
         knownExits:knownExits(actor,room)
-      });
-      if(choice.kind==='chat'){
-        const action:Command={type:'chat',actor,listener:choice.listener,
-          topic:plan.interest};
+      }):null;
+      const mischiefTarget=plan.mischief&&has(actor,'vision')
+        ?chooseMischiefTarget({
+          disposition:plan.mischief,
+          motive:livedMischiefMotive(commitmentMemories.get(actor)??[],minute),
+          intactObjects:intactFragiles(room),
+          bystanders:nearbyPeople
+        }):null;
+      const selected=arbitrateAutonomousAction({social,mischiefTarget});
+      if(!selected)continue;
+      if(selected.kind==='mischief'){
+        const action:Command={type:'break_object',actor,target:selected.target};
+        const result=execute(action);
+        recordDecision({actor,action,result});
+      }else if(selected.response.kind==='chat'){
+        const action:Command={type:'chat',actor,
+          listener:selected.response.listener,topic:plan.interest};
         const result=execute(action);
         recordDecision({actor,action,result});
         if(result.ok){
           socialParticipants.add(actor);
-          socialParticipants.add(choice.listener);
+          socialParticipants.add(selected.response.listener);
         }
-      }else if(choice.kind==='leave')
-        travelTo(actor,room,choice.destination);
+      }else if(selected.response.kind==='leave')
+        travelTo(actor,room,selected.response.destination);
     }
     // Opt-in intention arbitration. Scheduling, commitments and bodily needs
     // all compete through observed obligations, not a global RPG action score.
