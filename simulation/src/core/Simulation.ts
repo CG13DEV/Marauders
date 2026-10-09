@@ -1677,6 +1677,7 @@ export function createSimulation() {
           : { type: 'move', actor, destination: next };
       },
       exits: room => getRelationTargets(ecs, room, PassageTo),
+      knownExits,passageMinutes,
       canAnswerWitnessQuestion:actor=>patrolPlans.get(actor)?.kind!=='animal',
       execute, currentRoom, occupants, observations, assessment, trustOf, knowledgeGaps,
       pendingTutoring, attemptedTutors, searches, timetables, routines,
