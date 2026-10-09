@@ -398,3 +398,10 @@ At the end of the full-week model the opted-in population's **mean internal hung
 Calibrate the population's food/rest economics, generate personal goals from individual circumstances throughout the school year, add tangible food and actual sleep actions, then personal route knowledge and multiweek continuity.
 
 The source of truth for design remains the main repository `docs/` directory. This code is a small executable [GAME] model, not a statement of canon.
+
+
+## Expanded Hogwarts fixture (after #20)
+
+`createSchoolWeek(world, planning, social, rollout, 'expanded')` opts in the named Hogwarts population and offices while retaining the original 84-pupil + 12-professor timetable rollout. It adds **9 static non-timetable residents**, reuses the History of Magic lecturer as ghost Professor Binns (timetable intact, no hunger/sleep), and assigns four house heads to existing subject professors. New rooms include paired bathrooms on every modelled level (−1…7), Filch's office, Dumbledore's office, and an **unconnected** Room of Requirement. The latter is deliberately absent from `world.exits()` until a proper conditional-entry system is implemented. `room-of-requirement.ts` only validates the prerequisites for a future reveal; it does not open a door or teleport anyone. Expanded residents have stable keys but **no simulated ghost/animal physiology or autonomous patrols yet**.
+
+`createSchoolWeek()` without the fifth argument remains the experiment #20 baseline for reproducible seven-day comparisons. Run `npm test` and `npm run typecheck` to check both worlds.
