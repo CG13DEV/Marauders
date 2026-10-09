@@ -4,7 +4,8 @@
  */
 import type { EntityId, Command, CommandResult, WorldEvent, Observation } from './Simulation.ts';
 import { currentLesson, registerAttendance } from './school-time.ts';
-import { nextSchoolJourney, feasibleMealJourney, shortestHops } from './school-planner.ts';
+import { nextSchoolJourney, nextWeightedSchoolJourney,feasibleMealJourney, shortestHops } from './school-planner.ts';
+import {nextWeightedRoom} from './weighted-navigation.ts';
 import {followPhysicalPassages,MICRO_PASSAGE_MINUTES} from './physical-travel.ts';
 import { isActivePromise, personallyAvoids,
   type MeetingCommitment, type CommitmentMemory
@@ -37,6 +38,8 @@ export type SchedulerContext = {
   visibleFragiles(room: EntityId): EntityId[];
   passageAction(actor: EntityId, room: EntityId, next: EntityId): Command;
   exits(room: EntityId): EntityId[];
+  knownExits(actor:EntityId,room:EntityId):EntityId[];
+  passageMinutes(actor:EntityId,from:EntityId,to:EntityId):number|null;
   execute(command: Command): CommandResult;
   currentRoom(actor: EntityId): EntityId | null;
   occupants(room: EntityId): EntityId[];
@@ -76,7 +79,7 @@ export type SchedulerContext = {
 export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
   const {
     advanceClock, actors, has, visibleFragiles, passageAction,
-    exits, execute, currentRoom, occupants, canAnswerWitnessQuestion,observations, assessment,
+    exits, knownExits, passageMinutes, execute, currentRoom, occupants, canAnswerWitnessQuestion,observations, assessment,
     trustOf, knowledgeGaps, pendingTutoring, attemptedTutors, searches,
     timetables, routines, dailyPlans, meals, conversations, rests,
     commitments, commitmentMemories, intentions, bodilyNeeds,toiletNeeds,
@@ -117,20 +120,31 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
 
     function estimateSchoolJourney(actor:EntityId,records:readonly import('./school-time.ts').AttendanceRecord[],
       room:EntityId){
-      const micro=dailyPlans.get(actor)?.schoolTravel==='micro-28';
+      const travel=dailyPlans.get(actor)?.schoolTravel;
+      if(travel==='weighted-29')return nextWeightedSchoolJourney(
+        records,minute,room,
+        location=>knownExits(actor,location),
+        (a,b)=>passageMinutes(actor,a,b));
       return nextSchoolJourney(records,minute,room,exits,10,
-        micro?MICRO_PASSAGE_MINUTES:10);
+        travel==='micro-28'?MICRO_PASSAGE_MINUTES:10);
     }
 
     function travelTowardLesson(actor: EntityId, room: EntityId, goal: EntityId): void {
       if (room === goal) return;
-      if(dailyPlans.get(actor)?.schoolTravel==='micro-28'){
+      const travel=dailyPlans.get(actor)?.schoolTravel;
+      if(travel==='micro-28'||travel==='weighted-29'){
         // Each intermediate edge (and closed door) executes through the
-        // authoritative world command handler. One actor gets only ten
-        // in-world minutes of movement, never an instant teleport.
+        // authoritative world command handler, never a teleport.
+        const actorExits=(location:number)=>travel==='weighted-29'
+          ?knownExits(actor,location):exits(location);
+        const cost=(a:number,b:number)=>passageMinutes(actor,a,b);
+        const next=(a:number,b:number,edgeExits:(room:number)=>readonly number[])=>
+          travel==='weighted-29'?nextWeightedRoom(a,b,edgeExits,cost):
+            nextRoomOnRoute(a,b,edgeExits);
         for(const {action,result} of followPhysicalPassages({
           actor,startingRoom:room,destination:goal,
-          exits,nextRoom:nextRoomOnRoute,passageAction,currentRoom,execute
+          exits:actorExits,nextRoom:next,passageAction,currentRoom,execute,
+          ...(travel==='weighted-29'?{passageMinutes:cost}:{})
         }))decisions.push({actor,action,result});
         return;
       }
