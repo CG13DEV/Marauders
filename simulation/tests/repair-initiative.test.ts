@@ -39,8 +39,8 @@ test('31.8: nobody can fabricate an apology without personally missing a promise
   const two=world.character('two','Two',room);
   const offer=world.execute({type:'offer_meeting',actor:one,listener:two,
     room,atMinute:1180,purpose:'explore',repairOfMeetingId:1});
-  assert.deepEqual({ok:offer.ok,reason:offer.reason},
-    {ok:false,reason:'no_personal_lapse_to_repair'});
+  assert.equal(offer.ok,false);
+  if(!offer.ok) assert.equal(offer.reason,'no_personal_lapse_to_repair');
   assert.equal(world.meetingLedger().length,0);
   assert.equal(world.promiseHistory(two).length,0);
 });
