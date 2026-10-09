@@ -11,7 +11,8 @@ import {createPersistentSimulation,restoreCheckpoint} from '../core/persistence.
 import type {Trust} from '../core/cognition.ts';
 import {latestPersonalOutcome} from '../core/personal-outcomes.ts';
 
-export type SocialWorldVariant='mutual'|'reserved_reply'|'no_invitations'|'separated';
+export type SocialWorldVariant='mutual'|'reserved_reply'|'no_invitations'|'separated'|
+  'lesson_first'|'promise_first';
 export type TraceEntry={
   minute:number;day:number;actor:string;action:string;
   target?:string;ok:boolean;
@@ -52,6 +53,16 @@ export function runOpenSocialWorld(
           socialRoom:library,leisureRoom:library}:{})
     });
   });
+  // #31.7: The competing academic duty exists from world creation.
+  // No NPC is ordered to leave, break a promise or repair a relationship.
+  if(variant==='lesson_first'||variant==='promise_first'){
+    const james=ids[0]!;
+    const original={...defaultPlan,
+      ...(variant==='promise_first'?{commitmentPriority:'promise_first' as const}:{})};
+    world.setDailyLife(james,original);
+    world.setTimetable(james,[{id:'evening-study',subject:'Supervised study',
+      room:library,startsAt:2610,endsAt:2670}], 'lesson_first');
+  }
   // Fixed initial relationship configuration, not a pre-seeded experience.
   world.setTrust(ids[0]!,ids[1]!,'trusted');
   world.setTrust(ids[1]!,ids[0]!,'trusted');
@@ -63,6 +74,17 @@ export function runOpenSocialWorld(
     memories:ids.reduce((n,id)=>n+world.promiseHistory(id).length,0)
   };
   const trace:TraceEntry[]=[];
+  const conflictSnapshots: Array<{
+    minute:number;
+    firstMeetingStatus:string|null;
+    jamesRoom:string;
+    siriusRoom:string;
+    jamesTrust:Trust;
+    siriusTrust:Trust;
+    jamesOutcome:string|null;
+    siriusOutcome:string|null;
+    lessonStatus:string|null;
+  }>=[];
   const totalTicks=days*144;
   for(let i=0;i<totalTicks;i++){
     const before=ids.map((actor)=>({
@@ -79,6 +101,20 @@ export function runOpenSocialWorld(
     }));
     const decisions=world.step();
     const minute=world.clock().absoluteMinute;
+    if(minute===2640||minute===4070){
+      const [james,sirius]=ids;
+      conflictSnapshots.push({
+        minute,
+        firstMeetingStatus:world.meetingLedger()[0]?.status??null,
+        jamesRoom:world.currentRoom(james!)===library?'library':'common_or_corridor',
+        siriusRoom:world.currentRoom(sirius!)===common?'common':'elsewhere',
+        jamesTrust:world.trustOf(james!,sirius!),
+        siriusTrust:world.trustOf(sirius!,james!),
+        jamesOutcome:latestPersonalOutcome(world.promiseHistory(james!),sirius!)?.kind??null,
+        siriusOutcome:latestPersonalOutcome(world.promiseHistory(sirius!),james!)?.kind??null,
+        lessonStatus:world.attendance(james!)[0]?.status??null
+      });
+    }
     for(const decision of decisions){
       if(!decision.result.ok)throw Error('Unexpected invalid autonomous action: '+
         decision.action.type+':'+decision.result.reason);
@@ -139,7 +175,7 @@ export function runOpenSocialWorld(
   };
   return {
     experiment:'31.6',classification:'[GAME]' as const,variant,days,
-    initial,trace,events,summary,checkpoint,
+    initial,trace,events,summary,checkpoint,conflictSnapshots,
     interpretation:'Trace records pre-tick personal inputs and actual autonomous actions; it does not claim to reveal a hidden thought process.'
   };
 }
