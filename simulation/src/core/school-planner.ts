@@ -107,7 +107,9 @@ export function feasibleMealJourney(
   diningRoom: number,
   meals: readonly MealMemory[],
   nextLesson: Lesson | null,
-  exits: Exits
+  exits: Exits,
+  /** Optional personally known weighted route duration, used in #30. */
+  travelMinutes?:(from:number,to:number)=>number|null
 ): PlannedMeal | null {
   const day=dayOf(minute);
   for (const meal of MEALS) {
@@ -115,24 +117,36 @@ export function feasibleMealJourney(
     const begin=day*1440+meal.start;
     const finish=day*1440+meal.end;
     const hops=shortestHops(room,diningRoom,exits);
-    if(hops===null) continue;
-    // Earliest we can eat if we start travelling right now (move once/tick).
-    const eatingAt=Math.max(begin,minute+hops*MINUTES_PER_TICK);
+    // A personally known secret route can connect rooms that are disconnected
+    // in the public map; don't reject it before evaluating personal knowledge.
+    const approachCost=travelMinutes?travelMinutes(room,diningRoom):
+      hops===null?null:hops*MINUTES_PER_TICK;
+    if(approachCost===null)continue;
+    // School time remains quantized to ticks. Arrival is conservatively
+    // rounded UP to the next attendance tick; never invent an early meal.
+    const approachTicks=travelMinutes
+      ?Math.ceil(approachCost/MINUTES_PER_TICK)*MINUTES_PER_TICK:approachCost;
+    const eatingAt=Math.max(begin,minute+approachTicks);
     if (eatingAt>=finish) continue;
     // Don't go across the castle hours early; instead start a just-in-time trip.
-    const approachAt=begin - hops*MINUTES_PER_TICK;
+    const approachAt=begin-approachTicks;
     if(minute<approachAt || minute>=finish) continue;
 
     if(nextLesson && minute<nextLesson.endsAt) {
       // The session has already started: leaving is never an implicit choice.
       if(minute>=nextLesson.startsAt) continue;
       const afterMealHops=shortestHops(diningRoom,nextLesson.room,exits);
-      if(afterMealHops===null) continue;
-      // The meal itself costs one subsequent tick, even when already at table.
+      const nextCost=travelMinutes?travelMinutes(diningRoom,nextLesson.room):
+        afterMealHops===null?null:afterMealHops*MINUTES_PER_TICK;
+      if(nextCost===null)continue;
+      // Eating consumes a subsequent tick; rounding never permits magical
+      // fractional arrival at a ten-minute academic boundary.
       const freeToMove=eatingAt+MINUTES_PER_TICK;
-      if(freeToMove+afterMealHops*MINUTES_PER_TICK>nextLesson.startsAt) continue;
+      if(freeToMove+Math.ceil(nextCost/MINUTES_PER_TICK)*MINUTES_PER_TICK
+         >nextLesson.startsAt)continue;
     }
-    return {kind:meal.kind,eatingAt,hops,feasible:true};
+    return {kind:meal.kind,eatingAt,
+      hops:hops??Math.ceil(approachCost/MINUTES_PER_TICK),feasible:true};
   }
   return null;
 }

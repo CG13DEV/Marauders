@@ -24,6 +24,8 @@ import {
 } from './social-commitments.ts';
 import { runWorldStep, type StepDecision } from './scheduler.ts';
 import { nextRoomOnRoute } from './navigation.ts';
+import {actorNextRoom,traverseActorJourney} from './actor-navigation.ts';
+import {shortestWeightedRoute,type WeightedRoute} from './weighted-navigation.ts';
 import {nearbySearchRooms,nextWitnessInquiry,type ToiletNeed,type PatrolKind,type PatrolPlan} from './resident-life.ts';
 import { INITIAL_NEEDS, afterMeal, isOpenIntention,
   type BodilyNeeds,type PersonalIntention,type IntentionImportance,
@@ -231,6 +233,18 @@ export function createSimulation() {
     a:number;b:number;minutes:number;hidden:boolean
   }>();
   const knownHidden=new Map<number,Set<string>>();
+  // World-local, derived memo. Routes are shared ONLY when the character's
+  // known hidden links are identical. Topology mutations invalidate all plans.
+  const routeMemo=new Map<string,WeightedRoute|null>();
+  // #30: explicit, actor-local navigation policy; no global all-knowing map.
+  const unifiedTravel=new Set<number>();
+  function setTravelMode(actor:EntityId,mode:'unified-30'|null):void{
+    if(!isCharacter(actor))throw Error('Navigation mode requires a character');
+    if(mode!=='unified-30'&&mode!==null)throw Error('Unknown navigation mode');
+    if(mode===null)unifiedTravel.delete(actor);
+    else unifiedTravel.add(actor);
+  }
+  const usesUnifiedTravel=(actor:EntityId)=>unifiedTravel.has(actor);
 
   const {
     keys, doors, events, observationsByCharacter, beliefsByCharacter, roomDetails,
@@ -322,6 +336,7 @@ export function createSimulation() {
     if(options?.hidden!==undefined&&typeof options.hidden!=='boolean')
       throw new Error('Invalid hidden passage setting');
     weightedPassages.set(key,{a,b,minutes,hidden});
+    routeMemo.clear();
     // Concealed entrances do NOT enter the public ECS PassageTo relation,
     // which is what legacy actors use for ordinary navigation.
     if(!hidden){
@@ -369,6 +384,22 @@ export function createSimulation() {
       (p.hidden&&!knownHidden.get(actor)?.has(pairKey(a,b))))
       return null;
     return p.minutes;
+  }
+
+  function planActorRoute(actor:EntityId,from:EntityId,to:EntityId):WeightedRoute|null{
+    if(!isCharacter(actor)||!isRoom(from)||!isRoom(to))return null;
+    const secrets=[...(knownHidden.get(actor)??[])].sort().join(';');
+    const cacheKey=secrets+'|'+from+':'+to;
+    if(routeMemo.has(cacheKey)){
+      const cached=routeMemo.get(cacheKey)!;
+      return cached?{...cached,rooms:[...cached.rooms]}:null;
+    }
+    const result=shortestWeightedRoute(from,to,
+      room=>knownExits(actor,room),
+      (a,b)=>passageMinutes(actor,a,b));
+    if(routeMemo.size>=100000)routeMemo.clear();
+    routeMemo.set(cacheKey,result);
+    return result?{...result,rooms:[...result.rooms]}:null;
   }
 
   function passageDiscoveries(actor:EntityId):[number,number][]{
@@ -1679,7 +1710,7 @@ export function createSimulation() {
           : { type: 'move', actor, destination: next };
       },
       exits: room => getRelationTargets(ecs, room, PassageTo),
-      knownExits,passageMinutes,
+      knownExits,passageMinutes,planActorRoute,usesUnifiedTravel,
       canAnswerWitnessQuestion:actor=>patrolPlans.get(actor)?.kind!=='animal',
       execute, currentRoom, occupants, observations, assessment, trustOf, knowledgeGaps,
       pendingTutoring, attemptedTutors, searches, timetables, routines,
@@ -1690,7 +1721,21 @@ export function createSimulation() {
       spellKnowledge, beliefsByCharacter, setRoutine, emit,
       recordDailyRest
     });
-    // One validated action per patroller per ten-minute tick. Observations
+    // Patrollers share the exact same physics and personal graph as pupils.
+    const patrolTravelWorld={knownExits,passageMinutes,planActorRoute,passageAction:
+      (actor:EntityId,room:EntityId,next:EntityId):Command=>{
+        const door=doors.get(pairKey(room,next));
+        return door!==undefined&&Door.open[door]===0
+          ?{type:'open_door',actor,door}:{type:'move',actor,destination:next};
+      },currentRoom,execute};
+    const patrolNext=(actor:EntityId,room:EntityId,goal:EntityId)=>
+      usesUnifiedTravel(actor)
+        ?actorNextRoom(patrolTravelWorld,actor,room,goal)
+        :nextRoomOnRoute(room,goal,
+          place=>getRelationTargets(ecs,place,PassageTo));
+    // One policy action per patroller per ten-minute tick. A locomotion
+    // policy action may perform multiple independently validated passages.
+    // Observations
     // are personal; nobody reads world.events() to discover a remote crime.
     const passageAction=(actor:EntityId,room:EntityId,next:EntityId):Command=>{
       const door=doors.get(pairKey(room,next));
@@ -1705,13 +1750,16 @@ export function createSimulation() {
       const obs=observationsByCharacter.get(actor)??[];
       const sightings=incidentSightings(actor);
       let action:Command|null=null;
+      let navigationGoal:EntityId|null=null;
       if(patrol.kind==='animal'&&sightings>patrol.sentSignals){
         if(room===currentRoom(patrol.partner!))
           action={type:'signal_incident',actor,listener:patrol.partner!};
         else if(room!==patrol.rendezvous){
-          const next=nextRoomOnRoute(room,patrol.rendezvous!,
-            place=>getRelationTargets(ecs,place,PassageTo));
-          if(next!==null)action=passageAction(actor,room,next);
+          const next=patrolNext(actor,room,patrol.rendezvous!);
+          if(next!==null){
+            action=passageAction(actor,room,next);
+            navigationGoal=patrol.rendezvous!;
+          }
         }
       }else if(patrol.kind==='caretaker'){
         // Either direct sight or genuinely acquired testimony may be reported.
@@ -1768,10 +1816,11 @@ export function createSimulation() {
         }
         while(!action&&search.pending.length){
           const goal=search.pending[0]!;
-          const next=nextRoomOnRoute(room,goal,
-            place=>getRelationTargets(ecs,place,PassageTo));
-          if(next!==null)action=passageAction(actor,room,next);
-          else search.checked.push(search.pending.shift()!);
+          const next=patrolNext(actor,room,goal);
+          if(next!==null){
+            action=passageAction(actor,room,next);
+            navigationGoal=goal;
+          }else search.checked.push(search.pending.shift()!);
         }
         if(search.pending.length===0)patrol.search=undefined;
       }
@@ -1781,14 +1830,22 @@ export function createSimulation() {
           patrol.waypoint=(patrol.waypoint+1)%patrol.waypoints.length;
         const goal=patrol.waypoints[patrol.waypoint]!;
         if(room!==goal){
-          const next=nextRoomOnRoute(room,goal,
-            place=>getRelationTargets(ecs,place,PassageTo));
-          if(next!==null)action=passageAction(actor,room,next);
+          const next=patrolNext(actor,room,goal);
+          if(next!==null){
+            action=passageAction(actor,room,next);
+            navigationGoal=goal;
+          }
         }
       }
       if(action){
-        const result=execute(action);
-        decisions.push({actor,action,result});
+        if(usesUnifiedTravel(actor)&&navigationGoal!==null){
+          for(const {action:stepAction,result} of traverseActorJourney(
+            patrolTravelWorld,actor,room,navigationGoal))
+            decisions.push({actor,action:stepAction,result});
+        }else{
+          const result=execute(action);
+          decisions.push({actor,action,result});
+        }
       }
     }
     return decisions;
@@ -1855,6 +1912,7 @@ export function createSimulation() {
       }),
       broken: Array.from(query(ecs, [Fragile])).map(id => [id, Fragile.broken[id] === 1]),
       doors: Array.from(query(ecs, [Door])).map(id => [id, Door.open[id] === 1]),
+      ...(unifiedTravel.size?{unifiedTravel:[...unifiedTravel].sort((a,b)=>a-b)}:{}),
       ...(knownHidden.size?{knownPassages:[...knownHidden.entries()]
         .filter(([,known])=>known.size>0)
         .map(([actor,known]):[number,[number,number][]]=>[
@@ -1935,6 +1993,12 @@ export function createSimulation() {
     for (const [id, open] of state.doors) {
       if (!hasComponent(ecs, id, Door)) throw new Error('Checkpoint references missing door');
       Door.open[id] = open ? 1 : 0;
+    }
+    unifiedTravel.clear();
+    for(const actor of state.unifiedTravel??[]){
+      if(!isCharacter(actor)||unifiedTravel.has(actor))
+        throw Error('Invalid saved navigation policy');
+      unifiedTravel.add(actor);
     }
     knownHidden.clear();
     for(const [actor,pairs] of state.knownPassages??[]){
@@ -2108,7 +2172,8 @@ export function createSimulation() {
     captureRuntime, hydrateRuntime,
     setTrust, trustOf, setInquisitive, setSocialInvestigator, setGuarded, setRoutine, assessment,
     setTimetable, setManualControl, attendance, learningDebt, knowledgeGaps,
-    setDailyLife, mealHistory, conversationHistory, restHistory,
+    setDailyLife,setTravelMode,usesUnifiedTravel,
+    mealHistory, conversationHistory, restHistory,
     promiseHistory, meetingLedger, intentionHistory, needsOf,
     setHelpSeeking, setHelpful, tutoringRequest, assistance, hasHelped,
     seedSpellKnowledge, spellStage, setExperimenter, isIlluminated,
@@ -2117,7 +2182,7 @@ export function createSimulation() {
     clock: () => schoolTime(tick),
     beliefs: (observer: EntityId): Belief[] => beliefsByCharacter.read(observer),
     currentRoom, locationOf, occupants, observations,
-    knownExits,passageMinutes,passageDiscoveries,
+    knownExits,passageMinutes,planActorRoute,passageDiscoveries,
     isBroken: (eid: EntityId) => hasComponent(ecs, eid, Fragile) && Fragile.broken[eid] === 1,
     doorIsOpen: (eid: EntityId) => hasComponent(ecs, eid, Door) ? Door.open[eid] === 1 : null,
     id: (key: string) => keys.get(key),

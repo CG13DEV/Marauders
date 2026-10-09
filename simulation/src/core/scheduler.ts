@@ -7,6 +7,8 @@ import { currentLesson, registerAttendance } from './school-time.ts';
 import { nextSchoolJourney, nextWeightedSchoolJourney,feasibleMealJourney, shortestHops } from './school-planner.ts';
 import {nextWeightedRoom} from './weighted-navigation.ts';
 import {followPhysicalPassages,MICRO_PASSAGE_MINUTES} from './physical-travel.ts';
+import {actorNextRoom,actorJourneyDuration,traverseActorJourney}
+  from './actor-navigation.ts';
 import { isActivePromise, personallyAvoids,
   type MeetingCommitment, type CommitmentMemory
 } from './social-commitments.ts';
@@ -40,6 +42,9 @@ export type SchedulerContext = {
   exits(room: EntityId): EntityId[];
   knownExits(actor:EntityId,room:EntityId):EntityId[];
   passageMinutes(actor:EntityId,from:EntityId,to:EntityId):number|null;
+  planActorRoute(actor:EntityId,from:EntityId,to:EntityId):
+    import('./weighted-navigation.ts').WeightedRoute|null;
+  usesUnifiedTravel(actor:EntityId):boolean;
   execute(command: Command): CommandResult;
   currentRoom(actor: EntityId): EntityId | null;
   occupants(room: EntityId): EntityId[];
@@ -79,7 +84,8 @@ export type SchedulerContext = {
 export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
   const {
     advanceClock, actors, has, visibleFragiles, passageAction,
-    exits, knownExits, passageMinutes, execute, currentRoom, occupants, canAnswerWitnessQuestion,observations, assessment,
+    exits, knownExits, passageMinutes, planActorRoute, usesUnifiedTravel,
+    execute, currentRoom, occupants, canAnswerWitnessQuestion,observations, assessment,
     trustOf, knowledgeGaps, pendingTutoring, attemptedTutors, searches,
     timetables, routines, dailyPlans, meals, conversations, rests,
     commitments, commitmentMemories, intentions, bodilyNeeds,toiletNeeds,
@@ -102,6 +108,32 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
     const socialParticipants = new Set<EntityId>();
     const sleeping = new Set<EntityId>();
     const promisePriorities = new Set<EntityId>();
+    const travelWorld={knownExits,passageMinutes,planActorRoute,
+      passageAction,currentRoom,execute};
+    const travelTime=(actor:number,from:number,to:number):number|null=>
+      usesUnifiedTravel(actor)
+        ?actorJourneyDuration(travelWorld,actor,from,to)
+        :((hops=>hops===null?null:hops*10)(shortestHops(from,to,exits)));
+    const travelTo=(actor:number,from:number,to:number):StepDecision|null=>{
+      if(from===to)return null;
+      if(usesUnifiedTravel(actor)){
+        const steps=traverseActorJourney(travelWorld,actor,from,to);
+        for(const {action,result} of steps)decisions.push({actor,action,result});
+        const last=steps.at(-1);
+        return last?{actor,action:last.action,result:last.result}:null;
+      }
+      const next=nextRoomOnRoute(from,to,exits);
+      if(next===null)return null;
+      const action=passageAction(actor,from,next);
+      const result=execute(action);
+      const record={actor,action,result};
+      decisions.push(record);
+      return record;
+    };
+    const mealFor=(actor:number,room:number,diningRoom:number,
+      records:readonly MealMemory[],nextLesson:import('./school-time.ts').AttendanceRecord|null)=>
+      feasibleMealJourney(minute,room,diningRoom,records,nextLesson,exits,
+        usesUnifiedTravel(actor)?(from,to)=>travelTime(actor,from,to):undefined);
     const upcomingFor = (actor: EntityId) =>
       commitments.find(m => isActivePromise(m,minute) &&
         (m.promisor===actor || m.beneficiary===actor));
@@ -113,15 +145,16 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       const promise=upcomingFor(actor);
       const room=currentRoom(actor);
       if(!promise || room===null) continue;
-      const hops=shortestHops(room,promise.room,exits);
-      if(hops!==null && minute>=promise.atMinute-(hops+1)*10)
+      const trip=travelTime(actor,room,promise.room);
+      if(trip!==null && minute>=promise.atMinute-trip-10)
         promisePriorities.add(actor);
     }
 
     function estimateSchoolJourney(actor:EntityId,records:readonly import('./school-time.ts').AttendanceRecord[],
       room:EntityId){
       const travel=dailyPlans.get(actor)?.schoolTravel;
-      if(travel==='weighted-29')return nextWeightedSchoolJourney(
+      if(usesUnifiedTravel(actor)||travel==='weighted-29')
+        return nextWeightedSchoolJourney(
         records,minute,room,
         location=>knownExits(actor,location),
         (a,b)=>passageMinutes(actor,a,b));
@@ -131,6 +164,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
 
     function travelTowardLesson(actor: EntityId, room: EntityId, goal: EntityId): void {
       if (room === goal) return;
+      if(usesUnifiedTravel(actor)){travelTo(actor,room,goal);return;}
       const travel=dailyPlans.get(actor)?.schoolTravel;
       if(travel==='micro-28'||travel==='weighted-29'){
         // Each intermediate edge (and closed door) executes through the
@@ -168,8 +202,8 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
         if (!journey || !journey.committed) continue;
         const plan = dailyPlans.get(actor);
         const meal = plan && !journey.inClass
-          ? feasibleMealJourney(minute, room, plan.diningRoom,
-              meals.get(actor) ?? [], journey.lesson, exits)
+          ? mealFor(actor,room,plan.diningRoom,
+              meals.get(actor) ?? [],journey.lesson)
           : null;
         // A viable meal may precede class; the next pass executes the travel.
         if (meal !== null) continue;
@@ -195,15 +229,13 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       const lesson=estimateSchoolJourney(actor,timetables.get(actor)?.records??[],room);
       if(lesson?.committed)continue;
       const destination=closestBathroom(room,need.bathrooms,
-        (from,to)=>shortestHops(from,to,exits));
+        (from,to)=>travelTime(actor,from,to));
       if(destination===null)continue;
-      const action:Command|null=room===destination
-        ?{type:'use_toilet',actor}
-        :(()=>{
-          const next=nextRoomOnRoute(room,destination,exits);
-          return next===null?null:passageAction(actor,room,next);
-        })();
-      if(action){
+      if(room!==destination){
+        const moved=travelTo(actor,room,destination);
+        if(moved?.result.ok)occupiedBySchool.add(actor);
+      }else{
+        const action:Command={type:'use_toilet',actor};
         const result=execute(action);
         decisions.push({actor,action,result});
         if(result.ok)occupiedBySchool.add(actor);
@@ -242,21 +274,16 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       const promise=upcomingFor(actor);
       const room=currentRoom(actor);
       if(!promise || room===null) continue;
-      const hops=shortestHops(room,promise.room,exits);
-      if(hops===null) continue;
-      if(minute < promise.atMinute-(hops+1)*10) continue;
+      const trip=travelTime(actor,room,promise.room);
+      if(trip===null)continue;
+      if(minute<promise.atMinute-trip-10)continue;
       // While a person waits, don't let their routine drag them elsewhere.
       if(room===promise.room){
         occupiedBySchool.add(actor);
         continue;
       }
-      const next=nextRoomOnRoute(room,promise.room,exits);
-      if(next!==null){
-        const action=passageAction(actor,room,next);
-        const result=execute(action);
-        decisions.push({actor,action,result});
-        occupiedBySchool.add(actor);
-      }
+      const moved=travelTo(actor,room,promise.room);
+      if(moved)occupiedBySchool.add(actor);
     }
 
     // Answer only invitations the actor actually heard. Both sides must still
@@ -402,9 +429,9 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
         if(goal.kind==='attend_meeting'){
           const meeting=commitments.find(m=>m.id===goal.meetingId);
           if(!meeting || meeting.status!=='pending')return false;
-          const hops=shortestHops(room,goal.destination,exits);
-          return hops!==null &&
-            minute>=meeting.atMinute-(hops+1)*10 &&
+          const trip=travelTime(actor,room,goal.destination);
+          return trip!==null &&
+            minute>=meeting.atMinute-trip-10 &&
             minute<meeting.atMinute+20;
         }
         return true;
@@ -416,9 +443,8 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       // reusing the same path/time feasibility rules as the academic planner.
       const nextSchool=estimateSchoolJourney(
         actor,timetables.get(actor)?.records??[],room);
-      const mealJourney=feasibleMealJourney(
-        minute,room,plan.diningRoom,
-        meals.get(actor)??[],nextSchool?.lesson??null,exits);
+      const mealJourney=mealFor(actor,room,plan.diningRoom,
+        meals.get(actor)??[],nextSchool?.lesson??null);
       const bestGoal=pickIntention(eligible);
       const seekMeal=needs.hunger>=24 &&
         (needs.hunger>=60||bestGoal?.importance!=='important');
@@ -426,14 +452,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
         for(const goal of remaining)
           if(goal.status==='active')
             transitionIntention(actor,goal.id,'paused','hunger');
-        if(room!==plan.diningRoom){
-          const next=nextRoomOnRoute(room,plan.diningRoom,exits);
-          if(next!==null){
-            const action=passageAction(actor,room,next);
-            const result=execute(action);
-            decisions.push({actor,action,result});
-          }
-        }
+        if(room!==plan.diningRoom)travelTo(actor,room,plan.diningRoom);
         continue;
       }
       const target=choice.kind==='visit'||choice.kind==='pursue'
@@ -450,12 +469,9 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       }
       if(choice.kind==='eat'){
         // Physical journey and legal meal command only during serving hours.
-        const next=room===plan.diningRoom?null:
-          nextRoomOnRoute(room,plan.diningRoom,exits);
-        const action:Command|null=room===plan.diningRoom
-          ? {type:'eat_meal',actor,kind:choice.meal}
-          : next===null?null:passageAction(actor,room,next);
-        if(action){
+        if(room!==plan.diningRoom)travelTo(actor,room,plan.diningRoom);
+        else{
+          const action:Command={type:'eat_meal',actor,kind:choice.meal};
           const result=execute(action);
           decisions.push({actor,action,result});
         }
@@ -463,11 +479,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       }
       if(choice.kind==='rest'){
         if(room===plan.homeRoom){sleeping.add(actor);continue;}
-        const next=nextRoomOnRoute(room,plan.homeRoom,exits);
-        if(next!==null){
-          const action=passageAction(actor,room,next);
-          const result=execute(action);decisions.push({actor,action,result});
-        }
+        travelTo(actor,room,plan.homeRoom);
         continue;
       }
       if(choice.kind==='visit'||choice.kind==='pursue'){
@@ -506,12 +518,8 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
           // Shared with Filch: finite local candidates, no access to anyone's
           // private thoughts and no omniscient remote object tracking.
           if(room!==goal.destination){
-            const next=nextRoomOnRoute(room,goal.destination,exits);
-            if(next!==null){
-              transitionIntention(actor,goal.id,'active');
-              const action=passageAction(actor,room,next);
-              const result=execute(action);decisions.push({actor,action,result});
-            }
+            const moved=travelTo(actor,room,goal.destination);
+            if(moved)transitionIntention(actor,goal.id,'active');
             continue;
           }
           const people=occupants(room).filter(other=>
@@ -540,13 +548,8 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
           // Navigate to the room *last personally observed*, never to the
           // object's omniscient current position; reality is checked on arrival.
           if(room!==goal.destination){
-            const next=nextRoomOnRoute(room,goal.destination,exits);
-            if(next!==null){
-              transitionIntention(actor,goal.id,'active');
-              const action=passageAction(actor,room,next);
-              const result=execute(action);
-              decisions.push({actor,action,result});
-            }
+            const moved=travelTo(actor,room,goal.destination);
+            if(moved)transitionIntention(actor,goal.id,'active');
             continue;
           }
           const action:Command={type:'inspect_object',actor,target:goal.object};
@@ -564,13 +567,10 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
             occupiedBySchool.add(actor);
             continue;
           }
-          const next=nextRoomOnRoute(room,goal.destination,exits);
-          if(next!==null){
+          const moved=travelTo(actor,room,goal.destination);
+          if(moved){
             transitionIntention(actor,goal.id,'active');
-            const action=passageAction(actor,room,next);
-            const result=execute(action);
-            decisions.push({actor,action,result});
-            if(result.ok)occupiedBySchool.add(actor);
+            if(moved.result.ok)occupiedBySchool.add(actor);
           }
           continue;
         }
@@ -578,14 +578,10 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
           transitionIntention(actor,goal.id,'completed');
           continue;
         }
-        const next=nextRoomOnRoute(room,goal.destination,exits);
-        if(next!==null){
+        const moved=travelTo(actor,room,goal.destination);
+        if(moved){
           transitionIntention(actor,goal.id,'active');
-          const action=passageAction(actor,room,next);
-          const result=execute(action);decisions.push({actor,action,result});
-          // Arrival is a physical fact of this tick, not a second action
-          // deferred until a subsequent decision window.
-          if(result.ok && action.type==='move' && next===goal.destination)
+          if(moved.result.ok&&currentRoom(actor)===goal.destination)
             transitionIntention(actor,goal.id,'completed');
         }
         continue;
@@ -597,14 +593,8 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
         const destination=isLeisure(minute)
           ? leisureDestination(plan,minute)
           : shouldReturnHome(minute)?plan.homeRoom:null;
-        if(destination!==null && destination!==room){
-          const next=nextRoomOnRoute(room,destination,exits);
-          if(next!==null){
-            const action=passageAction(actor,room,next);
-            const result=execute(action);
-            decisions.push({actor,action,result});
-          }
-        }
+        if(destination!==null&&destination!==room)
+          travelTo(actor,room,destination);
       }
       // Idle characters can now share common rooms and talk; neither a
       // closed kitchen nor a sleeping period invents free nourishment.
@@ -629,47 +619,32 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
         const timeline = timetables.get(actor);
         const journey = timeline
           ? estimateSchoolJourney(actor,timeline.records,room) : null;
-        const opportunity = feasibleMealJourney(minute, room,
-          plan.diningRoom, knownMeals, journey?.lesson ?? null, exits);
+        const opportunity=mealFor(actor,room,plan.diningRoom,
+          knownMeals,journey?.lesson??null);
         if (opportunity) {
           // We can walk before a meal window, but never eat before it starts.
-          const action: Command | null = room === plan.diningRoom
-            ? (meal === opportunity.kind
-              ? {type:'eat_meal',actor,kind:opportunity.kind} : null)
-            : (() => {
-                const next=nextRoomOnRoute(room,plan.diningRoom,exits);
-                return next === null ? null : passageAction(actor,room,next);
-              })();
-          if(action){
+          if(room!==plan.diningRoom)travelTo(actor,room,plan.diningRoom);
+          else if(meal===opportunity.kind){
+            const action:Command={type:'eat_meal',actor,kind:opportunity.kind};
             const result=execute(action);
             decisions.push({actor,action,result});
           }
           continue;
         }
       } else if (meal !== null && !ateMeal(knownMeals, dayOf(minute), meal)) {
-        const action: Command = room === plan.diningRoom
-          ? { type: 'eat_meal', actor, kind: meal }
-          : (() => {
-              const next = nextRoomOnRoute(room, plan.diningRoom, exits);
-              return next === null ? null : passageAction(actor, room, next);
-            })()!;
-        if (action) {
-          const result = execute(action);
-          decisions.push({ actor, action, result });
+        if(room!==plan.diningRoom)travelTo(actor,room,plan.diningRoom);
+        else{
+          const action:Command={type:'eat_meal',actor,kind:meal};
+          const result=execute(action);
+          decisions.push({actor,action,result});
         }
         continue;
       }
       // Leisure is spent in a shared hub, sleep in a private bedroom.
       const destination = isLeisure(minute)
         ? leisureDestination(plan, minute) : plan.homeRoom;
-      if (shouldReturnHome(minute) && room !== destination) {
-        const next = nextRoomOnRoute(room, destination, exits);
-        if (next !== null) {
-          const action = passageAction(actor, room, next);
-          const result = execute(action);
-          decisions.push({ actor, action, result });
-        }
-      }
+      if(shouldReturnHome(minute)&&room!==destination)
+        travelTo(actor,room,destination);
     }
 
     // First, helpers respond to requests they actually heard earlier. Being
@@ -808,25 +783,28 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
 
       // Depth-first exploration discovers one room at a time, without knowing
       // where a source is. Only public adjacent exits are inspected.
-      const unexplored = exits(room)
-        .filter(next => !search!.seenRooms.has(next)).sort((a, b) => a - b);
-      const next = unexplored[0];
-      if (next !== undefined) {
-        const action: Command = passageAction(actor, room, next);
-        const result = execute(action);
-        if (result.ok && action.type === 'move') {
+      const unexplored=(usesUnifiedTravel(actor)?knownExits(actor,room):exits(room))
+        .filter(next=>!search!.seenRooms.has(next))
+        .sort((a,b)=>usesUnifiedTravel(actor)
+          ?(passageMinutes(actor,room,a)??Infinity)-
+             (passageMinutes(actor,room,b)??Infinity)||a-b
+          :a-b);
+      const next=unexplored[0];
+      if(next!==undefined){
+        const moved=travelTo(actor,room,next);
+        // Searching visits exactly one new location per decision tick,
+        // even if the graph would permit a longer trip. The observer must
+        // physically enter a room before considering it explored.
+        if(moved?.result.ok&&currentRoom(actor)===next){
           search.seenRooms.add(next);
           search.trail.push(next);
         }
-        decisions.push({ actor, action, result });
         continue;
       }
-      if (search.trail.length > 1) {
-        const parent = search.trail[search.trail.length - 2]!;
-        const action: Command = { type: 'move', actor, destination: parent };
-        const result = execute(action);
-        if (result.ok) search.trail.pop();
-        decisions.push({ actor, action, result });
+      if(search.trail.length>1){
+        const parent=search.trail[search.trail.length-2]!;
+        const moved=travelTo(actor,room,parent);
+        if(moved?.result.ok&&currentRoom(actor)===parent)search.trail.pop();
       }
     }
     // Inquiry-first pupils attend once they have no higher-priority action.
@@ -1007,15 +985,10 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
         continue;
       }
       const goal = pending[0]!;
-      const next = nextRoomOnRoute(room, goal,
-        location => exits(location));
-      if (next === null) continue; // unreachable destination: do not teleport
-      const action: Command = passageAction(actor, room, next);
-      const result = execute(action);
-      decisions.push({ actor, action, result });
-      if (result.ok && action.type === 'move' && next === goal) {
+      const moved=travelTo(actor,room,goal);
+      if(moved?.result.ok&&currentRoom(actor)===goal){
         pending.shift();
-        if (pending.length === 0) setRoutine(actor, []);
+        if(pending.length===0)setRoutine(actor,[]);
       }
     }
     for (const [actor, timetable] of timetables) {

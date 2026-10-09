@@ -503,3 +503,16 @@ A new deterministic weighted shortest-path algorithm (`weighted-navigation.ts`) 
 Run `npm run weighted-passages-demo` for a two-student experiment that compares travel times before/after only one finds a short secret; tests cover longer-but-faster public alternatives, concealed-route privacy, adjacency validation, weighted micro budgets, and V1 journal/V2 checkpoint continuation.
 
 **Remaining gaps:** no crowd congestion, equipment- or skill-gated entrances, route rumours, failed searches, moving stairs, risk-aware navigation, or continuous UE movement. Secret-passage topology is part of world setup, discoveries part of character-local runtime. We do not assert the experimental hidden link is an actual canonical Hogwarts shortcut.
+
+
+## Experiment #30 — one real actor-local travel system across Hogwarts
+
+**[GAME], opt-in:** `createSchoolWeek(world,'adaptive','autonomous','96-all','expanded','research-600','foundations-27','unified-30')`. All **600 pupils, 25 subject teachers and 9 named residents** (including Filch and Mrs Norris) use a single reusable `actor-navigation.ts` service: travel-time optimal Dijkstra over each actor's own `knownExits` and `passageMinutes`, with independent physical `move` and `open_door` commands. A character can traverse multiple graph edges in a ten-minute world tick, paying the actual cost of each edge, bounded by that ten-minute budget. Every intermediate room and opening remains authoritative and witnessed normally; no teleport.
+
+The school scheduler reuses this for school commutes, meals, toilet destinations, rest, social promises, investigations, witness inquiries, idle leisure, and explicit routines. Its *meal and meeting departure estimates* use the same actor-local weighted route costs. Filch and Mrs Norris's patrol/incident search in `Simulation.step` also share the planner and physical executor. What motivates a journey is still decided by the character's own policy; the navigator never reads someone else's private knowledge or invents a new goal.
+
+The opt-in policy is per-character `setTravelMode(actor,'unified-30')` (or `null` to disable), not a global switch. V1 replay and V2 checkpoints store and remap the policy, alongside personal passage discoveries. Previously established `legacy`, `micro-28`, and `weighted-29` travel behaviors are unchanged in default fixtures. Manual player control still suppresses NPC movement.
+
+Run `npm run unified-demo -- 96` to simulate 16 in-world hours for the full 600-pupil school, reporting moves, doors, patrol activity, meals, class attendance, and multi-passage ticks. Tests check route selection, personally known shortcuts, caretaker and animal behavior, dining-room meals, manual override and persistence.
+
+**Remaining limits:** [GAME] passage weights approximate travel, not 3D meters; all *public* passages are currently presumed known to all residents, while secret passages require discovery. Not yet modelled: crowd queues, dynamic stairs, school-wide individual map acquisition for public corridors, risk-aware route preference, per-minute events, changing gait/form, door traversal overhead in the planning heuristic, or Unreal character locomotion. A successful unit test or 16-hour headless run does not prove week-long performance.

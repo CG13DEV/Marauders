@@ -29,6 +29,7 @@ export type RuntimeSnapshot = {
   broken: [number, boolean][];
   doors: [number, boolean][];
   knownPassages?:[number,[number,number][]][];
+  unifiedTravel?:number[];
   flags: [number, StateFlags][];
   trusts: [number, number, Trust][];
   helpedBy: [number, number][];
@@ -128,6 +129,7 @@ export function remapRuntimeSnapshot(snapshot: RuntimeSnapshot, at: (id: number)
     locations: snapshot.locations.map(([id, room]) => [at(id), at(room)]),
     broken: snapshot.broken.map(([id, value]) => [at(id), value]),
     doors: snapshot.doors.map(([id, value]) => [at(id), value]),
+    ...(snapshot.unifiedTravel===undefined?{}:{unifiedTravel:snapshot.unifiedTravel.map(at)}),
     ...(snapshot.knownPassages===undefined?{}:{knownPassages:snapshot.knownPassages.map(
       ([actor,pairs]):[number,[number,number][]]=>[
         at(actor),pairs.map(([a,b]):[number,number]=>[at(a),at(b)])

@@ -48,3 +48,4 @@ jobs:
       - run: npm run foundation-demo -- 144
       - run: npm run travel-demo -- 144
       - run: npm run weighted-passages-demo
+      - run: npm run unified-demo -- 96

@@ -74,9 +74,10 @@ export function createSchoolWeek(
   expansion: 'baseline' | 'expanded' = 'baseline',
   scale: 'fixture-84' | 'research-600' = 'fixture-84',
   curriculum: 'legacy' | 'foundations-27' = 'legacy',
-  travel: 'legacy' | 'micro-28' | 'weighted-29' = 'legacy'
+  travel: 'legacy' | 'micro-28' | 'weighted-29' | 'unified-30' = 'legacy'
 ) {
-  if(travel!=='legacy'&&travel!=='micro-28'&&travel!=='weighted-29')
+  if(travel!=='legacy'&&travel!=='micro-28'&&travel!=='weighted-29'&&
+     travel!=='unified-30')
     throw Error('Unknown school travel mode');
   if(travel!=='legacy'&&curriculum!=='foundations-27')
     throw Error('Micro travel requires foundations curriculum');
@@ -200,7 +201,8 @@ export function createSchoolWeek(
           ...(year === 1 ? { learningAppointments: true } : {}),
           ...(students.length<=population.pupils?{intentionPlanning:true}:{}),
           ...(planning === 'adaptive' ? {schoolPlanning:'adaptive' as const} : {}),
-          ...(travel!=='legacy'&&year<=2?{schoolTravel:travel}:{})
+          ...(year<=2&&(travel==='micro-28'||travel==='weighted-29')?
+            {schoolTravel:travel}:{})
         });
         // The first year notices their *own* gaps after a missed explanation.
         // They only invite help if social invitations are enabled.
@@ -331,7 +333,8 @@ export function createSchoolWeek(
           style:index%2===0?'reserved':'outgoing',interest:'lessons',
           ...(population.teachers===12?{intentionPlanning:true}:{ }),
           ...(planning==='adaptive'?{schoolPlanning:'adaptive' as const}:{}),
-          ...(travel!=='legacy'?{schoolTravel:travel}:{})
+          ...(travel==='micro-28'||travel==='weighted-29'?
+            {schoolTravel:travel}:{})
         });
         professors.push({id:teacher,subject});
         staffSchedule.set(teacher,[]);
@@ -404,6 +407,17 @@ export function createSchoolWeek(
         id:p.id,subject:p.subject as Subject
       }))
     ):null;
+
+  // #30 must encompass EVERY NPC category: younger and older pupils,
+  // existing and additional teachers, Filch, Norris, named residents and
+  // spirits. Travel is an actor policy, not a flag attached only to lessons.
+  if(travel==='unified-30'){
+    for(const id of new Set([
+      ...students.map(s=>s.id),
+      ...professors.map(t=>t.id),
+      ...(residents?.people.map(p=>p.id)??[])
+    ]))world.setTravelMode(id,'unified-30');
+  }
 
   return {
     world, rollout, population, expansion, scale, curriculum, travel, residents, layout, hall, staffRoom, greatHall, library, courtyard, hospital,
