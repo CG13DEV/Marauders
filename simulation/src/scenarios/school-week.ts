@@ -13,6 +13,10 @@ import {
 } from './curriculum.ts';
 import {cohortSize,dormGroupFor,RESEARCH_DORM_CAPACITY,
   RESEARCH_SCHOOL_POPULATION} from './school-population.ts';
+import {planFoundationTimetable,FOUNDATION_PROFILE,FOUNDATION_SUBJECTS,
+  FOUNDATION_STARTS,FOUNDATION_ROOM_CAPACITY,FOUNDATION_TEACHER_LIMIT,
+  type FoundationSubject,type FoundationTeacher,type FoundationSpace,
+  type FoundationAssignment,weeklyFoundationSlots} from './foundation-timetable.ts';
 
 export { HOUSES, SUBJECTS, ELECTIVES } from './curriculum.ts';
 export const SCHOOL_WEEK_DAYS = 5;
@@ -44,7 +48,7 @@ export type Student = {
   groupId: string;
   electives: readonly ElectiveSubject[];
 };
-export type Teacher = { id: number; subject: Subject };
+export type Teacher = { id: number; subject: Subject | 'Flying' };
 export type TeachingGroup = {
   id: string;
   year: number;
@@ -53,7 +57,7 @@ export type TeachingGroup = {
 };
 export type TeachingSession = {
   id: string;
-  subject: Subject;
+  subject: Subject | 'Flying';
   teacher: number;
   room: number;
   startsAt: number;
@@ -68,8 +72,13 @@ export function createSchoolWeek(
   social: 'autonomous' | 'off' = 'autonomous',
   rollout: IntentionRolloutStage = 'control',
   expansion: 'baseline' | 'expanded' = 'baseline',
-  scale: 'fixture-84' | 'research-600' = 'fixture-84'
+  scale: 'fixture-84' | 'research-600' = 'fixture-84',
+  curriculum: 'legacy' | 'foundations-27' = 'legacy'
 ) {
+  if(curriculum!=='legacy'&&curriculum!=='foundations-27')
+    throw Error('Unknown curriculum');
+  if(curriculum==='foundations-27'&&scale!=='research-600')
+    throw Error('Foundations curriculum requires the research population');
   if(scale!=='fixture-84'&&scale!=='research-600')
     throw new Error('Unknown school population scale');
   if(!INTENTION_ROLLOUT_STAGES.includes(rollout))
@@ -256,6 +265,7 @@ export function createSchoolWeek(
         const subject = SUBJECTS[subjectIndex]!;
         const groupIndex = track * 7 + (subjectIndex + rotation) % 7;
         const group = teachingGroups[groupIndex]!;
+        if(curriculum==='foundations-27'&&group.year<=2)continue;
         addSession('core_d' + day + '_p' + slot + '_' + group.id,
           subject, group.id, group.students, startsAt);
       }
@@ -281,6 +291,92 @@ export function createSchoolWeek(
     }
   }
 
+  // Experiment #27 is deliberately opt-in: years 1–2 get their complete
+  // foundation program, while years 3–7 retain the previous partial fixture.
+  // Extra instructors and rooms are *physical* entities, not timetable fiction.
+  const foundationTeachers:FoundationTeacher[]=[];
+  const foundationSpaces:FoundationSpace[]=[];
+  const foundationAssignments:FoundationAssignment[]=[];
+  if(curriculum==='foundations-27'){
+    for(let subjectIndex=0;subjectIndex<FOUNDATION_SUBJECTS.length;subjectIndex++){
+      const subject=FOUNDATION_SUBJECTS[subjectIndex]!;
+      const isHeavy=(FOUNDATION_PROFILE[1][subject]??0)>=3;
+      const count=isHeavy?2:1;
+      const baseRoom=subject==='Flying'
+        ?courtyard
+        :subject in classrooms
+          ?classrooms[subject as CoreSubject]
+          :electiveRooms[subject as keyof typeof electiveRooms];
+      const descriptor=world.roomInfo(baseRoom);
+      if(!descriptor)throw Error('Subject facility not found: '+subject);
+      const floor=descriptor.floor;
+      const wing=descriptor.wing??'central';
+      const landing=layout.landings[floor as keyof typeof layout.landings];
+      if(!landing)throw Error('Subject facility has no staircase: '+subject);
+      const anchor=subject==='Flying'?courtyard:
+        wing==='central'?landing.gallery:landing[wing];
+      for(let index=0;index<count;index++){
+        const key='foundation_'+subjectIndex+'_'+index;
+        const teacher=world.character('foundation_teacher_'+key,
+          'Младший преподаватель: '+subject+', '+(index+1),staffRoom);
+        world.grantPointAuthority(teacher,'teacher');
+        world.setDailyLife(teacher,{
+          homeRoom:staffRoom,diningRoom:greatHall,
+          style:index%2===0?'reserved':'outgoing',interest:'lessons',
+          ...(population.teachers===12?{intentionPlanning:true}:{ }),
+          ...(planning==='adaptive'?{schoolPlanning:'adaptive' as const}:{})
+        });
+        professors.push({id:teacher,subject});
+        staffSchedule.set(teacher,[]);
+        foundationTeachers.push({
+          id:teacher,subject,maxPeriods:FOUNDATION_TEACHER_LIMIT
+        });
+        const room=world.room('foundation_room_'+key,
+          'Учебное пространство '+subject+' №'+(index+1),
+          {floor,wing,kind:subject==='Flying'?'courtyard':
+            descriptor.kind??'classroom',loreStatus:'GAME'});
+        world.connect(anchor,room);
+        foundationSpaces.push({
+          id:room,subjects:[subject],capacity:FOUNDATION_ROOM_CAPACITY
+        });
+      }
+    }
+    const foundationGroups=teachingGroups.filter(g=>g.year<=2).map(g=>({
+      id:g.id,year:g.year as 1|2,students:g.students
+    }));
+    foundationAssignments.push(...planFoundationTimetable({
+      groups:foundationGroups,teachers:foundationTeachers,
+      spaces:foundationSpaces,slots:weeklyFoundationSlots(),
+      existing:sessions
+    }));
+    for(const assignment of foundationAssignments){
+      const id='foundation_'+assignment.groupId+'_'+assignment.subject+'_'+
+        assignment.startsAt;
+      const introductory=assignment.subject==='Charms'&&
+        assignment.groupId.startsWith('y1_')&&
+        !explainedLumosTo.has(assignment.groupId);
+      if(introductory)explainedLumosTo.add(assignment.groupId);
+      const label=assignment.subject==='Flying'
+        ?'Полёты'
+        :SUBJECT_LABELS[assignment.subject];
+      const lesson:Lesson={
+        id,subject:label,room:assignment.room,
+        startsAt:assignment.startsAt,endsAt:assignment.endsAt,
+        groupId:assignment.groupId,teacher:assignment.teacher,
+        ...(introductory?{spell:'lumos' as const}:{})
+      };
+      sessions.push({
+        id,subject:assignment.subject,teacher:assignment.teacher,
+        room:assignment.room,startsAt:assignment.startsAt,
+        endsAt:assignment.endsAt,groupId:assignment.groupId,
+        students:[...assignment.students]
+      });
+      staffSchedule.get(assignment.teacher)!.push(lesson);
+      for(const pupil of assignment.students)
+        pupilSchedule.get(pupil)!.push(lesson);
+    }
+  }
+
   // Keep student and teacher timetables chronological for reproducible queries.
   for (const [id, lessons] of pupilSchedule) {
     lessons.sort((a, b) => a.startsAt - b.startsAt);
@@ -294,11 +390,14 @@ export function createSchoolWeek(
   // Opt-in fixture: named leaders, house heads, spirits and caretaker do not
   // change the experiment #20 population gates or artificial pupil cohorts.
   const residents = expansion === 'expanded'
-    ? createCastleResidents(world, layout, professors) : null;
+    ? createCastleResidents(world,layout,professors.filter(
+      (p):p is Teacher & {subject:Subject}=>p.subject!=='Flying'
+    )):null;
 
   return {
-    world, rollout, population, expansion, scale, residents, layout, hall, staffRoom, greatHall, library, courtyard, hospital,
+    world, rollout, population, expansion, scale, curriculum, residents, layout, hall, staffRoom, greatHall, library, courtyard, hospital,
     dorms, dormitoryRooms, classrooms, electiveRooms, professors, students, teachingGroups,
+    foundationTeachers,foundationSpaces,foundationAssignments,
     sessions, pupilSchedule, staffSchedule
   };
 }
