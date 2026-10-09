@@ -390,13 +390,16 @@ export function createSimulation() {
     if(!isCharacter(actor)||!isRoom(from)||!isRoom(to))return null;
     const secrets=[...(knownHidden.get(actor)??[])].sort().join(';');
     const cacheKey=secrets+'|'+from+':'+to;
-    if(routeMemo.has(cacheKey))return routeMemo.get(cacheKey)!;
+    if(routeMemo.has(cacheKey)){
+      const cached=routeMemo.get(cacheKey)!;
+      return cached?{...cached,rooms:[...cached.rooms]}:null;
+    }
     const result=shortestWeightedRoute(from,to,
       room=>knownExits(actor,room),
       (a,b)=>passageMinutes(actor,a,b));
     if(routeMemo.size>=100000)routeMemo.clear();
     routeMemo.set(cacheKey,result);
-    return result;
+    return result?{...result,rooms:[...result.rooms]}:null;
   }
 
   function passageDiscoveries(actor:EntityId):[number,number][]{
