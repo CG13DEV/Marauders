@@ -157,7 +157,8 @@ export function remapRuntimeSnapshot(snapshot: RuntimeSnapshot, at: (id: number)
       ([actor,goals]):[number,PersonalIntention[]]=>[
         at(actor),goals.map(g=>({
           ...g,destination:at(g.destination),
-          ...(g.object===undefined?{}:{object:at(g.object)})
+          ...(g.object===undefined?{}:{object:at(g.object)}),
+          ...(g.questioned===undefined?{}:{questioned:g.questioned.map(at)})
         }))
       ]
     )}),
