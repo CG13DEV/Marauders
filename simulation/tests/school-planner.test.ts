@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createSimulation } from '../src/core/Simulation.ts';
 import {
-  shortestHops, nextSchoolJourney, feasibleMealJourney
+  shortestHops, nextSchoolJourney, nextWeightedSchoolJourney, feasibleMealJourney
 } from '../src/core/school-planner.ts';
 import { createPersistentSimulation, restoreCheckpoint, restoreSimulation } from '../src/core/persistence.ts';
 import { createSchoolWeek, reportSchoolWeek } from '../src/scenarios/school-week.ts';
@@ -108,4 +108,30 @@ test('the same population yields a fair legacy-vs-adaptive seven-day comparison'
     'route-aware departure must improve punctuality');
   assert.ok(improved.firstYearKnowsLumos>=original.firstYearKnowsLumos,
     'early departures must not degrade Lumos instruction');
+});
+
+
+test('#30.6: cached weighted school estimate matches legacy search without exposing routes',()=>{
+  const exits=new Map([[1,[2]],[2,[1,3]],[3,[2]]]);
+  const connections=(room:number)=>exits.get(room)??[];
+  const passage=(a:number,b:number)=>Math.abs(a-b)===1?3:null;
+  const lessons=[lesson(3)];
+  const old=nextWeightedSchoolJourney(lessons,510,1,connections,passage);
+  let requests=0;
+  const cached=nextWeightedSchoolJourney(lessons,510,1,
+    ()=>{throw Error('cached route must not enumerate public or secret exits');},
+    ()=>{throw Error('cached route must not recompute passage durations');},10,
+    (from,to)=>{
+      requests++;
+      assert.deepEqual([from,to],[1,3]);
+      return {rooms:[1,2,3],minutes:6,hops:2};
+    });
+  assert.deepEqual(cached,old);
+  assert.equal(requests,1);
+  const blocked=nextWeightedSchoolJourney(lessons,510,1,connections,passage,
+    10,()=>null);
+  assert.equal(blocked?.hops,null);
+  assert.equal(blocked?.committed,false);
+  assert.equal(nextWeightedSchoolJourney([],510,1,connections,passage,
+    10,()=>{throw Error('No lesson should not request a route');}),null);
 });
