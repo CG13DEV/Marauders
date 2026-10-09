@@ -7,6 +7,8 @@ import { currentLesson, registerAttendance } from './school-time.ts';
 import { nextSchoolJourney, nextWeightedSchoolJourney,feasibleMealJourney, shortestHops } from './school-planner.ts';
 import {nextWeightedRoom} from './weighted-navigation.ts';
 import {followPhysicalPassages,MICRO_PASSAGE_MINUTES} from './physical-travel.ts';
+import {actorNextRoom,actorJourneyDuration,traverseActorJourney}
+  from './actor-navigation.ts';
 import { isActivePromise, personallyAvoids,
   type MeetingCommitment, type CommitmentMemory
 } from './social-commitments.ts';
@@ -40,6 +42,7 @@ export type SchedulerContext = {
   exits(room: EntityId): EntityId[];
   knownExits(actor:EntityId,room:EntityId):EntityId[];
   passageMinutes(actor:EntityId,from:EntityId,to:EntityId):number|null;
+  usesUnifiedTravel(actor:EntityId):boolean;
   execute(command: Command): CommandResult;
   currentRoom(actor: EntityId): EntityId | null;
   occupants(room: EntityId): EntityId[];
@@ -79,7 +82,8 @@ export type SchedulerContext = {
 export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
   const {
     advanceClock, actors, has, visibleFragiles, passageAction,
-    exits, knownExits, passageMinutes, execute, currentRoom, occupants, canAnswerWitnessQuestion,observations, assessment,
+    exits, knownExits, passageMinutes, usesUnifiedTravel,
+    execute, currentRoom, occupants, canAnswerWitnessQuestion,observations, assessment,
     trustOf, knowledgeGaps, pendingTutoring, attemptedTutors, searches,
     timetables, routines, dailyPlans, meals, conversations, rests,
     commitments, commitmentMemories, intentions, bodilyNeeds,toiletNeeds,
@@ -102,6 +106,31 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
     const socialParticipants = new Set<EntityId>();
     const sleeping = new Set<EntityId>();
     const promisePriorities = new Set<EntityId>();
+    const travelWorld={knownExits,passageMinutes,passageAction,currentRoom,execute};
+    const travelTime=(actor:number,from:number,to:number):number|null=>
+      usesUnifiedTravel(actor)
+        ?actorJourneyDuration(travelWorld,actor,from,to)
+        :((hops=>hops===null?null:hops*10)(shortestHops(from,to,exits)));
+    const travelTo=(actor:number,from:number,to:number):StepDecision|null=>{
+      if(from===to)return null;
+      if(usesUnifiedTravel(actor)){
+        const steps=traverseActorJourney(travelWorld,actor,from,to);
+        for(const {action,result} of steps)decisions.push({actor,action,result});
+        const last=steps.at(-1);
+        return last?{actor,action:last.action,result:last.result}:null;
+      }
+      const next=nextRoomOnRoute(from,to,exits);
+      if(next===null)return null;
+      const action=passageAction(actor,from,next);
+      const result=execute(action);
+      const record={actor,action,result};
+      decisions.push(record);
+      return record;
+    };
+    const mealFor=(actor:number,room:number,diningRoom:number,
+      records:readonly MealMemory[],nextLesson:import('./school-time.ts').AttendanceRecord|null)=>
+      feasibleMealJourney(minute,room,diningRoom,records,nextLesson,exits,
+        usesUnifiedTravel(actor)?(from,to)=>travelTime(actor,from,to):undefined);
     const upcomingFor = (actor: EntityId) =>
       commitments.find(m => isActivePromise(m,minute) &&
         (m.promisor===actor || m.beneficiary===actor));
@@ -121,7 +150,8 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
     function estimateSchoolJourney(actor:EntityId,records:readonly import('./school-time.ts').AttendanceRecord[],
       room:EntityId){
       const travel=dailyPlans.get(actor)?.schoolTravel;
-      if(travel==='weighted-29')return nextWeightedSchoolJourney(
+      if(usesUnifiedTravel(actor)||travel==='weighted-29')
+        return nextWeightedSchoolJourney(
         records,minute,room,
         location=>knownExits(actor,location),
         (a,b)=>passageMinutes(actor,a,b));
@@ -131,6 +161,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
 
     function travelTowardLesson(actor: EntityId, room: EntityId, goal: EntityId): void {
       if (room === goal) return;
+      if(usesUnifiedTravel(actor)){travelTo(actor,room,goal);return;}
       const travel=dailyPlans.get(actor)?.schoolTravel;
       if(travel==='micro-28'||travel==='weighted-29'){
         // Each intermediate edge (and closed door) executes through the
