@@ -6,6 +6,7 @@
  * This is a provisional navigation model, NOT personal map knowledge.
  */
 import { MINUTES_PER_TICK, type AttendanceRecord } from './school-time.ts';
+import {shortestWeightedRoute} from './weighted-navigation.ts';
 import {
   ateMeal, dayOf, type MealKind, type MealMemory
 } from './daily-life.ts';
@@ -75,6 +76,24 @@ export function nextSchoolJourney(
     inClass,
     committed: inClass || (departAt!==null && minute>=departAt)
   };
+}
+
+/** Actual time-optimal estimate from the actor's known weighted network. */
+export function nextWeightedSchoolJourney(
+  lessons:readonly Lesson[],
+  minute:number,location:number,
+  knownExits:(room:number)=>readonly number[],
+  passageMinutes:(from:number,to:number)=>number|null,
+  bufferMinutes=MINUTES_PER_TICK
+):ScheduledJourney|null{
+  const lesson=lessons.find(l=>minute<l.endsAt);
+  if(!lesson)return null;
+  const route=shortestWeightedRoute(location,lesson.room,knownExits,passageMinutes);
+  const departAt=route===null?null:
+    lesson.startsAt-route.minutes-bufferMinutes;
+  const inClass=minute>=lesson.startsAt&&minute<lesson.endsAt;
+  return {lesson,hops:route?.hops??null,departAt,inClass,
+    committed:inClass||(departAt!==null&&minute>=departAt)};
 }
 
 /**

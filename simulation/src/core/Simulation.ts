@@ -62,6 +62,7 @@ export type Command =
   | { type: 'move'; actor: EntityId; destination: EntityId }
   | { type: 'break_object'; actor: EntityId; target: EntityId }
   | { type: 'open_door'; actor: EntityId; door: EntityId }
+  | { type: 'search_passages'; actor: EntityId }
   | { type: 'tell'; actor: EntityId; listener: EntityId; claim: Claim }
   | { type: 'inspect_object'; actor: EntityId; target: EntityId }
   | { type: 'ask_about'; actor: EntityId; listener: EntityId; object: EntityId }
@@ -94,6 +95,7 @@ export type WorldEvent =
   | { type: 'entity_moved'; actor: EntityId; from: EntityId; to: EntityId }
   | { type: 'object_broken'; actor: EntityId; target: EntityId; room: EntityId }
   | { type: 'door_opened'; actor: EntityId; door: EntityId }
+  | { type: 'passage_discovered'; actor: EntityId; from: EntityId; to: EntityId }
   | { type: 'testimony_delivered'; actor: EntityId; listener: EntityId; claim: Claim }
   | { type: 'object_inspected'; actor: EntityId; target: EntityId; broken: boolean }
   | { type: 'question_asked'; actor: EntityId; listener: EntityId; object: EntityId; answered: boolean }
@@ -181,10 +183,15 @@ export type CommandResult =
   | { ok: true; events: readonly WorldEvent[] }
   | { ok: false; reason: MoveRejection | BreakRejection | SocialRejection | DoorRejection | InspectRejection | QuestionRejection | SpellRejection | HelpRejection | DailyRejection | MeetingRejection | IntentionRejection | PointRejection | 'no_toilet_need' | 'wrong_toilet' |
       'not_urgent' | 'no_animal_signal' | 'not_partner' | 'no_sighting' |
-      'animal_cannot_speak' | 'animal_action_unavailable' | 'listener_cannot_speak'; events: readonly [] };
+      'animal_cannot_speak' | 'animal_action_unavailable' | 'listener_cannot_speak' |
+      'unknown_passage' | 'cannot_search_passages'; events: readonly [] };
 
 export type DoorOptions = {
-  door: { key: string; label: string; open: boolean };
+  door?: { key: string; label: string; open: boolean };
+  /** [GAME] Physical minutes for one traversal of this undirected passage. */
+  travelMinutes?:number;
+  /** Hidden links exist physically but are excluded from public navigation. */
+  hidden?:boolean;
 };
 
 function pairKey(a: EntityId, b: EntityId): string {
@@ -220,6 +227,10 @@ export function createSimulation() {
   const Name = { value: [] as string[] };
   const LocatedIn = createRelation({ exclusive: true });
   const PassageTo = createRelation();
+  const weightedPassages=new Map<string,{
+    a:number;b:number;minutes:number;hidden:boolean
+  }>();
+  const knownHidden=new Map<number,Set<string>>();
 
   const {
     keys, doors, events, observationsByCharacter, beliefsByCharacter, roomDetails,
@@ -302,12 +313,21 @@ export function createSimulation() {
       throw new Error('Passages must connect two distinct rooms');
     }
     const key = pairKey(a, b);
-    if (doors.has(key)) throw new Error('This passage already has a door');
-    if (options?.door && hasComponent(ecs, a, PassageTo(b))) {
-      throw new Error('Cannot add a door to an existing passage');
+    if (weightedPassages.has(key))
+      throw new Error('This passage already exists');
+    const minutes=options?.travelMinutes??2;
+    if(!Number.isSafeInteger(minutes)||minutes<1||minutes>10)
+      throw new Error('Passage duration must be 1–10 minutes');
+    const hidden=options?.hidden===true;
+    if(options?.hidden!==undefined&&typeof options.hidden!=='boolean')
+      throw new Error('Invalid hidden passage setting');
+    weightedPassages.set(key,{a,b,minutes,hidden});
+    // Concealed entrances do NOT enter the public ECS PassageTo relation,
+    // which is what legacy actors use for ordinary navigation.
+    if(!hidden){
+      addComponent(ecs, a, PassageTo(b));
+      addComponent(ecs, b, PassageTo(a));
     }
-    addComponent(ecs, a, PassageTo(b));
-    addComponent(ecs, b, PassageTo(a));
     if (!options?.door) return undefined;
 
     const doorId = addNamedEntity(options.door.key, options.door.label);
@@ -329,7 +349,34 @@ export function createSimulation() {
   }
 
   function adjacent(a: EntityId, b: EntityId): boolean {
-    return isRoom(a) && isRoom(b) && hasComponent(ecs, a, PassageTo(b));
+    return isRoom(a)&&isRoom(b)&&weightedPassages.has(pairKey(a,b));
+  }
+
+  function knownExits(actor:EntityId,room:EntityId):EntityId[]{
+    if(!isCharacter(actor)||!isRoom(room))return [];
+    const known=knownHidden.get(actor);
+    const publicExits=getRelationTargets(ecs,room,PassageTo);
+    const secrets=[...weightedPassages.entries()].flatMap(([key,p])=>
+      p.hidden&&known?.has(key)
+        ?p.a===room?[p.b]:p.b===room?[p.a]:[]
+        :[]);
+    return [...new Set([...publicExits,...secrets])].sort((a,b)=>a-b);
+  }
+
+  function passageMinutes(actor:EntityId,a:EntityId,b:EntityId):number|null{
+    const p=weightedPassages.get(pairKey(a,b));
+    if(!isCharacter(actor)||!p||
+      (p.hidden&&!knownHidden.get(actor)?.has(pairKey(a,b))))
+      return null;
+    return p.minutes;
+  }
+
+  function passageDiscoveries(actor:EntityId):[number,number][]{
+    if(!isCharacter(actor))return [];
+    return [...(knownHidden.get(actor)??[])].map(key=>{
+      const p=weightedPassages.get(key)!;
+      return [p.a,p.b] as [number,number];
+    }).sort((a,b)=>a[0]-b[0]||a[1]-b[1]);
   }
 
   function passageOpen(a: EntityId, b: EntityId): boolean {
@@ -498,8 +545,10 @@ export function createSimulation() {
           typeof plan.intentionPlanning !== 'boolean') ||
         (plan.evidenceInquiry !== undefined &&
           typeof plan.evidenceInquiry !== 'boolean') ||
-        (plan.schoolTravel !== undefined && plan.schoolTravel !== 'micro-28') ||
-        (plan.schoolTravel === 'micro-28' && plan.schoolPlanning !== 'adaptive') ||
+        (plan.schoolTravel !== undefined &&
+          plan.schoolTravel !== 'micro-28'&&plan.schoolTravel!=='weighted-29') ||
+        ((plan.schoolTravel === 'micro-28'||plan.schoolTravel==='weighted-29') &&
+          plan.schoolPlanning !== 'adaptive') ||
         (plan.evidenceInquiry===true && plan.intentionPlanning!==true) ||
         (plan.learningAppointments !== undefined &&
           typeof plan.learningAppointments !== 'boolean') ||
@@ -739,6 +788,9 @@ export function createSimulation() {
   function execute(command: Command): CommandResult {
     if (command.type === 'move') {
       const from = currentRoom(command.actor);
+      if(from!==null&&weightedPassages.get(pairKey(from,command.destination))?.hidden&&
+         !knownHidden.get(command.actor)?.has(pairKey(from,command.destination)))
+        return {ok:false,reason:'unknown_passage',events:[]};
       const isConnected = from !== null && adjacent(from, command.destination);
       const reason = validateMovement({
         actorExists: entityExists(ecs, command.actor),
@@ -769,6 +821,24 @@ export function createSimulation() {
     if(patrolPlans.get(command.actor)?.kind==='animal'&&
        !['inspect_object','signal_incident','break_object'].includes(command.type))
       return {ok:false,reason:'animal_action_unavailable',events:[]};
+    if(command.type==='search_passages'){
+      const here=currentRoom(command.actor);
+      if(here===null||!hasComponent(ecs,command.actor,Vision))
+        return {ok:false,reason:'cannot_search_passages',events:[]};
+      const known=knownHidden.get(command.actor)??new Set<string>();
+      const discovered:WorldEvent[]=[];
+      for(const [key,passage] of weightedPassages){
+        if(!passage.hidden||known.has(key)||
+           (passage.a!==here&&passage.b!==here))continue;
+        known.add(key);
+        const event:WorldEvent={type:'passage_discovered',actor:command.actor,
+          from:here,to:passage.a===here?passage.b:passage.a};
+        emit(event);
+        discovered.push(event);
+      }
+      if(known.size)knownHidden.set(command.actor,known);
+      return {ok:true,events:discovered};
+    }
     if(command.type==='decide_house_points'){
       if(!pointAuthorities.has(command.actor))
         return {ok:false,reason:'no_point_authority',events:[]};
@@ -1609,6 +1679,7 @@ export function createSimulation() {
           : { type: 'move', actor, destination: next };
       },
       exits: room => getRelationTargets(ecs, room, PassageTo),
+      knownExits,passageMinutes,
       canAnswerWitnessQuestion:actor=>patrolPlans.get(actor)?.kind!=='animal',
       execute, currentRoom, occupants, observations, assessment, trustOf, knowledgeGaps,
       pendingTutoring, attemptedTutors, searches, timetables, routines,
@@ -1784,6 +1855,14 @@ export function createSimulation() {
       }),
       broken: Array.from(query(ecs, [Fragile])).map(id => [id, Fragile.broken[id] === 1]),
       doors: Array.from(query(ecs, [Door])).map(id => [id, Door.open[id] === 1]),
+      ...(knownHidden.size?{knownPassages:[...knownHidden.entries()]
+        .filter(([,known])=>known.size>0)
+        .map(([actor,known]):[number,[number,number][]]=>[
+          actor,[...known].map(key=>{
+            const p=weightedPassages.get(key)!;
+            return [p.a,p.b] as [number,number];
+          }).sort((x,y)=>x[0]-y[0]||x[1]-y[1])
+        ])}:{}),
       flags: characters.map(id => [id, traitFlags(id)]),
       trusts: trust,
       helpedBy: helped,
@@ -1856,6 +1935,19 @@ export function createSimulation() {
     for (const [id, open] of state.doors) {
       if (!hasComponent(ecs, id, Door)) throw new Error('Checkpoint references missing door');
       Door.open[id] = open ? 1 : 0;
+    }
+    knownHidden.clear();
+    for(const [actor,pairs] of state.knownPassages??[]){
+      if(!isCharacter(actor)||!Array.isArray(pairs))
+        throw Error('Invalid known passage owner');
+      const known=new Set<string>();
+      for(const [a,b] of pairs){
+        const key=pairKey(a,b);
+        if(!weightedPassages.get(key)?.hidden||known.has(key))
+          throw Error('Invalid or duplicate known passage');
+        known.add(key);
+      }
+      if(known.size)knownHidden.set(actor,known);
     }
     houseMembership.clear();
     for(const [id,house] of state.houseMembership??[]){
@@ -2025,6 +2117,7 @@ export function createSimulation() {
     clock: () => schoolTime(tick),
     beliefs: (observer: EntityId): Belief[] => beliefsByCharacter.read(observer),
     currentRoom, locationOf, occupants, observations,
+    knownExits,passageMinutes,passageDiscoveries,
     isBroken: (eid: EntityId) => hasComponent(ecs, eid, Fragile) && Fragile.broken[eid] === 1,
     doorIsOpen: (eid: EntityId) => hasComponent(ecs, eid, Door) ? Door.open[eid] === 1 : null,
     id: (key: string) => keys.get(key),

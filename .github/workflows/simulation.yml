@@ -47,3 +47,4 @@ jobs:
       - run: npm run population-demo -- 144
       - run: npm run foundation-demo -- 144
       - run: npm run travel-demo -- 144
+      - run: npm run weighted-passages-demo

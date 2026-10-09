@@ -51,14 +51,22 @@ export function createCastleLayout(world: Simulation) {
     const east = add('east_landing_' + floor, 'Восточная лестница: уровень ' + floor, floor, 'east', 'landing');
     const gallery = add('gallery_' + floor, 'Галерея: уровень ' + floor, floor, 'central', 'gallery');
     landings[floor] = { west, east, gallery };
-    world.connect(west, gallery);
-    world.connect(gallery, east);
-    if (floor === 0 || floor === 2 || floor === 4) world.connect(west, east);
+    // Long transverse galleries need more time than short doorways.
+    world.connect(west,gallery,{travelMinutes:3});
+    world.connect(gallery,east,{travelMinutes:3});
+    if(floor===0||floor===2||floor===4)
+      world.connect(west,east,{travelMinutes:5});
   }
   for (let index = 1; index < levels.length; index++) {
-    world.connect(landings[levels[index - 1]!]!.west, landings[levels[index]!]!.west);
-    world.connect(landings[levels[index - 1]!]!.east, landings[levels[index]!]!.east);
+    world.connect(landings[levels[index-1]!]!.west,
+      landings[levels[index]!]!.west,{travelMinutes:4});
+    world.connect(landings[levels[index-1]!]!.east,
+      landings[levels[index]!]!.east,{travelMinutes:4});
   }
+  // [GAME] Optional experimental hidden cross-floor shortcut. Never expose
+  // it via the public PassageTo graph or conflate it with a canon passage.
+  world.connect(landings[4].west,landings[0].west,
+    {travelMinutes:3,hidden:true});
 
   const hall = landings[0].gallery;
   const greatHall = add('great_hall', 'Большой зал', 0, 'central', 'dining');

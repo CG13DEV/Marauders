@@ -67,6 +67,7 @@ function remapCommand(command: Command, ids: Map<number, number>): Command {
     case 'move': return { ...command, actor: at(command.actor), destination: at(command.destination) };
     case 'break_object': return { ...command, actor: at(command.actor), target: at(command.target) };
     case 'open_door': return { ...command, actor: at(command.actor), door: at(command.door) };
+    case 'search_passages':return {...command,actor:at(command.actor)};
     case 'tell': return { ...command, actor: at(command.actor), listener: at(command.listener),
       claim: { ...command.claim, culprit: at(command.claim.culprit), object: at(command.claim.object) } };
     case 'inspect_object': return { ...command, actor: at(command.actor), target: at(command.target) };
@@ -104,6 +105,8 @@ function canonicalize(value: unknown, idToKey: Map<number, string>): unknown {
     'target', 'door', 'from', 'to', 'room', 'destination', 'source', 'observer', 'partner', 'promisor', 'beneficiary', 'pupil', 'speaker', 'announcer', 'questioned'
   ]);
   function recur(input: unknown, parent?: string): unknown {
+    if(parent==='passageDiscoveries'&&typeof input==='number')
+      return idToKey.get(input)??('unknown:'+input);
     if (Array.isArray(input)) return input.map(x => recur(x, parent));
     if (input !== null && typeof input === 'object') {
       return Object.fromEntries(Object.entries(input).map(([key, item]) =>
@@ -122,7 +125,7 @@ function auditOf(world: Simulation, operations: readonly Operation[]): string {
     if (op.kind === 'room' || op.kind === 'character' || op.kind === 'fragileObject')
       idToKey.set(op.id, op.key);
     if (op.kind === 'connect' && op.doorId !== undefined)
-      idToKey.set(op.doorId, op.options?.door.key ?? 'unnamed-door');
+      idToKey.set(op.doorId, op.options?.door?.key ?? 'unnamed-door');
   }
   const characters = operations.filter((o): o is Extract<EntityCreation, { kind: 'character' }> =>
     o.kind === 'character');
@@ -149,6 +152,8 @@ function auditOf(world: Simulation, operations: readonly Operation[]): string {
       rests: world.restHistory(c.id),
       ...(world.toiletState(c.id)?{toilet:world.toiletState(c.id)}:{}),
       ...(world.patrolState(c.id)?{patrol:world.patrolState(c.id)}:{}),
+      ...(world.passageDiscoveries(c.id).length
+        ?{passageDiscoveries:world.passageDiscoveries(c.id)}:{}),
       ...(world.houseOf(c.id)===null?{}:{house:world.houseOf(c.id)}),
       ...(world.knownPointNews(c.id).length?{pointNews:world.knownPointNews(c.id)}:{}),
       ...(world.intentionHistory(c.id).length?{intentions:world.intentionHistory(c.id)}:{}),
@@ -157,7 +162,7 @@ function auditOf(world: Simulation, operations: readonly Operation[]): string {
         ? { promises: world.promiseHistory(c.id) } : {})
     })),
     objects: objects.map(o => ({ key: o.key, room: world.locationOf(o.id), broken: world.isBroken(o.id) })),
-    doors: doors.map(o => ({ key: o.options?.door.key, open: world.doorIsOpen(o.doorId!) })),
+    doors: doors.map(o => ({ key: o.options?.door?.key, open: world.doorIsOpen(o.doorId!) })),
     ...(world.pointHistory().length?{
       housePoints:world.housePoints(),pointLedger:world.pointHistory()
     }:{}),

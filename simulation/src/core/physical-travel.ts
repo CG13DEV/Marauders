@@ -26,6 +26,8 @@ export function followPhysicalPassages(args:{
   passageAction(actor:number,room:number,next:number):Command;
   currentRoom(actor:number):number|null;
   execute(action:Command):CommandResult;
+  /** When omitted, preserve the Experiment #28 uniform two-minute cost. */
+  passageMinutes?:(from:number,to:number)=>number|null;
   budgetMinutes?:number;
 }):MicroStep[]{
   const {actor,destination,exits,nextRoom,passageAction,currentRoom,execute}=args;
@@ -34,8 +36,9 @@ export function followPhysicalPassages(args:{
     throw new Error('Invalid micro travel budget');
   const steps:MicroStep[]=[];
   let room=args.startingRoom;
-  const maxCommands=Math.floor(budget/MICRO_PASSAGE_MINUTES);
-  for(let i=0;i<maxCommands&&room!==destination;i++){
+  let remaining=budget;
+  // A weighted one-minute passage allows up to ten separate real commands.
+  for(let i=0;i<budget&&room!==destination;i++){
     const next=nextRoom(room,destination,exits);
     if(next===null)break;
     const action=passageAction(actor,room,next);
@@ -43,6 +46,14 @@ export function followPhysicalPassages(args:{
     // free bonus action via the traversal adapter.
     if(action.type!=='move'&&action.type!=='open_door')
       throw new Error('Invalid physical passage action');
+    const price=action.type==='open_door'?MICRO_PASSAGE_MINUTES:
+      args.passageMinutes?.(room,next)??
+      (args.passageMinutes?null:MICRO_PASSAGE_MINUTES);
+    if(price===null)break;
+    if(!Number.isSafeInteger(price)||price<1||price>MICRO_TICK_MINUTES)
+      throw Error('Invalid physical passage duration');
+    if(price>remaining)break;
+    remaining-=price;
     const result=execute(action);
     steps.push({action,result});
     if(!result.ok)break;
