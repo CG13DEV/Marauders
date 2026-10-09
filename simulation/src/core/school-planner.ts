@@ -120,7 +120,10 @@ export function feasibleMealJourney(
     if (ateMeal(meals,day,meal.kind)) continue;
     const begin=day*1440+meal.start;
     const finish=day*1440+meal.end;
-    const hops=shortestHops(room,diningRoom,exits);
+    // A weighted personal route already determines whether the trip is possible.
+    // Do not BFS the public graph for every *candidate* meal; most candidates
+    // are rejected before an actual meal journey is selected.
+    const hops=travelMinutes?null:shortestHops(room,diningRoom,exits);
     // A personally known secret route can connect rooms that are disconnected
     // in the public map; don't reject it before evaluating personal knowledge.
     const approachCost=travelMinutes?travelMinutes(room,diningRoom):
@@ -139,7 +142,7 @@ export function feasibleMealJourney(
     if(nextLesson && minute<nextLesson.endsAt) {
       // The session has already started: leaving is never an implicit choice.
       if(minute>=nextLesson.startsAt) continue;
-      const afterMealHops=shortestHops(diningRoom,nextLesson.room,exits);
+      const afterMealHops=travelMinutes?null:shortestHops(diningRoom,nextLesson.room,exits);
       const nextCost=travelMinutes?travelMinutes(diningRoom,nextLesson.room):
         afterMealHops===null?null:afterMealHops*MINUTES_PER_TICK;
       if(nextCost===null)continue;
@@ -149,8 +152,12 @@ export function feasibleMealJourney(
       if(freeToMove+Math.ceil(nextCost/MINUTES_PER_TICK)*MINUTES_PER_TICK
          >nextLesson.startsAt)continue;
     }
+    // Preserve historical PlannedMeal.hops semantics: publicly reachable
+    // routes report *public* hops even when the selected personal route is
+    // faster. Only accepted weighted meal candidates need this metadata.
+    const publicHops=travelMinutes?shortestHops(room,diningRoom,exits):hops;
     return {kind:meal.kind,eatingAt,
-      hops:hops??Math.ceil(approachCost/MINUTES_PER_TICK),feasible:true};
+      hops:publicHops??Math.ceil(approachCost/MINUTES_PER_TICK),feasible:true};
   }
   return null;
 }
