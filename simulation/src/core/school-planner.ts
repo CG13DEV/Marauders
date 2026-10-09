@@ -6,7 +6,7 @@
  * This is a provisional navigation model, NOT personal map knowledge.
  */
 import { MINUTES_PER_TICK, type AttendanceRecord } from './school-time.ts';
-import {shortestWeightedRoute} from './weighted-navigation.ts';
+import {shortestWeightedRoute,type WeightedRoute} from './weighted-navigation.ts';
 import {
   ateMeal, dayOf, type MealKind, type MealMemory
 } from './daily-life.ts';
@@ -84,11 +84,15 @@ export function nextWeightedSchoolJourney(
   minute:number,location:number,
   knownExits:(room:number)=>readonly number[],
   passageMinutes:(from:number,to:number)=>number|null,
-  bufferMinutes=MINUTES_PER_TICK
+  bufferMinutes=MINUTES_PER_TICK,
+  // #30.6: opt-in per-actor cached resolver; old weighted callers stay unchanged.
+  resolveRoute?:(from:number,to:number)=>WeightedRoute|null
 ):ScheduledJourney|null{
   const lesson=lessons.find(l=>minute<l.endsAt);
   if(!lesson)return null;
-  const route=shortestWeightedRoute(location,lesson.room,knownExits,passageMinutes);
+  const route=resolveRoute
+    ?resolveRoute(location,lesson.room)
+    :shortestWeightedRoute(location,lesson.room,knownExits,passageMinutes);
   const departAt=route===null?null:
     lesson.startsAt-route.minutes-bufferMinutes;
   const inClass=minute>=lesson.startsAt&&minute<lesson.endsAt;
