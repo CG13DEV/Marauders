@@ -16,14 +16,17 @@ test('witness choice uses only known damage and co-located people, once each',()
 test('after examining damage, anyone can question a local witness without knowing a culprit',()=>{
   const w=createPersistentSimulation();
   const office=w.room('office','Кабинет');
+  const vestibule=w.room('vestibule','Переход');
   const hall=w.room('hall','Коридор');
-  w.connect(office,hall);
+  w.connect(office,vestibule);
+  w.connect(vestibule,hall);
   const seeker=w.character('seeker','Свидетель последствий',office);
   const witness=w.character('witness','Очевидец',hall);
   const pupil=w.character('pupil','Ученик',hall);
   const cup=w.fragileObject('cup','Чашка',hall);
   assert.equal(w.execute({type:'break_object',actor:pupil,target:cup}).ok,true);
   assert.equal(w.beliefs(seeker).length,0);
+  assert.equal(w.execute({type:'move',actor:seeker,destination:vestibule}).ok,true);
   assert.equal(w.execute({type:'move',actor:seeker,destination:hall}).ok,true);
   assert.deepEqual(w.execute({type:'ask_about',actor:seeker,listener:witness,
     object:cup}),{ok:false,reason:'not_known',events:[]});
