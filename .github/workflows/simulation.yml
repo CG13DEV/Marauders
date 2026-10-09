@@ -66,3 +66,5 @@ jobs:
           MARAUDERS_ROUTE_PROFILE: '1'
       - name: Experiment 30.8 seven-day 634-resident soak
         run: npm run week-soak-demo
+      - name: Experiment 30.9 GC and ECS retention audit
+        run: npm run memory-audit-demo
