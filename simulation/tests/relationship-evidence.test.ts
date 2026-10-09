@@ -77,7 +77,7 @@ test('#31.5: a neutral baseline can be reduced, but not upgraded by mere attenda
 test('#31.5: later evidence concerns only the same named partner',()=>{
   const waited={...pair,kind:'waited_alone' as const};
   const met={...pair,meetingId:2,minute:1180,kind:'met' as const};
-  assert.equal(relationshipFromExperience('trusted',[waited],'11' as unknown as number).trust,'neutral');
+  assert.equal(relationshipFromExperience('trusted',[waited],11).trust,'neutral');
   assert.equal(relationshipFromExperience('trusted',[waited,
     {...met,partner:12}],11).trust,'neutral');
   assert.equal(relationshipFromExperience('trusted',[waited,met],11).trust,'trusted');
