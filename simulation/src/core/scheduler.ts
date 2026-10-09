@@ -23,6 +23,7 @@ import { decideInvestigation, type Assessment, type Trust } from './cognition.ts
 import { chooseMischiefTarget, livedMischiefMotive } from './mischief.ts';
 import {arbitrateAutonomousAction} from './action-arbitration.ts';
 import {chooseSocialResponse} from './social-choice.ts';
+import {ownUnrepairedCommitment,considersConcreteRepair} from './reconciliation.ts';
 import { spellDefinitions, type SpellId, type LearningRecord } from './spellcraft.ts';
 import type { Belief } from './beliefs.ts';
 import { willingToTutor, type TutoringRequest } from './social-learning.ts';
@@ -348,10 +349,26 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
         // Actual teaching revalidates whether they still need the concept.
         learnerNeedsConcept:true
       });
-      const accept= academicHelp && !appointmentClashes &&
-        !personallyAvoids(commitmentMemories.get(actor)??[],offer.promisor) &&
-        trustOf(actor,offer.promisor)!=='distrusted' &&
-        !(plan.style==='reserved' && offer.purpose==='explore');
+      const ownEvidence=commitmentMemories.get(actor)??[];
+      // The original repair reference has to be in this listener's
+      // personally HEARD invitation, not only the authoritative ledger.
+      const heardRepair=ownEvidence.find(m=>m.meetingId===offer.id&&
+        m.partner===offer.promisor&&m.kind==='invited');
+      const admittedMeeting=heardRepair?.repairOfMeetingId;
+      const canRespondToRepair=admittedMeeting!==undefined &&
+        admittedMeeting===offer.repairOfMeetingId &&
+        considersConcreteRepair({
+          personalHistory:ownEvidence,partner:offer.promisor,
+          repairOfMeetingId:admittedMeeting,
+          response:plan.repairResponse
+        });
+      // An acknowledgement may be considered, not magically accepted.
+      // Ordinary invitations still respect the same refusal gates as before.
+      const ordinaryConsent=!personallyAvoids(ownEvidence,offer.promisor)&&
+        !(plan.style==='reserved'&&offer.purpose==='explore');
+      const accept=academicHelp&&!appointmentClashes&&
+        trustOf(actor,offer.promisor)!=='distrusted'&&
+        (offer.repairOfMeetingId===undefined?ordinaryConsent:canRespondToRepair);
       const action:Command={type:'answer_meeting',actor,meetingId:offer.id,accept};
       const result=execute(action);
       recordDecision({actor,action,result});
@@ -1004,6 +1021,36 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
     }
 
     phase('study-invitations');
+    // #31.8: a personal missed obligation can motivate ONE concrete offer
+    // to that same person. This is not a free apology; the partner can refuse.
+    // We query only OWN autobiography and physically nearby participants.
+    for(const actor of actors('dailyLife')){
+      const plan=dailyPlans.get(actor);
+      if(!plan?.repairInitiative||!plan.socialInvitations||
+         !isLeisure(minute)||has(actor,'manual')||!has(actor,'hearing')||
+         occupiedBySchool.has(actor)||socialParticipants.has(actor)||
+         sleeping.has(actor)||decidedActors.has(actor))continue;
+      const room=currentRoom(actor);
+      if(room===null||room!==leisureDestination(plan,minute))continue;
+      const cause=ownUnrepairedCommitment(commitmentMemories.get(actor)??[],minute);
+      if(!cause)continue;
+      const partner=cause.partner;
+      if(!occupants(room).includes(partner)||!has(partner,'hearing')||
+        has(partner,'manual')||occupiedBySchool.has(partner)||
+        socialParticipants.has(partner)||decidedActors.has(partner))continue;
+      const target=(dayOf(minute)+1)*1440+19*60+40;
+      const action:Command={
+        type:'offer_meeting',actor,listener:partner,room,atMinute:target,
+        purpose:'explore',repairOfMeetingId:cause.missedMeetingId
+      };
+      const result=execute(action);
+      recordDecision({actor,action,result});
+      if(result.ok){
+        socialParticipants.add(actor);
+        socialParticipants.add(partner);
+      }
+    }
+
     // Offer one future meeting per initiator-week, only to a person met
     // previously in this actor's own autobiographical conversation history.
     // This is opt-in and does not query the target's intentions or memories.

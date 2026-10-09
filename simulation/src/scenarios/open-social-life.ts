@@ -12,10 +12,10 @@ import type {Trust} from '../core/cognition.ts';
 import {latestPersonalOutcome} from '../core/personal-outcomes.ts';
 
 export type SocialWorldVariant='mutual'|'reserved_reply'|'no_invitations'|'separated'|
-  'lesson_first'|'promise_first';
+  'lesson_first'|'promise_first'|'repair_open'|'repair_guarded'|'repair_unneeded';
 export type TraceEntry={
   minute:number;day:number;actor:string;action:string;
-  target?:string;ok:boolean;
+  target?:string;ok:boolean;repairOfMeetingId?:number;
   firsthandOutcome:string|null;
   knownPartnerTrust:Trust|null;
   previousConversations:number;
@@ -44,8 +44,13 @@ export function runOpenSocialWorld(
     socialInvitations:variant!=='no_invitations'
   };
   ids.forEach((id,i)=>{
+    const repairing=variant==='repair_open'||variant==='repair_guarded'||
+      variant==='repair_unneeded';
     world.setDailyLife(id,{
       ...defaultPlan,
+      ...(repairing&&i===0?{repairInitiative:true}:{}),
+      ...(repairing&&i===1?{repairResponse:
+        variant==='repair_guarded'?'guarded' as const:'open' as const}:{}),
       ...(variant==='reserved_reply'&&i===1
         ?{style:'reserved' as const}:{}),
       ...(variant==='separated'&&i>=2
@@ -55,10 +60,13 @@ export function runOpenSocialWorld(
   });
   // #31.7: The competing academic duty exists from world creation.
   // No NPC is ordered to leave, break a promise or repair a relationship.
-  if(variant==='lesson_first'||variant==='promise_first'){
+  if(variant==='lesson_first'||variant==='promise_first'||
+    variant==='repair_open'||variant==='repair_guarded'){
     const james=ids[0]!;
     const original={...defaultPlan,
-      ...(variant==='promise_first'?{commitmentPriority:'promise_first' as const}:{})};
+      ...(variant==='promise_first'?{commitmentPriority:'promise_first' as const}:{}),
+      ...(variant==='repair_open'||variant==='repair_guarded'
+        ?{repairInitiative:true}:{})};
     world.setDailyLife(james,original);
     world.setTimetable(james,[{id:'evening-study',subject:'Supervised study',
       room:library,startsAt:2610,endsAt:2670}], 'lesson_first');
@@ -84,6 +92,8 @@ export function runOpenSocialWorld(
     jamesOutcome:string|null;
     siriusOutcome:string|null;
     lessonStatus:string|null;
+    selfMissedMyPromise:boolean;
+    repairStatus:string|null;
   }>=[];
   const totalTicks=days*144;
   for(let i=0;i<totalTicks;i++){
@@ -101,7 +111,7 @@ export function runOpenSocialWorld(
     }));
     const decisions=world.step();
     const minute=world.clock().absoluteMinute;
-    if(minute===2640||minute===4070){
+    if(minute===2640||minute===4070||minute===5520){
       const [james,sirius]=ids;
       conflictSnapshots.push({
         minute,
@@ -112,7 +122,10 @@ export function runOpenSocialWorld(
         siriusTrust:world.trustOf(sirius!,james!),
         jamesOutcome:latestPersonalOutcome(world.promiseHistory(james!),sirius!)?.kind??null,
         siriusOutcome:latestPersonalOutcome(world.promiseHistory(sirius!),james!)?.kind??null,
-        lessonStatus:world.attendance(james!)[0]?.status??null
+        lessonStatus:world.attendance(james!)[0]?.status??null,
+        selfMissedMyPromise:world.promiseHistory(james!).some(m=>
+          m.partner===sirius&&m.kind==='missed_my_promise'),
+        repairStatus:world.meetingLedger().find(m=>m.repairOfMeetingId!==undefined)?.status??null
       });
     }
     for(const decision of decisions){
@@ -128,6 +141,8 @@ export function runOpenSocialWorld(
         minute,day:Math.floor(minute/1440),actor:nameOf(decision.actor),
         action:action.type,
         ...(target===undefined?{}:{target}),
+        ...('repairOfMeetingId' in action&&action.repairOfMeetingId!==undefined
+          ?{repairOfMeetingId:action.repairOfMeetingId}:{}),
         ok:decision.result.ok,
         firsthandOutcome:partner>=0?
           remembered.outcomes[partner]??null:null,
@@ -148,9 +163,17 @@ export function runOpenSocialWorld(
       actor:nameOf(event.actor),
       ...('listener' in event?{listener:nameOf(event.listener)}:{}),
       ...('outcome' in event?{outcome:event.outcome}:{}),
-      ...('accepted' in event?{accepted:event.accepted}:{})
+      ...('accepted' in event?{accepted:event.accepted}:{}),
+      ...('meetingId' in event?{meetingId:event.meetingId}:{}),
+      ...('repairOfMeetingId' in event&&event.repairOfMeetingId!==undefined
+        ?{repairOfMeetingId:event.repairOfMeetingId}:{})
     }));
+  const repairMeetings=world.meetingLedger().filter(m=>
+    m.repairOfMeetingId!==undefined);
   const summary={
+    repairOffers:repairMeetings.length,
+    repairKept:repairMeetings.filter(m=>m.status==='kept').length,
+    repairDeclined:repairMeetings.filter(m=>m.status==='declined').length,
     chats:events.filter(x=>x.type==='conversation_shared').length,
     offers:events.filter(x=>x.type==='meeting_offered').length,
     accepted:events.filter(x=>x.type==='meeting_answered'&&x.accepted).length,

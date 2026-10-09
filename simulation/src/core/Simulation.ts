@@ -14,6 +14,7 @@ import { perceiveCrash } from './perception-rules.ts';
 import { copyClaim, type Claim, type Belief } from './beliefs.ts';
 import { assessReports, type Assessment, type Trust } from './cognition.ts';
 import {relationshipFromExperience} from './relationship-evidence.ts';
+import {ownUnrepairedCommitment} from './reconciliation.ts';
 
 import { createRuntimeStores } from './runtime-stores.ts';
 import { isHouseId, calculatePoints, respondToNews,
@@ -79,7 +80,8 @@ export type Command =
   | { type: 'promise_meeting'; actor: EntityId; listener: EntityId;
       room: EntityId; atMinute: number; purpose: MeetingPurpose }
   | { type: 'offer_meeting'; actor: EntityId; listener: EntityId;
-      room: EntityId; atMinute: number; purpose: MeetingPurpose; spell?: SpellId }
+      room: EntityId; atMinute: number; purpose: MeetingPurpose; spell?: SpellId;
+      repairOfMeetingId?:number }
   | { type: 'answer_meeting'; actor: EntityId; meetingId: number; accept: boolean }
   | { type: 'tutor_appointment'; actor: EntityId; meetingId: number }
   | { type: 'intend_visit'; actor: EntityId; destination:EntityId;
@@ -115,7 +117,8 @@ export type WorldEvent =
   | { type: 'meeting_resolved'; actor: EntityId; listener: EntityId;
       meetingId: number; room: EntityId; minute: number; outcome: 'kept' | 'expired' }
   | { type: 'meeting_offered'; actor: EntityId; listener: EntityId;
-      meetingId: number; room: EntityId; minute: number }
+      meetingId: number; room: EntityId; minute: number;
+      repairOfMeetingId?:number }
   | { type: 'meeting_answered'; actor: EntityId; listener: EntityId;
       meetingId: number; room: EntityId; minute: number; accepted: boolean }
   | { type: 'tutoring_appointment_completed'; actor: EntityId; listener: EntityId;
@@ -176,7 +179,8 @@ export type MeetingRejection =
   | 'invalid_purpose' | 'already_committed' | 'not_colocated'
   | 'listener_cannot_hear' | 'no_pending_offer' | 'not_invited'
   | 'offer_timed_out' | 'not_study_meeting' | 'appointment_not_ready'
-  | 'appointment_already_taught' | 'not_missing_concept';
+  | 'appointment_already_taught' | 'not_missing_concept'
+  | 'no_personal_lapse_to_repair' | 'wrong_repair_purpose';
 
 export type IntentionRejection='no_intention_planner'|'invalid_intention'|
   'too_many_intentions'|'missing_intention'|'invalid_deadline'|'duplicate_intention'|
@@ -626,6 +630,10 @@ export function createSimulation() {
         (plan.socialChoice!==undefined && plan.socialChoice!=='reflective') ||
         (plan.relationshipLearning!==undefined &&
           typeof plan.relationshipLearning!=='boolean') ||
+        (plan.repairInitiative!==undefined &&
+          typeof plan.repairInitiative!=='boolean') ||
+        (plan.repairResponse!==undefined &&
+          plan.repairResponse!=='open'&&plan.repairResponse!=='guarded') ||
         (plan.mischief !== undefined &&
           plan.mischief!=='reckless' && plan.mischief!=='cautious' &&
           plan.mischief!=='reactive') ||
@@ -1065,11 +1073,23 @@ export function createSimulation() {
         return {ok:false,reason:'listener_cannot_hear',events:[]};
       if (hasMeetingConflict(commitments,command.actor,command.listener,command.atMinute))
         return {ok:false,reason:'already_committed',events:[]};
+      if(command.repairOfMeetingId!==undefined){
+        const memory=commitmentMemories.get(command.actor)??[];
+        const cause=ownUnrepairedCommitment(memory,now);
+        if(!Number.isSafeInteger(command.repairOfMeetingId)||
+           cause?.missedMeetingId!==command.repairOfMeetingId||
+           cause.partner!==command.listener)
+          return {ok:false,reason:'no_personal_lapse_to_repair',events:[]};
+        if(command.purpose!=='explore'||command.spell!==undefined)
+          return {ok:false,reason:'wrong_repair_purpose',events:[]};
+      }
       const offer:MeetingCommitment={
         id:commitments.length+1,promisor:command.actor,
         beneficiary:command.listener,room:command.room,
         atMinute:command.atMinute,purpose:command.purpose,
-        ...(command.spell===undefined?{}:{spell:command.spell}),status:'offered'
+        ...(command.spell===undefined?{}:{spell:command.spell}),
+        ...(command.repairOfMeetingId===undefined?{}:{repairOfMeetingId:command.repairOfMeetingId}),
+        status:'offered'
       };
       commitments.push(offer);
       if(offer.spell!==undefined)
@@ -1077,16 +1097,19 @@ export function createSimulation() {
       commitmentMemories.get(command.actor)!.push({
         meetingId:offer.id,partner:command.listener,kind:'offered',
         minute:now,room:offer.room,purpose:offer.purpose,
-        ...(offer.spell===undefined?{}:{spell:offer.spell})
+        ...(offer.spell===undefined?{}:{spell:offer.spell}),
+        ...(offer.repairOfMeetingId===undefined?{}:{repairOfMeetingId:offer.repairOfMeetingId})
       });
       commitmentMemories.get(command.listener)!.push({
         meetingId:offer.id,partner:command.actor,kind:'invited',
         minute:now,room:offer.room,purpose:offer.purpose,
-        ...(offer.spell===undefined?{}:{spell:offer.spell})
+        ...(offer.spell===undefined?{}:{spell:offer.spell}),
+        ...(offer.repairOfMeetingId===undefined?{}:{repairOfMeetingId:offer.repairOfMeetingId})
       });
       const event:WorldEvent={
         type:'meeting_offered',actor:command.actor,listener:command.listener,
-        meetingId:offer.id,room:offer.room,minute:now
+        meetingId:offer.id,room:offer.room,minute:now,
+        ...(offer.repairOfMeetingId===undefined?{}:{repairOfMeetingId:offer.repairOfMeetingId})
       };
       emit(event);
       return {ok:true,events:[event]};
@@ -1721,6 +1744,11 @@ export function createSimulation() {
         // Only a *physically waiting* participant can remember abandonment.
         if(promisorHere) remember(meeting.promisor,meeting.beneficiary,'waited_alone');
         if(beneficiaryHere) remember(meeting.beneficiary,meeting.promisor,'waited_alone');
+        // Each absentee remembers only their OWN unfulfilled responsibility.
+        if(!promisorHere) remember(meeting.promisor,meeting.beneficiary,'missed_my_promise');
+        if(!beneficiaryHere && (commitmentMemories.get(meeting.beneficiary)??[])
+           .some(m=>m.meetingId===meeting.id&&m.kind==='accepted'))
+          remember(meeting.beneficiary,meeting.promisor,'missed_my_promise');
       }
       emit({type:'meeting_resolved',actor:meeting.promisor,
         listener:meeting.beneficiary,meetingId:meeting.id,

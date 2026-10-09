@@ -21,6 +21,8 @@ export type MeetingCommitment = {
   spell?: SpellId;
   /** Actual guarded teaching action succeeded at the agreed meeting. */
   taught?: boolean;
+  /** First-hand admission of a specific earlier missed commitment. */
+  repairOfMeetingId?:number;
   status: MeetingStatus;
 };
 
@@ -28,11 +30,13 @@ export type CommitmentMemory = {
   meetingId: number;
   partner: number;
   kind: 'promised' | 'heard_promise' | 'offered' | 'invited' |
-    'accepted' | 'declined' | 'met' | 'waited_alone';
+    'accepted' | 'declined' | 'met' | 'waited_alone' | 'missed_my_promise';
   minute: number;
   room: number;
   purpose: MeetingPurpose;
   spell?: SpellId;
+  /** Only an offer can carry a concrete proposal to make good on a lapse. */
+  repairOfMeetingId?:number;
 };
 
 /** A promise must be a future, tick-aligned meeting rather than a ghost event. */
