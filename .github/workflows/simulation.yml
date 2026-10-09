@@ -39,3 +39,12 @@ jobs:
       - run: npm run intentions-demo
       - run: npm run unified-intentions-demo
       - run: npm run rollout-demo
+      - run: npm run points-demo
+      - run: npm run patrol-demo
+      - run: npm run investigation-demo
+      - run: npm run witness-demo
+      - run: npm run evidence-goals-demo
+      - run: npm run population-demo -- 144
+      - run: npm run foundation-demo -- 144
+      - run: npm run travel-demo -- 144
+      - run: npm run weighted-passages-demo

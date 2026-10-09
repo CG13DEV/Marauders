@@ -9,6 +9,8 @@
 import { createSimulation, type Command, type EntityId, type Simulation, type RoomDescriptor } from './Simulation.ts';
 import type { DoorOptions } from './Simulation.ts';
 import type { Trust } from './cognition.ts';
+import type { HouseId, PointAuthority } from './house-points.ts';
+import type { PatrolKind } from './resident-life.ts';
 import type { SpellId, SpellStage } from './spellcraft.ts';
 import type { Lesson, SchoolPriority } from './school-time.ts';
 import type { DailyLifePlan } from './daily-life.ts';
@@ -23,6 +25,11 @@ type EntityCreation =
 type Operation = EntityCreation
   | { kind: 'execute'; command: Command }
   | { kind: 'step' }
+  | {kind:'configureToilet';actor:number;rooms:number[];urgency:number}
+  | {kind:'configurePatrol';actor:number;role:PatrolKind;waypoints:number[];
+      partner?:number;rendezvous?:number}
+  | { kind:'registerHouse'; actor:number; house:HouseId }
+  | { kind:'grantPointAuthority'; actor:number; role:PointAuthority }
   | { kind: 'setTrust'; observer: number; source: number; value: Trust }
   | { kind: 'setInquisitive' | 'setSocialInvestigator' | 'setGuarded' | 'setHelpSeeking' | 'setHelpful' | 'setExperimenter' | 'setManualControl'; actor: number; enabled: boolean }
   | { kind: 'setRoutine'; actor: number; destinations: number[] }
@@ -60,6 +67,7 @@ function remapCommand(command: Command, ids: Map<number, number>): Command {
     case 'move': return { ...command, actor: at(command.actor), destination: at(command.destination) };
     case 'break_object': return { ...command, actor: at(command.actor), target: at(command.target) };
     case 'open_door': return { ...command, actor: at(command.actor), door: at(command.door) };
+    case 'search_passages':return {...command,actor:at(command.actor)};
     case 'tell': return { ...command, actor: at(command.actor), listener: at(command.listener),
       claim: { ...command.claim, culprit: at(command.claim.culprit), object: at(command.claim.object) } };
     case 'inspect_object': return { ...command, actor: at(command.actor), target: at(command.target) };
@@ -70,11 +78,17 @@ function remapCommand(command: Command, ids: Map<number, number>): Command {
     case 'practice_spell': return { ...command, actor: at(command.actor),
       ...(command.guide === undefined ? {} : { guide: at(command.guide) }) };
     case 'cast_spell': return { ...command, actor: at(command.actor) };
+    case 'use_toilet':case 'signal_incident':return {...command,actor:at(command.actor),
+      ...('listener' in command?{listener:at(command.listener)}:{})};
     case 'eat_meal': return { ...command, actor: at(command.actor) };
     case 'intend_visit': return {...command,actor:at(command.actor),destination:at(command.destination)};
     case 'cancel_intention': case 'intend_study': return {...command,actor:at(command.actor)};
-    case 'intend_investigate': return {...command,actor:at(command.actor),object:at(command.object)};
-    case 'chat': return { ...command, actor: at(command.actor), listener: at(command.listener) };
+    case 'intend_investigate': case 'intend_inquire': return {...command,actor:at(command.actor),object:at(command.object)};
+    case 'chat': case 'share_house_points':return {...command,
+      actor:at(command.actor),listener:at(command.listener)};
+    case 'decide_house_points':return {...command,actor:at(command.actor),
+      pupil:at(command.pupil),basis:command.basis.kind==='breakage_claim'
+        ?{...command.basis,object:at(command.basis.object)}:{...command.basis}};
     case 'promise_meeting': case 'offer_meeting': return {
       ...command,actor:at(command.actor),
       listener:at(command.listener),room:at(command.room)
@@ -88,10 +102,12 @@ function remapCommand(command: Command, ids: Map<number, number>): Command {
 function canonicalize(value: unknown, idToKey: Map<number, string>): unknown {
   const entityFields = new Set([
     'actor', 'listener', 'requester', 'helper', 'teacher', 'culprit', 'object',
-    'target', 'door', 'from', 'to', 'room', 'destination', 'source', 'observer', 'partner', 'promisor', 'beneficiary'
+    'target', 'door', 'from', 'to', 'room', 'destination', 'source', 'observer', 'partner', 'promisor', 'beneficiary', 'pupil', 'speaker', 'announcer', 'questioned'
   ]);
   function recur(input: unknown, parent?: string): unknown {
-    if (Array.isArray(input)) return input.map(x => recur(x));
+    if(parent==='passageDiscoveries'&&typeof input==='number')
+      return idToKey.get(input)??('unknown:'+input);
+    if (Array.isArray(input)) return input.map(x => recur(x, parent));
     if (input !== null && typeof input === 'object') {
       return Object.fromEntries(Object.entries(input).map(([key, item]) =>
         [key, recur(item, key)]));
@@ -109,7 +125,7 @@ function auditOf(world: Simulation, operations: readonly Operation[]): string {
     if (op.kind === 'room' || op.kind === 'character' || op.kind === 'fragileObject')
       idToKey.set(op.id, op.key);
     if (op.kind === 'connect' && op.doorId !== undefined)
-      idToKey.set(op.doorId, op.options?.door.key ?? 'unnamed-door');
+      idToKey.set(op.doorId, op.options?.door?.key ?? 'unnamed-door');
   }
   const characters = operations.filter((o): o is Extract<EntityCreation, { kind: 'character' }> =>
     o.kind === 'character');
@@ -134,13 +150,22 @@ function auditOf(world: Simulation, operations: readonly Operation[]): string {
       meals: world.mealHistory(c.id),
       conversations: world.conversationHistory(c.id),
       rests: world.restHistory(c.id),
+      ...(world.toiletState(c.id)?{toilet:world.toiletState(c.id)}:{}),
+      ...(world.patrolState(c.id)?{patrol:world.patrolState(c.id)}:{}),
+      ...(world.passageDiscoveries(c.id).length
+        ?{passageDiscoveries:world.passageDiscoveries(c.id)}:{}),
+      ...(world.houseOf(c.id)===null?{}:{house:world.houseOf(c.id)}),
+      ...(world.knownPointNews(c.id).length?{pointNews:world.knownPointNews(c.id)}:{}),
       ...(world.intentionHistory(c.id).length?{intentions:world.intentionHistory(c.id)}:{}),
       ...(world.needsOf(c.id)===null?{}:{needs:world.needsOf(c.id)}),
       ...(world.promiseHistory(c.id).length
         ? { promises: world.promiseHistory(c.id) } : {})
     })),
     objects: objects.map(o => ({ key: o.key, room: world.locationOf(o.id), broken: world.isBroken(o.id) })),
-    doors: doors.map(o => ({ key: o.options?.door.key, open: world.doorIsOpen(o.doorId!) })),
+    doors: doors.map(o => ({ key: o.options?.door?.key, open: world.doorIsOpen(o.doorId!) })),
+    ...(world.pointHistory().length?{
+      housePoints:world.housePoints(),pointLedger:world.pointHistory()
+    }:{}),
     trust: [...trustPairs].sort().map(pair => {
       const [observer, source] = pair.split(':').map(Number);
       return { observer, source, value: world.trustOf(observer!, source!) };
@@ -186,6 +211,14 @@ function createFacade(world: Simulation, operations: Operation[]) {
       operations.push({ kind: 'step' });
       return result;
     },
+    registerHouse(actor:number,house:HouseId){
+      world.registerHouse(actor,house);
+      operations.push({kind:'registerHouse',actor,house});
+    },
+    grantPointAuthority(actor:number,role:PointAuthority){
+      world.grantPointAuthority(actor,role);
+      operations.push({kind:'grantPointAuthority',actor,role});
+    },
     setTrust(observer: number, source: number, value: Trust) {
       world.setTrust(observer, source, value);
       operations.push({ kind: 'setTrust', observer, source, value });
@@ -217,6 +250,17 @@ function createFacade(world: Simulation, operations: Operation[]) {
     setExperimenter(actor: number, enabled: boolean) {
       world.setExperimenter(actor, enabled);
       operations.push({ kind: 'setExperimenter', actor, enabled });
+    },
+    configureToilet(actor:number,rooms:readonly number[],urgency=0){
+      world.configureToilet(actor,rooms,urgency);
+      operations.push({kind:'configureToilet',actor,rooms:[...rooms],urgency});
+    },
+    configurePatrol(actor:number,role:PatrolKind,waypoints:readonly number[],
+      partner?:number,rendezvous?:number){
+      world.configurePatrol(actor,role,waypoints,partner,rendezvous);
+      operations.push({kind:'configurePatrol',actor,role,waypoints:[...waypoints],
+        ...(partner===undefined?{}:{partner}),
+        ...(rendezvous===undefined?{}:{rendezvous})});
     },
     setRoutine(actor: number, destinations: readonly number[]) {
       world.setRoutine(actor, destinations);
@@ -349,6 +393,8 @@ export function restoreSimulation(serialized: string | SavedSimulationV1 | Saved
         break;
       }
       case 'step': restored.step(); break;
+      case 'registerHouse':restored.registerHouse(at(op.actor),op.house);break;
+      case 'grantPointAuthority':restored.grantPointAuthority(at(op.actor),op.role);break;
       case 'setTrust': restored.setTrust(at(op.observer), at(op.source), op.value); break;
       case 'setManualControl': restored.setManualControl(at(op.actor), op.enabled); break;
       case 'setInquisitive': restored.setInquisitive(at(op.actor), op.enabled); break;
@@ -357,6 +403,12 @@ export function restoreSimulation(serialized: string | SavedSimulationV1 | Saved
       case 'setHelpSeeking': restored.setHelpSeeking(at(op.actor), op.enabled); break;
       case 'setHelpful': restored.setHelpful(at(op.actor), op.enabled); break;
       case 'setExperimenter': restored.setExperimenter(at(op.actor), op.enabled); break;
+      case 'configureToilet':restored.configureToilet(at(op.actor),
+        op.rooms.map(at),op.urgency);break;
+      case 'configurePatrol':restored.configurePatrol(at(op.actor),op.role,
+        op.waypoints.map(at),
+        op.partner===undefined?undefined:at(op.partner),
+        op.rendezvous===undefined?undefined:at(op.rendezvous));break;
       case 'setRoutine': restored.setRoutine(at(op.actor), op.destinations.map(at)); break;
       case 'setTimetable': restored.setTimetable(at(op.actor), op.lessons.map(l => ({ ...l, room: at(l.room), ...(l.teacher === undefined ? {} : { teacher: at(l.teacher) }) })), op.priority); break;
       case 'setDailyLife': restored.setDailyLife(at(op.actor), op.plan

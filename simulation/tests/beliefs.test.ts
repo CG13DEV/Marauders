@@ -28,7 +28,8 @@ test('Remus learns a fact from Lily as testimony, not as his own observation', (
   assert.equal(result.ok, true);
   assert.deepEqual(world.beliefs(remus), [{
     claim: { kind: 'broke_object', culprit: james, object: cup },
-    evidence: { kind: 'testimony', speaker: lily, eventSequence: 4 }
+    evidence: { kind: 'testimony', speaker: lily, eventSequence: 4,
+      origin:{kind:'vision'} }
   }]);
   assert.deepEqual(world.observations(remus), [{ kind: 'heard_crash', source: 'hearing' }]);
 });

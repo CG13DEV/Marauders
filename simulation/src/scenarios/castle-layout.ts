@@ -6,12 +6,13 @@
 import type { Simulation, EntityId, RoomDescriptor } from '../core/Simulation.ts';
 import { SUBJECTS, ELECTIVES, type CoreSubject, type ElectiveSubject, type House } from './curriculum.ts';
 
-export type Floor = -1 | 0 | 1 | 2 | 3 | 4;
+export type Floor = -1 | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 export type Wing = 'west' | 'east' | 'central';
 export type RoomKind =
   | 'landing' | 'gallery' | 'common_room' | 'bedroom'
   | 'classroom' | 'dining' | 'courtyard' | 'hospital'
-  | 'library' | 'staff' | 'kitchen' | 'greenhouse' | 'tower';
+  | 'library' | 'staff' | 'kitchen' | 'greenhouse' | 'tower'
+  | 'bathroom' | 'office' | 'hidden';
 export type Place = {
   key: string; id: EntityId; floor: Floor; wing: Wing; kind: RoomKind;
   house?: House;
@@ -43,21 +44,29 @@ export function createCastleLayout(world: Simulation) {
     return id;
   }
 
-  const levels = [-1, 0, 1, 2, 3, 4] as const;
+  const levels = [-1, 0, 1, 2, 3, 4, 5, 6, 7] as const;
   const landings = {} as Record<Floor, FloorConnections>;
   for (const floor of levels) {
     const west = add('west_landing_' + floor, 'Западная лестница: уровень ' + floor, floor, 'west', 'landing');
     const east = add('east_landing_' + floor, 'Восточная лестница: уровень ' + floor, floor, 'east', 'landing');
     const gallery = add('gallery_' + floor, 'Галерея: уровень ' + floor, floor, 'central', 'gallery');
     landings[floor] = { west, east, gallery };
-    world.connect(west, gallery);
-    world.connect(gallery, east);
-    if (floor === 0 || floor === 2 || floor === 4) world.connect(west, east);
+    // Long transverse galleries need more time than short doorways.
+    world.connect(west,gallery,{travelMinutes:3});
+    world.connect(gallery,east,{travelMinutes:3});
+    if(floor===0||floor===2||floor===4)
+      world.connect(west,east,{travelMinutes:5});
   }
   for (let index = 1; index < levels.length; index++) {
-    world.connect(landings[levels[index - 1]!]!.west, landings[levels[index]!]!.west);
-    world.connect(landings[levels[index - 1]!]!.east, landings[levels[index]!]!.east);
+    world.connect(landings[levels[index-1]!]!.west,
+      landings[levels[index]!]!.west,{travelMinutes:4});
+    world.connect(landings[levels[index-1]!]!.east,
+      landings[levels[index]!]!.east,{travelMinutes:4});
   }
+  // [GAME] Optional experimental hidden cross-floor shortcut. Never expose
+  // it via the public PassageTo graph or conflate it with a canon passage.
+  world.connect(landings[4].west,landings[0].west,
+    {travelMinutes:3,hidden:true});
 
   const hall = landings[0].gallery;
   const greatHall = add('great_hall', 'Большой зал', 0, 'central', 'dining');
@@ -78,6 +87,45 @@ export function createCastleLayout(world: Simulation) {
   world.connect(landings[1].east, staffRoom);
   const kitchens = add('kitchens', 'Кухни', -1, 'west', 'kitchen', { loreStatus: 'INFERENCE' });
   world.connect(landings[-1].west, kitchens);
+
+  // [GAME] The lab has paired washrooms on every modelled level, even the
+  // dungeon. This is a usability fixture, not a book-accurate floor plan.
+  const bathrooms = {} as Record<Floor, { boys: EntityId; girls: EntityId }>;
+  for (const floor of levels) {
+    const boys = add('boys_bathroom_' + floor,
+      'Туалет для мальчиков: уровень ' + floor, floor, 'west', 'bathroom',
+      { loreStatus: 'GAME' });
+    const girls = add('girls_bathroom_' + floor,
+      floor === 2 ? 'Туалет Плаксы Миртл' : 'Туалет для девочек: уровень ' + floor,
+      floor, 'east', 'bathroom',
+      floor === 2 ? {
+        loreStatus: 'INFERENCE',
+        loreSource: 'https://www.harrypotter.com/fact-file/characters-and-pets/moaning-myrtle'
+      } : { loreStatus: 'GAME' });
+    world.connect(landings[floor].west, boys);
+    world.connect(landings[floor].east, girls);
+    bathrooms[floor] = { boys, girls };
+  }
+
+  const headmasterOffice = add('headmaster_office', 'Кабинет директора', 7, 'east', 'office', {
+    loreStatus: 'GAME'
+  });
+  world.connect(landings[7].east, headmasterOffice, {
+    door: { key: 'headmaster_office_door', label: 'Дверь кабинета директора', open: false }
+  });
+  const caretakerOffice = add('caretaker_office', 'Кабинет завхоза', 0, 'west', 'office', {
+    loreStatus: 'GAME'
+  });
+  world.connect(landings[0].west, caretakerOffice);
+
+  // [CANON] The entrance is on floor 7 opposite Barnabas's tapestry.
+  // Do NOT add a permanent passage: a normal pathfinder must not reveal it.
+  const roomOfRequirement = add('room_of_requirement', 'Выручай-комната',
+    7, 'central', 'hidden', {
+      loreStatus: 'CANON',
+      loreSource: 'https://www.harrypotter.com/fact-file/locations/the-room-of-requirement'
+    });
+  const requirementApproach = landings[7].gallery;
 
   const dorms = {} as Record<House, HouseRooms>;
   const houseData = [
@@ -162,6 +210,7 @@ export function createCastleLayout(world: Simulation) {
   }
   return {
     places, landings, hall, greatHall, courtyard, hospital, library, kitchens,
-    staffRoom, dorms, classrooms, electiveRooms, charmsCorridor
+    staffRoom, dorms, bathrooms, headmasterOffice, caretakerOffice,
+    roomOfRequirement, requirementApproach, classrooms, electiveRooms, charmsCorridor
   };
 }

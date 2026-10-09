@@ -4,11 +4,14 @@
  */
 import type { EntityId, Command, CommandResult, WorldEvent, Observation } from './Simulation.ts';
 import { currentLesson, registerAttendance } from './school-time.ts';
-import { nextSchoolJourney, feasibleMealJourney, shortestHops } from './school-planner.ts';
+import { nextSchoolJourney, nextWeightedSchoolJourney,feasibleMealJourney, shortestHops } from './school-planner.ts';
+import {nextWeightedRoom} from './weighted-navigation.ts';
+import {followPhysicalPassages,MICRO_PASSAGE_MINUTES} from './physical-travel.ts';
 import { isActivePromise, personallyAvoids,
   type MeetingCommitment, type CommitmentMemory
 } from './social-commitments.ts';
 import { nextRoomOnRoute } from './navigation.ts';
+import {advanceToiletNeed,closestBathroom,nextWitnessInquiry,type ToiletNeed} from './resident-life.ts';
 import { planStudyIntention } from './learning-intentions.ts';
 import { advanceNeeds,chooseNeedOrIntention,pickIntention,isOpenIntention,
   type PersonalIntention,type BodilyNeeds,type IntentionStatus,type Interruption
@@ -35,9 +38,12 @@ export type SchedulerContext = {
   visibleFragiles(room: EntityId): EntityId[];
   passageAction(actor: EntityId, room: EntityId, next: EntityId): Command;
   exits(room: EntityId): EntityId[];
+  knownExits(actor:EntityId,room:EntityId):EntityId[];
+  passageMinutes(actor:EntityId,from:EntityId,to:EntityId):number|null;
   execute(command: Command): CommandResult;
   currentRoom(actor: EntityId): EntityId | null;
   occupants(room: EntityId): EntityId[];
+  canAnswerWitnessQuestion(actor:EntityId):boolean;
   observations(actor: EntityId): Observation[];
   assessment(observer: EntityId, object: EntityId): Assessment;
   trustOf(observer: EntityId, source: EntityId): Trust;
@@ -55,6 +61,7 @@ export type SchedulerContext = {
   commitmentMemories: Map<EntityId, CommitmentMemory[]>;
   intentions: Map<EntityId,PersonalIntention[]>;
   bodilyNeeds: Map<EntityId,BodilyNeeds>;
+  toiletNeeds: Map<EntityId,ToiletNeed>;
   transitionIntention(actor:EntityId,id:number,status:IntentionStatus,
     interruptedBy?:Interruption):void;
   resolveMeetings(minute: number): void;
@@ -72,10 +79,10 @@ export type SchedulerContext = {
 export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
   const {
     advanceClock, actors, has, visibleFragiles, passageAction,
-    exits, execute, currentRoom, occupants, observations, assessment,
+    exits, knownExits, passageMinutes, execute, currentRoom, occupants, canAnswerWitnessQuestion,observations, assessment,
     trustOf, knowledgeGaps, pendingTutoring, attemptedTutors, searches,
     timetables, routines, dailyPlans, meals, conversations, rests,
-    commitments, commitmentMemories, intentions, bodilyNeeds,
+    commitments, commitmentMemories, intentions, bodilyNeeds,toiletNeeds,
     transitionIntention, resolveMeetings,
     spellKnowledge, beliefsByCharacter, setRoutine, emit, recordDailyRest
   } = ctx;
@@ -88,6 +95,8 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       bodilyNeeds.set(actor,advanceNeeds(
         needs,currentRoom(actor)===plan.homeRoom,minute));
     }
+    for(const [actor,need] of toiletNeeds)
+      toiletNeeds.set(actor,advanceToiletNeed(need,isSleepTime(minute)));
     const decisions: { actor: EntityId; action: Command; result: CommandResult }[] = [];
     const occupiedBySchool = new Set<EntityId>();
     const socialParticipants = new Set<EntityId>();
@@ -109,8 +118,36 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
         promisePriorities.add(actor);
     }
 
+    function estimateSchoolJourney(actor:EntityId,records:readonly import('./school-time.ts').AttendanceRecord[],
+      room:EntityId){
+      const travel=dailyPlans.get(actor)?.schoolTravel;
+      if(travel==='weighted-29')return nextWeightedSchoolJourney(
+        records,minute,room,
+        location=>knownExits(actor,location),
+        (a,b)=>passageMinutes(actor,a,b));
+      return nextSchoolJourney(records,minute,room,exits,10,
+        travel==='micro-28'?MICRO_PASSAGE_MINUTES:10);
+    }
+
     function travelTowardLesson(actor: EntityId, room: EntityId, goal: EntityId): void {
       if (room === goal) return;
+      const travel=dailyPlans.get(actor)?.schoolTravel;
+      if(travel==='micro-28'||travel==='weighted-29'){
+        // Each intermediate edge (and closed door) executes through the
+        // authoritative world command handler, never a teleport.
+        const actorExits=(location:number)=>travel==='weighted-29'
+          ?knownExits(actor,location):exits(location);
+        const cost=(a:number,b:number)=>passageMinutes(actor,a,b);
+        const next=(a:number,b:number,edgeExits:(room:number)=>readonly number[])=>
+          travel==='weighted-29'?nextWeightedRoom(a,b,edgeExits,cost):
+            nextRoomOnRoute(a,b,edgeExits);
+        for(const {action,result} of followPhysicalPassages({
+          actor,startingRoom:room,destination:goal,
+          exits:actorExits,nextRoom:next,passageAction,currentRoom,execute,
+          ...(travel==='weighted-29'?{passageMinutes:cost}:{})
+        }))decisions.push({actor,action,result});
+        return;
+      }
       const next = nextRoomOnRoute(room, goal,
         location => exits(location));
       if (next === null) return;
@@ -127,7 +164,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       if (!timetable || room === null || timetable.priority !== 'lesson_first' ||
           has(actor, 'manual') || promisePriorities.has(actor)) continue;
       if (dailyPlans.get(actor)?.schoolPlanning === 'adaptive') {
-        const journey = nextSchoolJourney(timetable.records, minute, room, exits);
+        const journey = estimateSchoolJourney(actor,timetable.records,room);
         if (!journey || !journey.committed) continue;
         const plan = dailyPlans.get(actor);
         const meal = plan && !journey.inClass
@@ -143,6 +180,33 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
         if (!lesson) continue;
         occupiedBySchool.add(actor);
         travelTowardLesson(actor, room, lesson.room);
+      }
+    }
+
+    // Need-driven, physically traversed toilet journeys. Classroom duty and
+    // feasible imminent school journeys have priority over non-emergency trips.
+    // An assigned bathroom is a destination, never a magical instant relief.
+    for(const [actor,need] of toiletNeeds){
+      if(has(actor,'manual')||occupiedBySchool.has(actor)||
+         decisions.some(d=>d.actor===actor))continue;
+      if(need.urgency<68)continue;
+      const room=currentRoom(actor);
+      if(room===null)continue;
+      const lesson=estimateSchoolJourney(actor,timetables.get(actor)?.records??[],room);
+      if(lesson?.committed)continue;
+      const destination=closestBathroom(room,need.bathrooms,
+        (from,to)=>shortestHops(from,to,exits));
+      if(destination===null)continue;
+      const action:Command|null=room===destination
+        ?{type:'use_toilet',actor}
+        :(()=>{
+          const next=nextRoomOnRoute(room,destination,exits);
+          return next===null?null:passageAction(actor,room,next);
+        })();
+      if(action){
+        const result=execute(action);
+        decisions.push({actor,action,result});
+        if(result.ok)occupiedBySchool.add(actor);
       }
     }
 
@@ -256,6 +320,23 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
         visibleFragiles(room),inspected,true);
       if(target!==null)execute({type:'intend_investigate',actor,object:target});
     }
+    // #25: any character's firsthand inspection can generate a causal goal.
+    for(const actor of actors('dailyLife')){
+      const plan=dailyPlans.get(actor);
+      if(!plan?.evidenceInquiry||!plan.intentionPlanning||
+         !has(actor,'hearing')||has(actor,'manual'))continue;
+      const room=currentRoom(actor);
+      if(room===null)continue;
+      const known=new Set(beliefsByCharacter.read(actor).map(b=>b.claim.object));
+      for(const observed of observations(actor)){
+        if(observed.kind!=='inspected_object'||!observed.broken||
+           known.has(observed.target)||
+           !visibleFragiles(room).includes(observed.target)||
+           (intentions.get(actor)??[]).some(g=>
+             g.kind==='inquire'&&g.object===observed.target))continue;
+        execute({type:'intend_inquire',actor,object:observed.target});
+      }
+    }
 
     // Opt-in intention arbitration. Scheduling, commitments and bodily needs
     // all compete through observed obligations, not a global RPG action score.
@@ -272,6 +353,9 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       // Reconcile a goal only against personal knowledge or an accepted
       // agreement the character actually participated in.
       for(const goal of goals.filter(isOpenIntention)){
+        if(goal.kind==='inquire' && goal.object!==undefined&&
+           beliefsByCharacter.read(actor).some(b=>b.claim.object===goal.object))
+          transitionIntention(actor,goal.id,'completed');
         if(goal.kind==='learn_concept' && goal.spell &&
            spellKnowledge.stage(actor,goal.spell)!=='unaware')
           transitionIntention(actor,goal.id,'completed');
@@ -305,6 +389,16 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
             m.promisor===actor&&m.spell===goal.spell &&
             (m.status==='offered'||m.status==='pending'));
         }
+        if(goal.kind==='inquire'&&room===goal.destination){
+          if(goal.object===undefined||beliefsByCharacter.read(actor).some(b=>
+             b.claim.object===goal.object))return false;
+          const asked=new Set(goal.questioned??[]);
+          return occupants(room).some(other=>other!==actor&&!asked.has(other)&&
+            has(other,'hearing')&&canAnswerWitnessQuestion(other)&&
+            !has(other,'manual')&&
+            !occupiedBySchool.has(other)&&!socialParticipants.has(other)&&
+            !decisions.some(d=>d.actor===other));
+        }
         if(goal.kind==='attend_meeting'){
           const meeting=commitments.find(m=>m.id===goal.meetingId);
           if(!meeting || meeting.status!=='pending')return false;
@@ -320,8 +414,8 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       // Meal service is a window, not instantaneous food wherever hunger
       // strikes. Plan the actual journey *before* the serving window closes,
       // reusing the same path/time feasibility rules as the academic planner.
-      const nextSchool=nextSchoolJourney(
-        timetables.get(actor)?.records??[],minute,room,exits);
+      const nextSchool=estimateSchoolJourney(
+        actor,timetables.get(actor)?.records??[],room);
       const mealJourney=feasibleMealJourney(
         minute,room,plan.diningRoom,
         meals.get(actor)??[],nextSchool?.lesson??null,exits);
@@ -406,6 +500,40 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
               socialParticipants.add(intention.helper);
             }
           }
+          continue;
+        }
+        if(goal.kind==='inquire'&&goal.object!==undefined){
+          // Shared with Filch: finite local candidates, no access to anyone's
+          // private thoughts and no omniscient remote object tracking.
+          if(room!==goal.destination){
+            const next=nextRoomOnRoute(room,goal.destination,exits);
+            if(next!==null){
+              transitionIntention(actor,goal.id,'active');
+              const action=passageAction(actor,room,next);
+              const result=execute(action);decisions.push({actor,action,result});
+            }
+            continue;
+          }
+          const people=occupants(room).filter(other=>
+            other!==actor&&has(other,'hearing')&&
+            canAnswerWitnessQuestion(other)&&!has(other,'manual')&&
+            !occupiedBySchool.has(other)&&!socialParticipants.has(other)&&
+            !decisions.some(d=>d.actor===other));
+          const inquiry=nextWitnessInquiry([goal.object],people,
+            (goal.questioned??[]).map(id=>goal.object+':'+id));
+          if(!inquiry){
+            transitionIntention(actor,goal.id,'paused','waiting');
+            continue;
+          }
+          const action:Command={type:'ask_about',actor,
+            listener:inquiry.listener,object:inquiry.object};
+          const result=execute(action);decisions.push({actor,action,result});
+          if(result.ok){
+            (goal.questioned??=[]).push(inquiry.listener);
+            if(beliefsByCharacter.read(actor).some(b=>b.claim.object===goal.object))
+              transitionIntention(actor,goal.id,'completed');
+            else transitionIntention(actor,goal.id,'paused','waiting');
+          }else transitionIntention(actor,goal.id,'paused','waiting');
           continue;
         }
         if(goal.kind==='investigate' && goal.object!==undefined){
@@ -500,7 +628,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       if (plan.schoolPlanning === 'adaptive') {
         const timeline = timetables.get(actor);
         const journey = timeline
-          ? nextSchoolJourney(timeline.records, minute, room, exits) : null;
+          ? estimateSchoolJourney(actor,timeline.records,room) : null;
         const opportunity = feasibleMealJourney(minute, room,
           plan.diningRoom, knownMeals, journey?.lesson ?? null, exits);
         if (opportunity) {
@@ -824,6 +952,25 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
         socialParticipants.add(actor);
         socialParticipants.add(candidate);
       }
+    }
+
+    // Any opt-in character can physically inspect their nearby environment,
+    // independent of caretaker-specific hardcoded routines.
+    for(const actor of actors('dailyLife')){
+      if(!dailyPlans.get(actor)?.evidenceInquiry||has(actor,'manual')||
+         !has(actor,'vision')||occupiedBySchool.has(actor)||
+         sleeping.has(actor)||socialParticipants.has(actor)||
+         decisions.some(d=>d.actor===actor))continue;
+      const room=currentRoom(actor);
+      if(room===null)continue;
+      const seen=new Set(observations(actor).filter(o=>
+        o.kind==='inspected_object').map(o=>o.target));
+      const object=visibleFragiles(room).filter(id=>!seen.has(id))
+        .sort((a,b)=>a-b)[0];
+      if(object===undefined)continue;
+      const action:Command={type:'inspect_object',actor,target:object};
+      const result=execute(action);
+      decisions.push({actor,action,result});
     }
 
     // A curious experimenter can apply a genuinely learned pattern.

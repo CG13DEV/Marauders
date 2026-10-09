@@ -18,6 +18,8 @@ export type DailyLifePlan = {
   interest: SocialTopic;
   /** Opt-in distance-aware scheduling. Absent means legacy 20-minute lead. */
   schoolPlanning?: 'adaptive';
+  /** #28 [GAME] Opt-in validated micro-passage traversal for school trips. */
+  schoolTravel?: 'micro-28' | 'weighted-29';
   /** Default protects academic commitments; alternative models character choice. */
   commitmentPriority?: CommitmentPriority;
   /** Opt-in, world-scoped autonomous invitation & response policy. */
@@ -26,6 +28,8 @@ export type DailyLifePlan = {
   learningAppointments?: boolean;
   /** Opt-in resumable goal queue with bodily needs (Experiment #18). */
   intentionPlanning?: boolean;
+  /** [GAME] Opt-in: personally inspected damage can generate witness inquiry goals. */
+  evidenceInquiry?:boolean;
 };
 export type MealMemory = { day: number; kind: MealKind; minute: number };
 export type ConversationMemory = {

@@ -398,3 +398,108 @@ At the end of the full-week model the opted-in population's **mean internal hung
 Calibrate the population's food/rest economics, generate personal goals from individual circumstances throughout the school year, add tangible food and actual sleep actions, then personal route knowledge and multiweek continuity.
 
 The source of truth for design remains the main repository `docs/` directory. This code is a small executable [GAME] model, not a statement of canon.
+
+
+## Expanded Hogwarts fixture (after #20)
+
+`createSchoolWeek(world, planning, social, rollout, 'expanded')` opts in the named Hogwarts population and offices while retaining the original 84-pupil + 12-professor timetable rollout. It adds **9 static non-timetable residents**, reuses the History of Magic lecturer as ghost Professor Binns (timetable intact, no hunger/sleep), and assigns four house heads to existing subject professors. New rooms include paired bathrooms on every modelled level (−1…7), Filch's office, Dumbledore's office, and an **unconnected** Room of Requirement. The latter is deliberately absent from `world.exits()` until a proper conditional-entry system is implemented. `room-of-requirement.ts` only validates the prerequisites for a future reveal; it does not open a door or teleport anyone. Expanded residents have stable keys but **no simulated ghost/animal physiology or autonomous patrols yet**.
+
+`createSchoolWeek()` without the fifth argument remains the experiment #20 baseline for reproducible seven-day comparisons. Run `npm test` and `npm run typecheck` to check both worlds.
+
+
+## Experiment #21 — House points, evidence, and local school news
+
+Run `npm run points-demo` to see a **false allegation** cause a real Gryffindor penalty. **[GAME]** House points are institutional ledger records, not a proof of factual wrongdoing. This is an opt-in vertical slice: ordinary `createSchoolWeek()` begins at 0 for each house and reproduces the former 7-day baseline (no synthetic auto-awards).
+
+New school setup functions: `registerHouse(pupil, house)` and `grantPointAuthority(staff, 'teacher' | 'headmaster')`. Both are journalled in persistent worlds. All 84 pupils receive house membership, the 12 lecturer slots staff authority; in expanded mode Dumbledore additionally receives headmaster authority, whereas Filch, Mrs Norris and the ghosts **do not**. Binns' pre-existing teaching slot remains a lecturer.
+
+Authoritative commands:
+- `decide_house_points` requires an authorised school official, an enrolled pupil, a signed delta in the GAME range ±1..50, a reason, and an explicit basis. Negative decisions on damaged objects require a matching entry in the decision-maker's **own belief ledger**; that belief might be eyewitness evidence or a false report. Positive merit currently needs visual ability and staff/pupil co-location; it is a discretionary observation fixture, **not** an automatically detected achievement.
+- `share_house_points` requires actual co-location, hearing, and first-hand **knowledge of the announcement or earlier gossip**. Ordinary `chat` now spreads at most one personally known point decision between participants.
+- A changed score is an authoritative `house_points_changed` event, while local listeners get `heard_house_points` observations and `knownPointNews()`. A person elsewhere cannot read the school's private ledger. `pointReactions()` returns bounded causal response memory (own house: pride, embarrassment, resentment), not a universal relationship score or autonomous revenge.
+- `housePoints()` and `pointHistory()` are world-facing **debug/administration** accessors only; do not feed them directly to NPC cognition.
+
+V1 operation replay and V2 materialized checkpoint preserve role assignment, immutable grounds/source of a point decision, ledger order and personal rumor provenance. Earlier saves lacking the optional point state continue to restore. `simulation/tests/house-points.test.ts` covers false allegations, authority & evidence gates, merits, rumor transfer, snapshots, expanded school and isolated worlds.
+
+**Deliberate limits:** no automatic autonomous sanctions yet, no correction/appeal mechanism, no House Cup ceremony/season reset, no Filch patrol reporting, and no long-term emergent intent generated from resentment. Those are separate stages, not things the `pointReactions` accessor pretends to simulate.
+
+
+## Experiment #22 — Filch, Mrs Norris, and real toilet visits
+
+Run `npm run patrol-demo`. The optional **expanded** school population now gives 84 pupils a slowly filling private toilet need with nine reachable bathroom choices matching each character's dormitory facilities. The 10-minute tick increments urgency while awake more than while sleeping; the numbers (roughly 1.2 versus 0.28) and the threshold (68) are **[GAME]**, not medical facts. Pupils only perform `use_toilet` after traversing ordinary world passages into an assigned bathroom with sufficiently high urgency; the action restores their private state. School classes and committed routes take precedence. The room isn't a teleport target; no player-facing RPG meter or public bathroom broadcast is implemented.
+
+Filch and Mrs Norris now have **cyclic physical patrols** in the same `world.step()`. Each consumes at most one validated action per step. Both can inspect physical objects upon reaching them. Mrs Norris, if she personally witnessed breakage or inspected an actually broken object, heads toward a **known rendezvous** instead of using omniscient knowledge of Filch's position. Only if they physically meet can she issue a nonverbal `signal_incident`: Filch gets an anonymous concern alert, **not a culprit ID, object ID or magically transmitted location**. She cannot use the human `tell` command. Filch, if *he* witnessed culpability and physically meets a staff member authorized to assign points, can deliver the ordinary `tell` testimony; the staff member can then decide independently. No automatic point penalties or fabricated proof follow the cat's alert.
+
+Implemented APIs: `configureToilet`, `toiletState`, `configurePatrol`, `patrolState`, commands `use_toilet` and `signal_incident`, events `toilet_used` and `animal_alerted`. Journal V1 and checkpoint V2 preserve the private urgency, visit counters, waypoint progress, witnessed incident signals and past Filch reports. Old saves lacking these fields remain valid. Existing default `createSchoolWeek()` and experiment 20's opt-in population gates remain unchanged; experiment 22 activates only with `expansion='expanded'`.
+
+**Boundaries:** bladder filling is time-based (water/food volumes and illnesses are not simulated); cubicles, queues, gender access enforcement, voice dialogue with Filch, real nighttime school-rule enforcement, and NPC intent responses to the cat's alarm are future work. The patrol is a configured route, not yet autonomous route adaptation based on accumulated suspicious patterns.
+
+
+## Experiment #23 — Face-to-face alerts and adaptive local search
+
+Run npm run investigation-demo. When Mrs Norris **physically meets** Filch and issues a validated signal_incident, Filch now suspends his fixed patrol briefly and searches nearby reachable public rooms from **his own location** (at most two passages deep / nine rooms). Room order is stable across runs; walking and doors use normal world rules; one patroller still performs at most one action per tick. An undiscovered remote room is never revealed by the cat: the alarm includes no object ID, culprit or incident coordinates. An inspected broken object proves damage but cannot magically identify the culprit.
+
+The bounded detour lives in PatrolPlan.search (origin, pending, checked) and survives V1 replay, V2 checkpoints and remapped entity IDs. Existing school population, timetable priority, patrol evidence and the default baseline remain unchanged. The experiment does **not** add general autonomous crime-solving, inferred culprit detection, witness interviewing, house-point penalties, or long-term priorities; those are separate research gates.
+
+
+## Experiment #24 — Personal investigation and witness testimony
+
+Run `npm run witness-demo`. Any character who **personally inspects a broken object** can ask a genuinely co-located, hearing witness about that object via `ask_about`, even before knowing a culprit. Inspecting damage never establishes culpability: a witness must already hold an observation or reported belief to answer, and a guarded guilty pupil may remain silent. Mrs Norris can neither speak nor answer human `ask_about` queries, even if she saw the incident.
+
+Filch's opt-in caretaker patrol now interviews actually encountered people once per damaged-object/person pair (deterministic ordering). His own first-hand or second-hand belief can be relayed to a co-located authorised teacher; `tell` keeps the immediate original origin of personally known claims so the teacher can distinguish what Filch actually saw from what a student told him. This is **source attribution, not proof**; unsubstantiated claims are still permitted as lies and never receive invented provenance. No automatic House-point decision happens.
+
+`PatrolPlan.interviewed` is persisted through V1 operation replay, V2 runtime snapshots and entity remapping; old optional-field snapshots remain supported. The baseline population and experiment 20 school metrics remain unchanged. No court-like formal questioning, automatic punishments, truth oracle, or global inference is introduced.
+
+
+## Experiment #25 — Reusable personal evidence → goals → actions
+
+Any character (student, professor, etc.) with **`intentionPlanning: true` and `evidenceInquiry: true`** in its optional `DailyLifePlan` can now create evidence-driven agency without a Filch-specific behavior tree. The sequence is: physically inspect an object in the same room → personally observe damage → form an authoritative `intend_inquire` personal intention → question reachable local speaking witnesses via `ask_about` → remember whom one has asked → finish when a claim is actually heard or wait until an explicit expiration. Human roles, player manual control and school commitments remain authoritative. A damaged object establishes no culprit; the character holds *attributed testimony*, not omniscient knowledge.
+
+The common `nextWitnessInquiry` policy selects witnesses for both Filch (#24) and any opted-in agent. The ordinary personal goal arbiter handles hunger, fatigue, timetables and meetings. `questioned` lives on `PersonalIntention`, with fully portable V1 audit, V1 command replay and V2 checkpoint remapping. Players can explicitly `intend_inquire` after their own local examination, but the automatic scheduler never takes control of a manually controlled character. Configuration is optional; the previous default baseline is unchanged.
+
+Run `npm run evidence-goals-demo` for an ordinary non-caretaker pupil who finds a broken vase, asks a guarded culprit who remains silent, then learns what an actual eyewitness says. This is a **general reusable causal slice**, not a universal open-ended goal generator or telepathic investigator.
+
+
+## Experiment #26 — Research school with 600 pupils
+
+Run `npm run population-demo -- 144` to build and advance the optional **600-person synthetic school** and print measured construction and simulation times, group and bedroom capacities, attendance and activity. The research-only scale is `createSchoolWeek(world,'adaptive','autonomous','96-all','expanded','research-600')`. The default call `createSchoolWeek()` still creates **84 pupils**, 14 paired-house teaching groups, 155 school sessions and exactly the original timetable behaviour.
+
+The opted-in school has precisely 600 pupils (150 per house; first through seventh years: 86, 86, 86, 86, 85, 85, 86). Each house/year group has 20–23 pupils, assigned deterministic stable character keys and a real, house-connected year/sex-specific bedroom holding at most five residents. The 28 academic groups use four alternating tracks, six weekday lesson windows (09:00, 10:00, 11:00, 13:00, 14:00, 15:00), 210 core sessions and 50 elective workshops. No room, lecturer or child is double-booked. With 12 academic staff and nine extra named residents, the expanded research world has 621 resident entities. All ordinary school rules — movement through doors, lesson attendance, meals, conversations, needs, staff/cat patrol, world-local observations and saved memories — remain the same.
+
+**[GAME] Boundaries:** This is not canonical student census data and it does not yet contain 600 hand-authored biographies. Sex/gender split and all anonymous identities are synthetic test fixtures. Core classes currently amount to approximately 7–8 lessons per week per pupil; full school hours, class-size-specific seats, teachers' workloads, accurately sized corridors and fine-grained UE geometry need further design. The load test proves what the current implementation actually does, not a finished Hogwarts simulation. V2 checkpoints must continue deterministically. `npm run population-demo -- 144` can be used to profile a full 24-hour day.
+
+
+## Experiment #27 — capacity-aware school timetable, grades 1–2
+
+**Optional**, keep previous behavior by default: `createSchoolWeek(world,'adaptive','autonomous','96-all','expanded','research-600','foundations-27')`. The 600-pupil world now gives every first-year pupil **20** 50-minute weekly classes (5 central disciplines × 3, History of Magic × 2, Astronomy × 2, Flying × 1) and every second-year **19** (no Flying). This is [GAME] invented *frequency* data; the first-year Flying curriculum itself is canonical.
+
+The pure deterministic `planFoundationTimetable` in `src/scenarios/foundation-timetable.ts` accepts groups and full school-resource constraints: subject-qualified instructors with **20-period maximum**, real teaching rooms with **24-seat capacity**, explicit days/slots and existing reservations. All assignments must avoid real time interval conflicts for staff, rooms and pupils. Missing teachers, insufficient room capacity and unavailable slots **throw diagnostics**, rather than dropping lessons. The currently implemented allocation is a greedy deterministic heuristic, **not** a mathematical certificate of infeasibility if allocation fails.
+
+The school fixture opts in **13 additional [GAME] teachers and 13 physically accessible classrooms/grounds**, adding 156 first-two-year classes alongside the still-partial 3–7 curricula. These ancillary teachers and facilities do **not** claim Hogwarts had a second set of named professors. Known 12 original subject teachers still cover the older partial timetable; their workload is not yet constrained to 20. The extra staff and rooms are real entities and receive true `setTimetable` records and ECS locations. Full 600-pupil load, lesson attendance, movement, knowledge provenance and V2 checkpoint continuation remain in the same world.
+
+Run `npm run foundation-demo -- 144` to simulate one in-world day, print teacher loads, exact first/second-year attendance, and **travel feasibility warnings** calculated from current shortest-hop / 10-minute-per-hop topology. Passing timetable allocation is not a claim that students can physically attend every class. Fixed blocks also do not yet represent double periods, night Astronomy, realistic transitions, individualized NEWT courses or all-year curricula. Default `createSchoolWeek()` on 84 students and previous `research-600` schedule remain untouched.
+
+
+## Experiment #28 — physical sub-tick travel without teleporting
+
+The optional `travel='micro-28'` final argument to `createSchoolWeek(...,'research-600','foundations-27','micro-28')` gives **only first- and second-year pupils and their temporary instructors** a school-commute travel mode. One ten-minute planning tick may perform up to five independently validated `move` or `open_door` commands at two in-world minutes each. Every adjacent room crossing is executed by the ordinary world command validator and emits its own `entity_moved` event (including any hearing/vision consequences). There is no single-command teleport. A closed door consumes a real extra action and movement budget; failures stop the journey.
+
+The departure-time estimator now receives an optional cost per abstract-graph hop while remaining backward-compatible with the former one-edge-per-tick baseline. The authoritative `DailyLifePlan.schoolTravel` flag requires adaptive school planning. The whole optional mode is V1 journal / V2 snapshot compatible and is checked for valid combinations when configured.
+
+Run `npm run travel-demo -- 144` to execute the SAME deterministic 600-pupil school for one day in both legacy and micro-passage mode and compare foundation attendance and actual validated movements. **This is a limited school-travel slice**: meal, toilet, leisure, social and patrol journeys still have ten-minute-per-edge traversal; timestamps and lesson attendance continue at ten-minute granularity; shorter micro-passage movements do not yet model distances, crowding or continuous Unreal character movement. Preserve these constraints before claiming a resolved physical school.
+
+
+Measured on hosted CI (144 ticks, 600 pupils, 172 opt-in first/second-years): the exact same 688 junior-school attendance events went from **390 on time / 298 late / 0 missed** to **688 on time / 0 late / 0 missed**. The remaining 428 older students retained their legacy school-travel mode, with the same **13 missed** classes across the entire school. Our CI demonstration asserts that completed lesson totals do not change and that the optional micro-commute mode genuinely improves punctuality. This is evidence that treating every abstract graph edge as ten minutes was creating false lateness; it does not certify realistic UE-scale travel times or everyday leisure/meal/toilet routes.
+
+
+## Experiment #29 — Weighted Hogwarts corridors and personally discovered shortcuts
+
+The research Hogwarts graph now distinguishes [GAME] traversal **duration** from node count. Public passages have explicit or default traversal costs (1–10 simulated minutes, two by default); experimental castle stairway edges take four minutes and broad galleries three or five. This is **not measured canonical geography**. A sample [GAME] concealed link connects the west landings on floors 4 and 0 in three simulated minutes. This link is deliberately **not** in the public `PassageTo` relation (nor in `world.exits`), so generic BFS, school and unrelated agents cannot magically discover it.
+
+Actors independently store discoveries. A sighted character physically at a hidden entrance can execute `search_passages` to inspect that location. Only that actor gets `passage_discovered`, `knownExits(actor,room)`, and its own `passageMinutes(actor,from,to)` for this shortcut. An unknowing actor cannot use it even if the physical rooms are adjacent: `move` rejects with `unknown_passage`. Searching elsewhere never reveals the shortcut. The secret's destination becomes known after local investigation; gradual exploration or sharing route knowledge are future work.
+
+A new deterministic weighted shortest-path algorithm (`weighted-navigation.ts`) chooses the **least travel-time route**, which may have **more graph edges** than the fewer-room route. The optional `travel='weighted-29'` research setting gives 1–2 course pupils and their assistants personally filtered weighted classroom trips; the world executor consumes the actual per-edge minutes out of each ten-minute tick, and opening a door costs an additional two minutes. Intermediate rooms and door actions remain real validated world events. No direct teleport. All preceding transport settings (`legacy` and `micro-28`) remain separate and unchanged.
+
+Run `npm run weighted-passages-demo` for a two-student experiment that compares travel times before/after only one finds a short secret; tests cover longer-but-faster public alternatives, concealed-route privacy, adjacency validation, weighted micro budgets, and V1 journal/V2 checkpoint continuation.
+
+**Remaining gaps:** no crowd congestion, equipment- or skill-gated entrances, route rumours, failed searches, moving stairs, risk-aware navigation, or continuous UE movement. Secret-passage topology is part of world setup, discoveries part of character-local runtime. We do not assert the experimental hidden link is an actual canonical Hogwarts shortcut.

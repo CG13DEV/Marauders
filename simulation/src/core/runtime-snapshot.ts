@@ -7,6 +7,8 @@ import type { TutoringRequest, AssistanceMemory } from './social-learning.ts';
 import type { Trust } from './cognition.ts';
 import type { MeetingCommitment, CommitmentMemory } from './social-commitments.ts';
 import type { PersonalIntention, BodilyNeeds } from './intentions.ts';
+import type { ToiletNeed,PatrolPlan } from './resident-life.ts';
+import type { HouseId, PointAuthority, PointDecision, PointNews } from './house-points.ts';
 import type {
   DailyLifePlan, MealMemory, ConversationMemory, RestMemory
 } from './daily-life.ts';
@@ -26,6 +28,7 @@ export type RuntimeSnapshot = {
   locations: [number, number][];
   broken: [number, boolean][];
   doors: [number, boolean][];
+  knownPassages?:[number,[number,number][]][];
   flags: [number, StateFlags][];
   trusts: [number, number, Trust][];
   helpedBy: [number, number][];
@@ -41,6 +44,12 @@ export type RuntimeSnapshot = {
   commitmentMemories?: [number, CommitmentMemory[]][];
   intentions?: [number,PersonalIntention[]][];
   bodilyNeeds?: [number,BodilyNeeds][];
+  houseMembership?: [number,HouseId][];
+  pointAuthorities?: [number,PointAuthority][];
+  pointLedger?: PointDecision[];
+  pointNews?: [number,PointNews[]][];
+  toiletNeeds?: [number,ToiletNeed][];
+  patrolPlans?: [number,PatrolPlan][];
   routines: [number, number[]][];
   searches: [number, PersistedSearch][];
   requests: [number, TutoringRequest][];
@@ -54,6 +63,7 @@ function remapEvent(event: WorldEvent, at: (id: number) => number): WorldEvent {
     case 'entity_moved': return { ...event, actor: at(event.actor), from: at(event.from), to: at(event.to) };
     case 'object_broken': return { ...event, actor: at(event.actor), target: at(event.target), room: at(event.room) };
     case 'door_opened': return { ...event, actor: at(event.actor), door: at(event.door) };
+    case 'passage_discovered':return {...event,actor:at(event.actor),from:at(event.from),to:at(event.to)};
     case 'testimony_delivered': return { ...event, actor: at(event.actor), listener: at(event.listener),
       claim: { ...event.claim, culprit: at(event.claim.culprit), object: at(event.claim.object) } };
     case 'object_inspected': return { ...event, actor: at(event.actor), target: at(event.target) };
@@ -62,6 +72,10 @@ function remapEvent(event: WorldEvent, at: (id: number) => number): WorldEvent {
       return { ...event, actor: at(event.actor) };
     case 'tutoring_requested': return { ...event, actor: at(event.actor), listener: at(event.listener) };
     case 'tutoring_answered': return { ...event, actor: at(event.actor), requester: at(event.requester) };
+    case 'toilet_used':return {...event,actor:at(event.actor),room:at(event.room)};
+    case 'animal_alerted':return {...event,actor:at(event.actor),listener:at(event.listener)};
+    case 'house_points_changed':return {...event,actor:at(event.actor),pupil:at(event.pupil)};
+    case 'house_points_shared':return {...event,actor:at(event.actor),listener:at(event.listener)};
     case 'meal_eaten': case 'rest_recorded': case 'intention_changed':
       return { ...event, actor: at(event.actor) };
     case 'conversation_shared':
@@ -78,6 +92,9 @@ function remapObservation(record: Observation, at: (id: number) => number): Obse
     case 'heard_crash': return { ...record };
     case 'witnessed_breakage': return { ...record, actor: at(record.actor), target: at(record.target) };
     case 'inspected_object': return { ...record, target: at(record.target) };
+    case 'animal_alert':return {...record,actor:at(record.actor)};
+    case 'heard_house_points':return {...record,
+      ...(record.speaker===undefined?{}:{speaker:at(record.speaker)})};
   }
 }
 function remapBelief(record: Belief, at: (id: number) => number): Belief {
@@ -111,6 +128,10 @@ export function remapRuntimeSnapshot(snapshot: RuntimeSnapshot, at: (id: number)
     locations: snapshot.locations.map(([id, room]) => [at(id), at(room)]),
     broken: snapshot.broken.map(([id, value]) => [at(id), value]),
     doors: snapshot.doors.map(([id, value]) => [at(id), value]),
+    ...(snapshot.knownPassages===undefined?{}:{knownPassages:snapshot.knownPassages.map(
+      ([actor,pairs]):[number,[number,number][]]=>[
+        at(actor),pairs.map(([a,b]):[number,number]=>[at(a),at(b)])
+      ])}),
     flags: snapshot.flags.map(([id, flags]) => [at(id), { ...flags }]),
     trusts: snapshot.trusts.map(([observer, source, value]) => [at(observer), at(source), value]),
     helpedBy: snapshot.helpedBy.map(([student, helper]) => [at(student), at(helper)]),
@@ -142,13 +163,58 @@ export function remapRuntimeSnapshot(snapshot: RuntimeSnapshot, at: (id: number)
       ([actor,goals]):[number,PersonalIntention[]]=>[
         at(actor),goals.map(g=>({
           ...g,destination:at(g.destination),
-          ...(g.object===undefined?{}:{object:at(g.object)})
+          ...(g.object===undefined?{}:{object:at(g.object)}),
+          ...(g.questioned===undefined?{}:{questioned:g.questioned.map(at)})
         }))
       ]
     )}),
     ...(snapshot.bodilyNeeds===undefined?{}:{bodilyNeeds:snapshot.bodilyNeeds.map(
       ([actor,needs])=>[at(actor),{...needs}] as [number,BodilyNeeds]
     )}),
+    ...(snapshot.houseMembership===undefined?{}:{
+      houseMembership:snapshot.houseMembership.map(([id,h])=>[at(id),h] as [number,HouseId])
+    }),
+    ...(snapshot.pointAuthorities===undefined?{}:{
+      pointAuthorities:snapshot.pointAuthorities.map(([id,role])=>[at(id),role] as [number,PointAuthority])
+    }),
+    ...(snapshot.pointLedger===undefined?{}:{
+      pointLedger:snapshot.pointLedger.map(d=>({
+        ...d,actor:at(d.actor),pupil:at(d.pupil),
+        evidence:d.evidence.kind==='testimony'
+          ?{...d.evidence,object:at(d.evidence.object),speaker:at(d.evidence.speaker)}
+          :d.evidence.kind==='vision'?{...d.evidence,object:at(d.evidence.object)}
+          :{...d.evidence}
+      }))
+    }),
+    ...(snapshot.pointNews===undefined?{}:{
+      pointNews:snapshot.pointNews.map(([id,items])=>[at(id),
+        items.map(n=>({...n,announcer:at(n.announcer),pupil:at(n.pupil),
+          ...(n.speaker===undefined?{}:{speaker:at(n.speaker)})}))
+      ] as [number,PointNews[]])
+    }),
+    ...(snapshot.toiletNeeds===undefined?{}:{toiletNeeds:snapshot.toiletNeeds.map(
+      ([actor,need])=>[at(actor),{...need,bathrooms:need.bathrooms.map(at)}] as [number,ToiletNeed])}),
+    ...(snapshot.patrolPlans===undefined?{}:{patrolPlans:snapshot.patrolPlans.map(
+      ([actor,plan])=>[at(actor),{...plan,waypoints:plan.waypoints.map(at),
+        ...(plan.partner===undefined?{}:{partner:at(plan.partner)}),
+        ...(plan.rendezvous===undefined?{}:{rendezvous:at(plan.rendezvous)}),
+        reportedClaims:plan.reportedClaims.map(key=>{
+          const parts=key.split(':').map(Number);
+          if(parts.length!==3||parts.some(v=>!Number.isSafeInteger(v)))throw new Error('Invalid patrol report');
+          return parts.map(at).join(':');
+        }),
+        ...(plan.interviewed===undefined?{}:{interviewed:plan.interviewed.map(key=>{
+          const parts=key.split(':').map(Number);
+          if(parts.length!==2||parts.some(v=>!Number.isSafeInteger(v)))
+            throw new Error('Invalid patrol inquiry');
+          return parts.map(at).join(':');
+        })}),
+        ...(plan.search===undefined?{}:{search:{
+          origin:at(plan.search.origin),
+          pending:plan.search.pending.map(at),
+          checked:plan.search.checked.map(at)
+        }})
+      }] as [number,PatrolPlan])}),
     routines: snapshot.routines.map(([id, path]) => [at(id), path.map(at)]),
     searches: snapshot.searches.map(([id, search]) => [at(id), {
       object: at(search.object), asked: search.asked.map(at),

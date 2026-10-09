@@ -1,6 +1,6 @@
 {
   "name": "marauders-simulation",
-  "version": "0.20.0",
+  "version": "0.29.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -27,7 +27,16 @@
     "learning-purpose-demo": "node --experimental-strip-types src/cli/learning-purpose-demo.ts",
     "intentions-demo": "node --experimental-strip-types src/cli/intentions-demo.ts",
     "unified-intentions-demo": "node --experimental-strip-types src/cli/unified-intentions-demo.ts",
-    "rollout-demo": "node --experimental-strip-types src/cli/rollout-demo.ts"
+    "rollout-demo": "node --experimental-strip-types src/cli/rollout-demo.ts",
+    "points-demo": "node --experimental-strip-types src/cli/points-demo.ts",
+    "patrol-demo": "node --experimental-strip-types src/cli/patrol-demo.ts",
+    "investigation-demo": "node --experimental-strip-types src/cli/investigation-demo.ts",
+    "witness-demo": "node --experimental-strip-types src/cli/witness-demo.ts",
+    "evidence-goals-demo": "node --experimental-strip-types src/cli/evidence-goals-demo.ts",
+    "population-demo": "node --experimental-strip-types src/cli/population-demo.ts",
+    "foundation-demo": "node --experimental-strip-types src/cli/foundation-timetable-demo.ts",
+    "travel-demo": "node --experimental-strip-types src/cli/travel-demo.ts",
+    "weighted-passages-demo": "node --experimental-strip-types src/cli/weighted-passages-demo.ts"
   },
   "dependencies": {
     "bitecs": "0.4.0"
