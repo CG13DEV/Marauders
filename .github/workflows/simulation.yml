@@ -28,6 +28,8 @@ jobs:
         run: npm run lived-motivation-demo
       - name: Experiment 31.4 social-response choices
         run: npm run social-choice-demo
+      - name: Experiment 31.5 relationship evidence choices
+        run: npm run relationship-evidence-demo
       - run: npm run demo
       - run: npm run perception-demo
       - run: npm run social-demo
