@@ -100,3 +100,22 @@ test('one V2 checkpoint can restore into two independent futures', () => {
   a.setManualControl(a.id('lily')!,true);
   assert.notEqual(JSON.stringify(a.captureRuntime()),JSON.stringify(b.captureRuntime()));
 });
+
+
+test('#30.8: V2 restore safely handles a history larger than JS argument limits',()=>{
+  const w=createPersistentSimulation();
+  const room=w.room('room','Комната');
+  const actor=w.character('pupil','Ученик',room);
+  const state=w.checkpoint();
+  const COUNT=160_000;
+  // Synthetic valid events isolate the stack limit without simulating every
+  // intervening physical step. The seven-day integration soak uses real events.
+  state.runtime.events=Array.from({length:COUNT},(_,minute)=>({
+    type:'rest_recorded' as const,actor,minute
+  }));
+  const restored=restoreCheckpoint(state);
+  const events=restored.events();
+  assert.equal(events.length,COUNT);
+  assert.deepEqual(events[0],{type:'rest_recorded',actor,minute:0});
+  assert.deepEqual(events.at(-1),{type:'rest_recorded',actor,minute:COUNT-1});
+});

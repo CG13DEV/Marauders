@@ -64,3 +64,5 @@ jobs:
           MARAUDERS_SCHEDULER_PROFILE: '1'
           MARAUDERS_TICK_PROFILE: '1'
           MARAUDERS_ROUTE_PROFILE: '1'
+      - name: Experiment 30.8 seven-day 634-resident soak
+        run: npm run week-soak-demo

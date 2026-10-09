@@ -2235,7 +2235,11 @@ export function createSimulation() {
     for (const [id, attempted] of state.attemptedTutors) attemptedTutors.set(id, new Set(attempted));
     assistanceHistory.clear();
     for (const [id, memories] of state.assistance) assistanceHistory.set(id, memories);
-    events.splice(0, events.length, ...state.events);
+    // Week-long worlds may contain hundreds of thousands of events. Passing
+    // the whole journal as variadic splice arguments overflows the JS stack.
+    // Keep the same authoritative array object and append safely in a loop.
+    events.length=0;
+    for(const event of state.events)events.push(event);
     tick = state.tick;
   }
 
