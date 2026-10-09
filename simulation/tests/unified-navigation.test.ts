@@ -158,3 +158,27 @@ test('#30: shared routing cache is isolated, defensive, and invalidated by topol
   assert.deepEqual(w.planActorRoute(other,a,d)?.rooms,[a,shortcut,d]);
   assert.equal(w.planActorRoute(pupil,a,d)?.hops,1);
 });
+
+
+test('#30.2: room-local hidden exit index preserves discovery isolation and topology updates',()=>{
+  const w=createSimulation();
+  const a=w.room('idx_a','A'),b=w.room('idx_b','B'),c=w.room('idx_c','C');
+  const d=w.room('idx_d','D'),e=w.room('idx_e','E');
+  w.connect(a,b,{travelMinutes:2});
+  w.connect(a,c,{travelMinutes:1,hidden:true});
+  w.connect(a,d,{travelMinutes:1,hidden:true});
+  w.connect(b,e,{travelMinutes:1,hidden:true}); // unrelated hidden exit
+  const first=w.character('idx_first','First',a);
+  const second=w.character('idx_second','Second',a);
+  assert.deepEqual(w.knownExits(first,a),[b]);
+  assert.deepEqual(w.knownExits(second,a),[b]);
+  assert.ok(w.execute({type:'search_passages',actor:first}).ok);
+  assert.deepEqual(w.knownExits(first,a),[b,c,d].sort((x,y)=>x-y));
+  assert.deepEqual(w.knownExits(second,a),[b]);
+  assert.deepEqual(w.knownExits(first,b),[a]); // no remote discovery
+  w.connect(a,e,{travelMinutes:3,hidden:true}); // dynamic topology edit
+  assert.deepEqual(w.knownExits(first,a),[b,c,d].sort((x,y)=>x-y));
+  assert.ok(w.execute({type:'search_passages',actor:first}).ok);
+  assert.deepEqual(w.knownExits(first,a),[b,c,d,e].sort((x,y)=>x-y));
+  assert.deepEqual(w.knownExits(second,a),[b]);
+});
