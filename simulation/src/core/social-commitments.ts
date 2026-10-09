@@ -4,6 +4,7 @@
  * witnessed. A global expired state is NOT a private mental observation.
  */
 import type { SpellId } from './spellcraft.ts';
+import {latestPersonalOutcome} from './personal-outcomes.ts';
 export type MeetingPurpose = 'study' | 'explore';
 export type CommitmentPriority = 'school_first' | 'promise_first';
 export type MeetingStatus =
@@ -62,9 +63,5 @@ export function hasMeetingConflict(
 export function personallyAvoids(
   history: readonly CommitmentMemory[], partner: number
 ): boolean {
-  // Offers, replies and chats are not a completed reconciliation.
-  const records = history.filter(x => x.partner === partner &&
-    (x.kind === 'waited_alone' || x.kind === 'met'));
-  const last = records.at(-1);
-  return last?.kind === 'waited_alone';
+  return latestPersonalOutcome(history,partner)?.kind === 'waited_alone';
 }
