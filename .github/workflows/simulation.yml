@@ -41,3 +41,4 @@ jobs:
       - run: npm run rollout-demo
       - run: npm run points-demo
       - run: npm run patrol-demo
+      - run: npm run investigation-demo

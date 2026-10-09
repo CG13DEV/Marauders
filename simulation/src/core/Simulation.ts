@@ -24,7 +24,7 @@ import {
 } from './social-commitments.ts';
 import { runWorldStep, type StepDecision } from './scheduler.ts';
 import { nextRoomOnRoute } from './navigation.ts';
-import {type ToiletNeed,type PatrolKind,type PatrolPlan} from './resident-life.ts';
+import {nearbySearchRooms,type ToiletNeed,type PatrolKind,type PatrolPlan} from './resident-life.ts';
 import { INITIAL_NEEDS, afterMeal, isOpenIntention,
   type BodilyNeeds,type PersonalIntention,type IntentionImportance,
   type IntentionStatus,type Interruption } from './intentions.ts';
@@ -461,7 +461,9 @@ export function createSimulation() {
   function patrolState(actor:EntityId):PatrolPlan|null{
     const plan=patrolPlans.get(actor);
     return plan?{...plan,waypoints:[...plan.waypoints],
-      reportedClaims:[...plan.reportedClaims]}:null;
+      reportedClaims:[...plan.reportedClaims],
+      ...(plan.search===undefined?{}:{search:{...plan.search,
+        pending:[...plan.search.pending],checked:[...plan.search.checked]}})}:null;
   }
 
   function setRoutine(actor: EntityId, destinations: readonly EntityId[]): void {
@@ -854,6 +856,18 @@ export function createSimulation() {
       if(sightings<=plan.sentSignals)
         return {ok:false,reason:'no_sighting',events:[]};
       plan.sentSignals=sightings;
+      // A physically received alarm triggers a bounded search around the
+      // meeting place. It contains NO remote coordinates or culprit identity.
+      const caretaker=patrolPlans.get(command.listener);
+      if(caretaker?.kind==='caretaker'){
+        const origin=currentRoom(command.listener)!;
+        caretaker.search={
+          origin,
+          pending:nearbySearchRooms(origin,
+            place=>getRelationTargets(ecs,place,PassageTo)),
+          checked:[]
+        };
+      }
       // A cat conveys suspicion, never culpability, object IDs or telepathy.
       observationsByCharacter.get(command.listener)?.push({
         kind:'animal_alert',source:'hearing',actor:command.actor});
@@ -1594,6 +1608,23 @@ export function createSimulation() {
           action={type:'inspect_object',actor,target:object};break;
         }
       }
+      // Experiment #23: investigate nearby passages before resuming the
+      // old route. Only accessible topology and personal observations guide
+      // the detour; the cat's privately witnessed culprit is never disclosed.
+      if(!action&&patrol.kind==='caretaker'&&patrol.search){
+        const search=patrol.search;
+        while(search.pending[0]===room){
+          search.checked.push(search.pending.shift()!);
+        }
+        while(!action&&search.pending.length){
+          const goal=search.pending[0]!;
+          const next=nextRoomOnRoute(room,goal,
+            place=>getRelationTargets(ecs,place,PassageTo));
+          if(next!==null)action=passageAction(actor,room,next);
+          else search.checked.push(search.pending.shift()!);
+        }
+        if(search.pending.length===0)patrol.search=undefined;
+      }
       if(!action){
         const waypoint=patrol.waypoints[patrol.waypoint]!;
         if(room===waypoint)
@@ -1795,8 +1826,16 @@ export function createSimulation() {
         (plan.partner!==undefined&&!isCharacter(plan.partner))||
         (plan.rendezvous!==undefined&&!isRoom(plan.rendezvous)))
         throw new Error('Invalid saved patrol');
+      if(plan.search!==undefined&&
+        (plan.kind!=='caretaker'||!isRoom(plan.search.origin)||
+         !Array.isArray(plan.search.pending)||
+         !Array.isArray(plan.search.checked)||
+         [...plan.search.pending,...plan.search.checked].some(r=>!isRoom(r))))
+        throw new Error('Invalid saved caretaker investigation');
       patrolPlans.set(actor,{...plan,waypoints:[...plan.waypoints],
-        reportedClaims:[...plan.reportedClaims]});
+        reportedClaims:[...plan.reportedClaims],
+        ...(plan.search===undefined?{}:{search:{...plan.search,
+          pending:[...plan.search.pending],checked:[...plan.search.checked]}})});
     }
     const componentFlags = {
       vision: Vision, hearing: Hearing, inquisitive: Inquisitive,

@@ -195,7 +195,12 @@ export function remapRuntimeSnapshot(snapshot: RuntimeSnapshot, at: (id: number)
           const parts=key.split(':').map(Number);
           if(parts.length!==3||parts.some(v=>!Number.isSafeInteger(v)))throw new Error('Invalid patrol report');
           return parts.map(at).join(':');
-        })
+        }),
+        ...(plan.search===undefined?{}:{search:{
+          origin:at(plan.search.origin),
+          pending:plan.search.pending.map(at),
+          checked:plan.search.checked.map(at)
+        }})
       }] as [number,PatrolPlan])}),
     routines: snapshot.routines.map(([id, path]) => [at(id), path.map(at)]),
     searches: snapshot.searches.map(([id, search]) => [at(id), {

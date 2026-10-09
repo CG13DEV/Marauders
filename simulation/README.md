@@ -433,3 +433,10 @@ Filch and Mrs Norris now have **cyclic physical patrols** in the same `world.ste
 Implemented APIs: `configureToilet`, `toiletState`, `configurePatrol`, `patrolState`, commands `use_toilet` and `signal_incident`, events `toilet_used` and `animal_alerted`. Journal V1 and checkpoint V2 preserve the private urgency, visit counters, waypoint progress, witnessed incident signals and past Filch reports. Old saves lacking these fields remain valid. Existing default `createSchoolWeek()` and experiment 20's opt-in population gates remain unchanged; experiment 22 activates only with `expansion='expanded'`.
 
 **Boundaries:** bladder filling is time-based (water/food volumes and illnesses are not simulated); cubicles, queues, gender access enforcement, voice dialogue with Filch, real nighttime school-rule enforcement, and NPC intent responses to the cat's alarm are future work. The patrol is a configured route, not yet autonomous route adaptation based on accumulated suspicious patterns.
+
+
+## Experiment #23 — Face-to-face alerts and adaptive local search
+
+Run npm run investigation-demo. When Mrs Norris **physically meets** Filch and issues a validated signal_incident, Filch now suspends his fixed patrol briefly and searches nearby reachable public rooms from **his own location** (at most two passages deep / nine rooms). Room order is stable across runs; walking and doors use normal world rules; one patroller still performs at most one action per tick. An undiscovered remote room is never revealed by the cat: the alarm includes no object ID, culprit or incident coordinates. An inspected broken object proves damage but cannot magically identify the culprit.
+
+The bounded detour lives in PatrolPlan.search (origin, pending, checked) and survives V1 replay, V2 checkpoints and remapped entity IDs. Existing school population, timetable priority, patrol evidence and the default baseline remain unchanged. The experiment does **not** add general autonomous crime-solving, inferred culprit detection, witness interviewing, house-point penalties, or long-term priorities; those are separate research gates.
