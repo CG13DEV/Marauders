@@ -74,11 +74,11 @@ export function createSchoolWeek(
   expansion: 'baseline' | 'expanded' = 'baseline',
   scale: 'fixture-84' | 'research-600' = 'fixture-84',
   curriculum: 'legacy' | 'foundations-27' = 'legacy',
-  travel: 'legacy' | 'micro-28' = 'legacy'
+  travel: 'legacy' | 'micro-28' | 'weighted-29' = 'legacy'
 ) {
-  if(travel!=='legacy'&&travel!=='micro-28')
+  if(travel!=='legacy'&&travel!=='micro-28'&&travel!=='weighted-29')
     throw Error('Unknown school travel mode');
-  if(travel==='micro-28'&&curriculum!=='foundations-27')
+  if(travel!=='legacy'&&curriculum!=='foundations-27')
     throw Error('Micro travel requires foundations curriculum');
   if(curriculum!=='legacy'&&curriculum!=='foundations-27')
     throw Error('Unknown curriculum');
@@ -200,7 +200,7 @@ export function createSchoolWeek(
           ...(year === 1 ? { learningAppointments: true } : {}),
           ...(students.length<=population.pupils?{intentionPlanning:true}:{}),
           ...(planning === 'adaptive' ? {schoolPlanning:'adaptive' as const} : {}),
-          ...(travel==='micro-28'&&year<=2?{schoolTravel:'micro-28' as const}:{})
+          ...(travel!=='legacy'&&year<=2?{schoolTravel:travel}:{})
         });
         // The first year notices their *own* gaps after a missed explanation.
         // They only invite help if social invitations are enabled.
@@ -331,7 +331,7 @@ export function createSchoolWeek(
           style:index%2===0?'reserved':'outgoing',interest:'lessons',
           ...(population.teachers===12?{intentionPlanning:true}:{ }),
           ...(planning==='adaptive'?{schoolPlanning:'adaptive' as const}:{}),
-          ...(travel==='micro-28'?{schoolTravel:'micro-28' as const}:{})
+          ...(travel!=='legacy'?{schoolTravel:travel}:{})
         });
         professors.push({id:teacher,subject});
         staffSchedule.set(teacher,[]);
