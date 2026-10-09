@@ -58,7 +58,8 @@ if(!ticksWithMultiMovement||!moves||!patrolMoves)
 // Diagnostic bookkeeping is validated separately from authoritative gameplay.
 if(process.env.MARAUDERS_SCHEDULER_PROFILE==='1'){
   const profile=s.world.schedulerProfile();
-  if(profile.phases.length!==19 || profile.phases.some(p=>p.calls!==ticks))
+  // #31.2 adds a separate, always-instrumented initiative phase.
+  if(profile.phases.length!==20 || profile.phases.some(p=>p.calls!==ticks))
     throw Error('Scheduler phase profile must cover every phase on every tick');
   if(profile.commands.calls<moves)
     throw Error('Scheduler profile must account for physical movement commands');

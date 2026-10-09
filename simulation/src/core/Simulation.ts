@@ -607,6 +607,8 @@ export function createSimulation() {
           typeof plan.intentionPlanning !== 'boolean') ||
         (plan.evidenceInquiry !== undefined &&
           typeof plan.evidenceInquiry !== 'boolean') ||
+        (plan.mischief !== undefined &&
+          plan.mischief!=='reckless' && plan.mischief!=='cautious') ||
         (plan.schoolTravel !== undefined &&
           plan.schoolTravel !== 'micro-28'&&plan.schoolTravel!=='weighted-29') ||
         ((plan.schoolTravel === 'micro-28'||plan.schoolTravel==='weighted-29') &&
@@ -1762,6 +1764,8 @@ export function createSimulation() {
       actors: trait => Array.from(query(ecs, [Character, agentComponents[trait]])),
       has: (actor, flag) => hasComponent(ecs, actor, flags[flag]),
       visibleFragiles: room => Array.from(query(ecs, [Fragile, LocatedIn(room)])),
+      intactFragiles: room => Array.from(query(ecs, [Fragile, LocatedIn(room)]))
+        .filter(object=>Fragile.broken[object]===0),
       passageAction: (actor, room, next) => {
         const door = doors.get(pairKey(room, next));
         return door !== undefined && Door.open[door] === 0

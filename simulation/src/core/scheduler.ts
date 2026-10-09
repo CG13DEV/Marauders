@@ -20,6 +20,7 @@ import { advanceNeeds,chooseNeedOrIntention,pickIntention,isOpenIntention,
   type PersonalIntention,type BodilyNeeds,type IntentionStatus,type Interruption
 } from './intentions.ts';
 import { decideInvestigation, type Assessment, type Trust } from './cognition.ts';
+import { chooseMischiefTarget } from './mischief.ts';
 import { spellDefinitions, type SpellId, type LearningRecord } from './spellcraft.ts';
 import type { Belief } from './beliefs.ts';
 import { willingToTutor, type TutoringRequest } from './social-learning.ts';
@@ -39,6 +40,7 @@ export type SchedulerContext = {
   actors(trait: AgentTrait): EntityId[];
   has(actor: EntityId, flag: ActorFlag): boolean;
   visibleFragiles(room: EntityId): EntityId[];
+  intactFragiles(room: EntityId): EntityId[];
   passageAction(actor: EntityId, room: EntityId, next: EntityId): Command;
   exits(room: EntityId): EntityId[];
   knownExits(actor:EntityId,room:EntityId):EntityId[];
@@ -86,7 +88,7 @@ export type SchedulerContext = {
 
 export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
   const {
-    advanceClock, actors, has, visibleFragiles, passageAction,
+    advanceClock, actors, has, visibleFragiles, intactFragiles, passageAction,
     exits, knownExits, passageMinutes, planActorRoute, usesUnifiedTravel,
     execute:executeRaw, currentRoom, occupants, canAnswerWitnessQuestion,observations, assessment,
     trustOf, knowledgeGaps, pendingTutoring, attemptedTutors, searches,
@@ -358,6 +360,34 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
     }
 
     phase('invitation-replies');
+    // #31.2 [GAME]: first physical incident can originate from an actor's
+    // disposition and local opportunity, rather than a scenario command.
+    // Observe ONLY co-located objects and people. Never inspect event history,
+    // hidden witness minds or omniscient positions to make this choice.
+    // The ordinary validated break_object command remains authoritative.
+    for(const actor of actors('dailyLife')){
+      const plan=dailyPlans.get(actor);
+      if(!plan?.mischief || !has(actor,'vision') || has(actor,'manual') ||
+         occupiedBySchool.has(actor) || socialParticipants.has(actor) ||
+         decidedActors.has(actor) || promisePriorities.has(actor) ||
+         isSleepTime(minute) || upcomingFor(actor))continue;
+      const room=currentRoom(actor);
+      if(room===null || currentLesson(timetables.get(actor)?.records??[],minute))
+        continue;
+      const needs=bodilyNeeds.get(actor);
+      if(needs && (needs.hunger>=60 || needs.fatigue>=85))continue;
+      if((intentions.get(actor)??[]).some(isOpenIntention))continue;
+      const target=chooseMischiefTarget({
+        disposition:plan.mischief,
+        intactObjects:intactFragiles(room),
+        bystanders:occupants(room).filter(other=>other!==actor)
+      });
+      if(target===null)continue;
+      const action:Command={type:'break_object',actor,target};
+      const result=execute(action);
+      recordDecision({actor,action,result});
+    }
+    phase('mischief-initiative');
     // The same personal queue now admits the *causes* behind learning and
     // investigation. No goal is invented from someone else's private mind.
     // Creating an intention is mental bookkeeping, not a physical action.
