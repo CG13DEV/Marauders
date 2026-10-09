@@ -136,3 +136,25 @@ test('#30: travel policy and private secrets replay via V1 and checkpoint V2',()
   assert.equal(w.currentRoom(actor),d);
   assert.throws(()=>w.setTravelMode(-999,'unified-30'),/requires a character/);
 });
+
+test('#30: shared routing cache is isolated, defensive, and invalidated by topology edits',()=>{
+  const {w,a,d}=junction();
+  const pupil=w.character('cache_pupil','Проверка карты',a);
+  const other=w.character('cache_other','Проверка знания',a);
+  w.setTravelMode(pupil,'unified-30');
+  w.setTravelMode(other,'unified-30');
+  const original=w.planActorRoute(pupil,a,d)!;
+  assert.equal(original.minutes,7);
+  original.rooms.splice(0);
+  assert.equal(w.planActorRoute(other,a,d)?.minutes,7);
+  assert.equal(w.planActorRoute(other,a,d)?.rooms[0],a);
+  w.execute({type:'search_passages',actor:pupil});
+  assert.equal(w.planActorRoute(pupil,a,d)?.minutes,2);
+  assert.equal(w.planActorRoute(other,a,d)?.minutes,7);
+  const shortcut=w.room('new_arched_way','Новый публичный ход');
+  w.connect(a,shortcut,{travelMinutes:1});
+  w.connect(shortcut,d,{travelMinutes:1});
+  assert.equal(w.planActorRoute(other,a,d)?.minutes,2);
+  assert.deepEqual(w.planActorRoute(other,a,d)?.rooms,[a,shortcut,d]);
+  assert.equal(w.planActorRoute(pupil,a,d)?.hops,1);
+});
