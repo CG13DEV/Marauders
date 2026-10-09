@@ -339,7 +339,7 @@ export function createSimulation() {
       throw new Error('Invalid hidden passage setting');
     weightedPassages.set(key,{a,b,minutes,hidden});
     if(hidden){
-      for(const [room,to] of [[a,b],[b,a]]){
+      for(const [room,to] of [[a,b],[b,a]] as [number,number][]){
         const exits=hiddenPassagesByRoom.get(room)??[];
         exits.push({key,to});
         hiddenPassagesByRoom.set(room,exits);
