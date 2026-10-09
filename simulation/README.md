@@ -490,3 +490,16 @@ Run `npm run travel-demo -- 144` to execute the SAME deterministic 600-pupil sch
 
 
 Measured on hosted CI (144 ticks, 600 pupils, 172 opt-in first/second-years): the exact same 688 junior-school attendance events went from **390 on time / 298 late / 0 missed** to **688 on time / 0 late / 0 missed**. The remaining 428 older students retained their legacy school-travel mode, with the same **13 missed** classes across the entire school. Our CI demonstration asserts that completed lesson totals do not change and that the optional micro-commute mode genuinely improves punctuality. This is evidence that treating every abstract graph edge as ten minutes was creating false lateness; it does not certify realistic UE-scale travel times or everyday leisure/meal/toilet routes.
+
+
+## Experiment #29 — Weighted Hogwarts corridors and personally discovered shortcuts
+
+The research Hogwarts graph now distinguishes [GAME] traversal **duration** from node count. Public passages have explicit or default traversal costs (1–10 simulated minutes, two by default); experimental castle stairway edges take four minutes and broad galleries three or five. This is **not measured canonical geography**. A sample [GAME] concealed link connects the west landings on floors 4 and 0 in three simulated minutes. This link is deliberately **not** in the public `PassageTo` relation (nor in `world.exits`), so generic BFS, school and unrelated agents cannot magically discover it.
+
+Actors independently store discoveries. A sighted character physically at a hidden entrance can execute `search_passages` to inspect that location. Only that actor gets `passage_discovered`, `knownExits(actor,room)`, and its own `passageMinutes(actor,from,to)` for this shortcut. An unknowing actor cannot use it even if the physical rooms are adjacent: `move` rejects with `unknown_passage`. Searching elsewhere never reveals the shortcut. The secret's destination becomes known after local investigation; gradual exploration or sharing route knowledge are future work.
+
+A new deterministic weighted shortest-path algorithm (`weighted-navigation.ts`) chooses the **least travel-time route**, which may have **more graph edges** than the fewer-room route. The optional `travel='weighted-29'` research setting gives 1–2 course pupils and their assistants personally filtered weighted classroom trips; the world executor consumes the actual per-edge minutes out of each ten-minute tick, and opening a door costs an additional two minutes. Intermediate rooms and door actions remain real validated world events. No direct teleport. All preceding transport settings (`legacy` and `micro-28`) remain separate and unchanged.
+
+Run `npm run weighted-passages-demo` for a two-student experiment that compares travel times before/after only one finds a short secret; tests cover longer-but-faster public alternatives, concealed-route privacy, adjacency validation, weighted micro budgets, and V1 journal/V2 checkpoint continuation.
+
+**Remaining gaps:** no crowd congestion, equipment- or skill-gated entrances, route rumours, failed searches, moving stairs, risk-aware navigation, or continuous UE movement. Secret-passage topology is part of world setup, discoveries part of character-local runtime. We do not assert the experimental hidden link is an actual canonical Hogwarts shortcut.
