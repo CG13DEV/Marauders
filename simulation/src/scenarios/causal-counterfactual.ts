@@ -13,7 +13,9 @@ export function runCausalFork(input:CausalFork){
   const world=createSimulation();
   const passage=world.room('passage','Боковая галерея');
   const gallery=world.room('gallery','Выставочная галерея');
-  world.connect(passage,gallery);
+  // Closed door transmits noise but blocks line of sight. It must be
+  // opened through the same authoritative travel mechanics as in the game.
+  world.connect(passage,gallery,{door:{key:'gallery_door',label:'Дверь галереи',open:false}});
   const investigator=world.character('investigator','Исследователь',passage);
   const witness=world.character('witness','Свидетель',gallery,
     {vision:input.witnessCanSee,hearing:true});
