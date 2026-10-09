@@ -2,6 +2,7 @@
  * The deterministic world-step scheduler. Consumes explicit, world-local
  * services instead of owning ECS stores or authoritative commands.
  */
+import {performance} from 'node:perf_hooks';
 import type { EntityId, Command, CommandResult, WorldEvent, Observation } from './Simulation.ts';
 import { currentLesson, registerAttendance } from './school-time.ts';
 import { nextSchoolJourney, nextWeightedSchoolJourney,feasibleMealJourney, shortestHops } from './school-planner.ts';
@@ -79,19 +80,35 @@ export type SchedulerContext = {
   beliefsByCharacter: { read(actor: number): Belief[] };
   setRoutine(actor: EntityId, destinations: readonly EntityId[]): void;
   emit(event: WorldEvent): void;
+  // Optional diagnostic sink; never changes policy, scheduling or persistence.
+  profile?: {phase(name:string,ms:number):void;command(ms:number):void};
 };
 
 export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
   const {
     advanceClock, actors, has, visibleFragiles, passageAction,
     exits, knownExits, passageMinutes, planActorRoute, usesUnifiedTravel,
-    execute, currentRoom, occupants, canAnswerWitnessQuestion,observations, assessment,
+    execute:executeRaw, currentRoom, occupants, canAnswerWitnessQuestion,observations, assessment,
     trustOf, knowledgeGaps, pendingTutoring, attemptedTutors, searches,
     timetables, routines, dailyPlans, meals, conversations, rests,
     commitments, commitmentMemories, intentions, bodilyNeeds,toiletNeeds,
     transitionIntention, resolveMeetings,
     spellKnowledge, beliefsByCharacter, setRoutine, emit, recordDailyRest
   } = ctx;
+    const profiler=ctx.profile;
+    let checkpoint=profiler?performance.now():0;
+    const phase=(name:string):void=>{
+      if(!profiler)return;
+      const now=performance.now();
+      profiler.phase(name,now-checkpoint);
+      checkpoint=now;
+    };
+    const execute=(command:Command):CommandResult=>{
+      if(!profiler)return executeRaw(command);
+      const started=performance.now();
+      try{return executeRaw(command);}
+      finally{profiler.command(performance.now()-started);}
+    };
     const minute = advanceClock();
     // Only opt-in characters have bodily state. Rest requires sustained
     // physical presence at home during actual sleeping hours, not a marker.
@@ -137,6 +154,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
     const upcomingFor = (actor: EntityId) =>
       commitments.find(m => isActivePromise(m,minute) &&
         (m.promisor===actor || m.beneficiary===actor));
+    phase('needs-and-clock');
     // Personal commitment priority can genuinely conflict with school duty.
     for(const actor of actors('dailyLife')) {
       const plan=dailyPlans.get(actor);
@@ -190,6 +208,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       decisions.push({ actor, action, result });
     }
 
+    phase('promise-priority-and-helpers');
     // Lesson-first pupils reserve the school period and prepare ahead of time.
     // Other pupils may continue investigating, at the cost of late attendance.
     for (const actor of actors('timetable')) {
@@ -217,6 +236,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       }
     }
 
+    phase('school-commutes');
     // Need-driven, physically traversed toilet journeys. Classroom duty and
     // feasible imminent school journeys have priority over non-emergency trips.
     // An assigned bathroom is a destination, never a magical instant relief.
@@ -242,6 +262,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       }
     }
 
+    phase('toilet-needs');
     // A purposeful study meeting needs a separate validated TEACH action.
     // Co-location alone can fulfill a social promise but never grants knowledge.
     for(const meeting of commitments){
@@ -264,6 +285,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       }
     }
 
+    phase('tutoring-appointments');
     // A heard personal promise can override meals and leisure, but not a
     // scheduled lesson unless the actor explicitly prioritizes that promise.
     // Each actor considers only their own participation, not others' plans.
@@ -286,6 +308,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       if(moved)occupiedBySchool.add(actor);
     }
 
+    phase('promise-travel');
     // Answer only invitations the actor actually heard. Both sides must still
     // be physically together, so neither can communicate at arbitrary range.
     for(const actor of actors('dailyLife')){
@@ -321,6 +344,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       }
     }
 
+    phase('invitation-replies');
     // The same personal queue now admits the *causes* behind learning and
     // investigation. No goal is invented from someone else's private mind.
     // Creating an intention is mental bookkeeping, not a physical action.
@@ -365,6 +389,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       }
     }
 
+    phase('goal-generation');
     // Opt-in intention arbitration. Scheduling, commitments and bodily needs
     // all compete through observed obligations, not a global RPG action score.
     // State transitions themselves do not consume an extra physical action.
@@ -647,6 +672,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
         travelTo(actor,room,destination);
     }
 
+    phase('intention-arbitration');
     // First, helpers respond to requests they actually heard earlier. Being
     // busy with a scheduled lesson defers help; no involuntary class skipping.
     // One response consumes one NPC action this tick.
@@ -712,6 +738,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       }
     }
 
+    phase('tutoring-and-requests');
     // The decision policy reads only the actor's beliefs and locally visible
     // objects. In particular it never reads authoritative broken-state or events.
     for (const actor of actors('inquisitive')) {
@@ -807,6 +834,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
         if(moved?.result.ok&&currentRoom(actor)===parent)search.trail.pop();
       }
     }
+    phase('investigation');
     // Inquiry-first pupils attend once they have no higher-priority action.
     // Remaining within a lesson's room takes priority over leisure routines.
     for (const actor of actors('timetable')) {
@@ -821,6 +849,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       travelTowardLesson(actor, room, lesson.room);
     }
 
+    phase('inquiry-first-lessons');
     // Actual conversation is a shared, local event. It consumes a tick for
     // both people and writes autobiographical memories to both ledgers.
     for (const actor of actors('dailyLife')) {
@@ -856,6 +885,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       }
     }
 
+    phase('conversations');
     // Learning appointments arise from an actual personal knowledge gap.
     // Learners only ask visible local people, not globally known teachers.
     // Their invitations are requests, not proof the listener can help.
@@ -894,6 +924,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       }
     }
 
+    phase('study-invitations');
     // Offer one future meeting per initiator-week, only to a person met
     // previously in this actor's own autobiographical conversation history.
     // This is opt-in and does not query the target's intentions or memories.
@@ -932,6 +963,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       }
     }
 
+    phase('social-invitations');
     // Any opt-in character can physically inspect their nearby environment,
     // independent of caretaker-specific hardcoded routines.
     for(const actor of actors('dailyLife')){
@@ -951,6 +983,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       decisions.push({actor,action,result});
     }
 
+    phase('evidence-inspection');
     // A curious experimenter can apply a genuinely learned pattern.
     // They must previously have performed guided practice; no secret unlock.
     for (const actor of actors('experimental')) {
@@ -971,6 +1004,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       decisions.push({ actor, action, result });
     }
 
+    phase('spell-practice');
     // Independent routines produce movement from explicit destination goals.
     // They use the castle's public topology, never hidden character locations.
     for (const actor of actors('routine')) {
@@ -991,6 +1025,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
         if(pending.length===0)setRoutine(actor,[]);
       }
     }
+    phase('independent-routines');
     for (const [actor, timetable] of timetables) {
       // Register arrival before teaching. Being marked present at some point in
       // the lesson is not enough: the pupil must be there at the teaching tick.
@@ -1018,6 +1053,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
     }
     resolveMeetings(minute);
     recordDailyRest(minute);
+    phase('attendance-and-rest');
     return decisions;
   }
 
