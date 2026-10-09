@@ -33,6 +33,10 @@ export function chooseSocialResponse(input:{
     const other=alternatives(grievance.partner)[0];
     if(other!==undefined)
       return {kind:'chat',listener:other,reason:'other_company'};
+    // Withdrawal needs a person to withdraw *from*, not an endless loop
+    // of wandering between empty rooms during a lingering grievance.
+    if(!local.includes(grievance.partner))
+      return {kind:'idle',reason:'no_opportunity'};
     const exit=[...new Set(knownExits)].sort((a,b)=>a-b)[0];
     return exit===undefined
       ?{kind:'idle',reason:'no_opportunity'}
