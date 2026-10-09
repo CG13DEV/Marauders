@@ -48,7 +48,8 @@ console.log(JSON.stringify({
     firstPupilSecretPassages:s.world.passageDiscoveries(s.students[0]!.id).length,
     filchSecretPassages:filch===undefined?null:s.world.passageDiscoveries(filch).length
   },
-  benchmark:{setupMs,simulatedMs:Math.round(performance.now()-simStart)}
+  benchmark:{setupMs,simulatedMs:Math.round(performance.now()-simStart)},
+  ...(process.env.MARAUDERS_ROUTE_PROFILE==='1'?{routeProfile:s.world.routeProfile()}:{})
 },null,2));
 if(!ticksWithMultiMovement||!moves||!patrolMoves)
   throw Error('Unified physics must produce real multi-passage and patrol movement');

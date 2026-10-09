@@ -238,6 +238,17 @@ export function createSimulation() {
   // World-local, derived memo. Routes are shared ONLY when the character's
   // known hidden links are identical. Topology mutations invalidate all plans.
   const routeMemo=new Map<string,WeightedRoute|null>();
+  // Opt-in diagnostics only. No data from this recorder influences simulation.
+  const routeDiagnostics=process.env.MARAUDERS_ROUTE_PROFILE==='1';
+  const routeCounters={requests:0,hits:0,misses:0,noRoute:0,searchMs:0};
+  const routeRequests=new Map<string,number>();
+  function routeProfile(){
+    return {...routeCounters,uniqueRequestKeys:routeRequests.size,
+      cacheEntries:routeMemo.size,
+      topRequests:[...routeRequests.entries()]
+        .sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]))
+        .slice(0,12).map(([key,count])=>({key,count}))};
+  }
   // #30: explicit, actor-local navigation policy; no global all-knowing map.
   const unifiedTravel=new Set<number>();
   function setTravelMode(actor:EntityId,mode:'unified-30'|null):void{
@@ -399,13 +410,24 @@ export function createSimulation() {
     if(!isCharacter(actor)||!isRoom(from)||!isRoom(to))return null;
     const secrets=[...(knownHidden.get(actor)??[])].sort().join(';');
     const cacheKey=secrets+'|'+from+':'+to;
+    if(routeDiagnostics){
+      routeCounters.requests++;
+      routeRequests.set(cacheKey,(routeRequests.get(cacheKey)??0)+1);
+    }
     if(routeMemo.has(cacheKey)){
+      if(routeDiagnostics)routeCounters.hits++;
       const cached=routeMemo.get(cacheKey)!;
       return cached?{...cached,rooms:[...cached.rooms]}:null;
     }
+    if(routeDiagnostics)routeCounters.misses++;
+    const started=routeDiagnostics?performance.now():0;
     const result=shortestWeightedRoute(from,to,
       room=>knownExits(actor,room),
       (a,b)=>passageMinutes(actor,a,b));
+    if(routeDiagnostics){
+      routeCounters.searchMs+=performance.now()-started;
+      if(result===null)routeCounters.noRoute++;
+    }
     if(routeMemo.size>=100000)routeMemo.clear();
     routeMemo.set(cacheKey,result);
     return result?{...result,rooms:[...result.rooms]}:null;
@@ -2191,7 +2213,7 @@ export function createSimulation() {
     clock: () => schoolTime(tick),
     beliefs: (observer: EntityId): Belief[] => beliefsByCharacter.read(observer),
     currentRoom, locationOf, occupants, observations,
-    knownExits,passageMinutes,planActorRoute,passageDiscoveries,
+    knownExits,passageMinutes,planActorRoute,passageDiscoveries,routeProfile,
     isBroken: (eid: EntityId) => hasComponent(ecs, eid, Fragile) && Fragile.broken[eid] === 1,
     doorIsOpen: (eid: EntityId) => hasComponent(ecs, eid, Door) ? Door.open[eid] === 1 : null,
     id: (key: string) => keys.get(key),
