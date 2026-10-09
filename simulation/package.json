@@ -1,6 +1,6 @@
 {
   "name": "marauders-simulation",
-  "version": "0.29.0",
+  "version": "0.30.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -36,7 +36,8 @@
     "population-demo": "node --experimental-strip-types src/cli/population-demo.ts",
     "foundation-demo": "node --experimental-strip-types src/cli/foundation-timetable-demo.ts",
     "travel-demo": "node --experimental-strip-types src/cli/travel-demo.ts",
-    "weighted-passages-demo": "node --experimental-strip-types src/cli/weighted-passages-demo.ts"
+    "weighted-passages-demo": "node --experimental-strip-types src/cli/weighted-passages-demo.ts",
+    "unified-demo": "node --experimental-strip-types src/cli/unified-navigation-demo.ts"
   },
   "dependencies": {
     "bitecs": "0.4.0"
