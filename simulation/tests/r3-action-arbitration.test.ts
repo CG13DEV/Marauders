@@ -10,7 +10,7 @@ function fork(people:boolean,manual=false){
   const friend=people?world.character('friend','Друг',room):null;
   const vase=world.fragileObject('vase','Ваза',room);
   // Place the next choice at evening leisure, without an earlier scripted act.
-  for(let i=0;i<65;i++)world.step(); 
+  for(let i=0;i<66;i++)world.step(); 
   const plan={homeRoom:room,diningRoom:room,leisureRoom:room,
     style:'reserved' as const,interest:'castle' as const};
   world.setDailyLife(actor,{...plan,mischief:'reckless',socialChoice:'reflective'});
@@ -26,7 +26,7 @@ function fork(people:boolean,manual=false){
 }
 test('R3: social contact wins over vandalism when both candidates exist',()=>{
   const both=fork(true);
-  assert.equal(both.clock,1140);
+  assert.equal(both.clock,1150);
   assert.deepEqual(both.decisions,['chat']);
   assert.deepEqual(both.chat,['friend']);
   assert.equal(both.broken,false);
