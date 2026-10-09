@@ -58,3 +58,9 @@ jobs:
         env:
           MARAUDERS_TICK_PROFILE: '1'
           MARAUDERS_ROUTE_PROFILE: '1'
+      - name: Experiment 30.5 scheduler phase diagnostic
+        run: npm run unified-demo -- 96
+        env:
+          MARAUDERS_SCHEDULER_PROFILE: '1'
+          MARAUDERS_TICK_PROFILE: '1'
+          MARAUDERS_ROUTE_PROFILE: '1'
