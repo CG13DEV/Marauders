@@ -14,6 +14,7 @@ import { perceiveCrash } from './perception-rules.ts';
 import { copyClaim, type Claim, type Belief } from './beliefs.ts';
 import { assessReports, type Assessment, type Trust } from './cognition.ts';
 import {relationshipFromExperience} from './relationship-evidence.ts';
+import {ownUnrepairedCommitment} from './reconciliation.ts';
 
 import { createRuntimeStores } from './runtime-stores.ts';
 import { isHouseId, calculatePoints, respondToNews,
@@ -116,7 +117,8 @@ export type WorldEvent =
   | { type: 'meeting_resolved'; actor: EntityId; listener: EntityId;
       meetingId: number; room: EntityId; minute: number; outcome: 'kept' | 'expired' }
   | { type: 'meeting_offered'; actor: EntityId; listener: EntityId;
-      meetingId: number; room: EntityId; minute: number }
+      meetingId: number; room: EntityId; minute: number;
+      repairOfMeetingId?:number }
   | { type: 'meeting_answered'; actor: EntityId; listener: EntityId;
       meetingId: number; room: EntityId; minute: number; accepted: boolean }
   | { type: 'tutoring_appointment_completed'; actor: EntityId; listener: EntityId;
@@ -1072,12 +1074,10 @@ export function createSimulation() {
         return {ok:false,reason:'already_committed',events:[]};
       if(command.repairOfMeetingId!==undefined){
         const memory=commitmentMemories.get(command.actor)??[];
+        const cause=ownUnrepairedCommitment(memory,now);
         if(!Number.isSafeInteger(command.repairOfMeetingId)||
-           !memory.some(m=>m.kind==='missed_my_promise'&&
-             m.meetingId===command.repairOfMeetingId&&
-             m.partner===command.listener)||
-           memory.some(m=>m.kind==='offered'&&
-             m.repairOfMeetingId===command.repairOfMeetingId))
+           cause?.missedMeetingId!==command.repairOfMeetingId||
+           cause.partner!==command.listener)
           return {ok:false,reason:'no_personal_lapse_to_repair',events:[]};
         if(command.purpose!=='explore'||command.spell!==undefined)
           return {ok:false,reason:'wrong_repair_purpose',events:[]};
@@ -1107,7 +1107,8 @@ export function createSimulation() {
       });
       const event:WorldEvent={
         type:'meeting_offered',actor:command.actor,listener:command.listener,
-        meetingId:offer.id,room:offer.room,minute:now
+        meetingId:offer.id,room:offer.room,minute:now,
+        ...(offer.repairOfMeetingId===undefined?{}:{repairOfMeetingId:offer.repairOfMeetingId})
       };
       emit(event);
       return {ok:true,events:[event]};
