@@ -34,6 +34,8 @@ export type DailyLifePlan = {
   mischief?:'reckless'|'cautious'|'reactive';
   /** #31.4: choose among non-destructive contact and avoidance actions. */
   socialChoice?:'reflective';
+  /** [GAME] #31.5: expose evidence-grounded directed trust from personal memory. */
+  relationshipLearning?:boolean;
 };
 export type MealMemory = { day: number; kind: MealKind; minute: number };
 export type ConversationMemory = {
