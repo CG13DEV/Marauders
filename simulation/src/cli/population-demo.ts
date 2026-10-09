@@ -1,5 +1,5 @@
 /** [GAME] Experiment #26: empirical 600-pupil simulation trial.
- * Usage: npm run population-demo -- 48
+ * Usage: npm run population-demo -- 144
  */
 import {performance} from 'node:perf_hooks';
 import {createSchoolWeek,reportSchoolWeek}
@@ -8,7 +8,7 @@ import {createSimulation} from '../core/Simulation.ts';
 import {populationSummary,RESEARCH_DORM_CAPACITY}
   from '../scenarios/school-population.ts';
 
-const requested=process.argv[2]===undefined?48:Number(process.argv[2]);
+const requested=process.argv[2]===undefined?144:Number(process.argv[2]);
 if(!Number.isSafeInteger(requested)||requested<1||requested>1008)
   throw new Error('Ticks must be a whole number between 1 and 1008');
 const start=performance.now();
@@ -41,6 +41,11 @@ const output={
   attendance:report.attendance,
   meals:report.pupilMeals,
   conversations:report.pupilConversations,
+  rests:report.pupilRests,
+  bathroomVisits:world.events().filter(e=>e.type==='toilet_used').length,
+  physicalMoves:world.events().filter(e=>e.type==='entity_moved').length,
+  socialInvitations:report.invitations,
+  acceptedInvitations:report.acceptedInvitations,
   automaticIntentionPupils:scene.population.pupils,
   staffReport:world.events().filter(e=>e.type==='testimony_delivered').length,
   benchmark:{setupMs,simulationMs:durationMs,
