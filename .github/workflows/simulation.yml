@@ -44,3 +44,4 @@ jobs:
       - run: npm run investigation-demo
       - run: npm run witness-demo
       - run: npm run evidence-goals-demo
+      - run: npm run population-demo -- 48
