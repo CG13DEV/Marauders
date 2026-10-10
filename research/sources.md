@@ -177,7 +177,7 @@ https://www.harrypotter.com/features/everything-you-need-to-know-about-the-room-
 ### Official Harry Potter Encyclopedia — The Gryffindor common room
 https://www.harrypotter.com/fact-file/locations/the-gryffindor-common-room
 
-Круглая гостиная, камин, красные и золотые тона, портрет Полной/Толстой дамы, лестницы в спальни.
+Круглая гостиная, камин, красные и золотые тона, портрет Толстой дамы, лестницы в спальни.
 
 ### Official Harry Potter — Everything we know about the Hogwarts common rooms
 https://www.harrypotter.com/features/everything-we-know-about-the-hogwarts-common-rooms
@@ -195,7 +195,7 @@ https://www.hp-lexicon.org/place/hogwarts-school-of-witchcraft-and-wizardry/gryf
 
 Книжные сведения: седьмой этаж, лестницы по полу и курсу, занавеси кроватей, круглые спальни. Не путать с игровыми 39 узлами спален, генерируемыми из исследовательского графа.
 
-См. [гривффиндорский источник-по-источнику](gryffindor-tower-visual.md) для разделения CANON / INFERENCE / GAME.
+См. [подробное исследование башни Гриффиндора](gryffindor-tower-visual.md) для разделения CANON / INFERENCE / GAME.
 
 ## Hogwarts exterior / geometry
 
