@@ -22,16 +22,16 @@
 
 Авторитетная игровая топология:
 
-- \`simulation/src/scenarios/castle-layout.ts\`: \`west_landing_4\` ⇄
-  \`dorm_gryffindor\` ⇄ \`boys_gryffindor\` / \`girls_gryffindor\`.
-- \`simulation/src/scenarios/school-week.ts\`: в конфигурации
-  \`research-600\` дополнительные физические комнаты
-  \`research_dorm_gryffindor_y{YEAR}_{boys|girls}_{N}\`
-  **напрямую соединяются** с \`dorm_gryffindor\`. Они группируются в UI
+- `simulation/src/scenarios/castle-layout.ts`: `west_landing_4` ⇄
+  `dorm_gryffindor` ⇄ `boys_gryffindor` / `girls_gryffindor`.
+- `simulation/src/scenarios/school-week.ts`: в конфигурации
+  `research-600` дополнительные физические комнаты
+  `research_dorm_gryffindor_y{YEAR}_{boys|girls}_{N}`
+  **напрямую соединяются** с `dorm_gryffindor`. Они группируются в UI
   по лестнице и курсу, но **не** соединены невидимыми новыми проходами.
-- \`simulation/src/scenarios/school-population.ts\`:
-  Gryffindor cohorts \`[22,20,23,21,22,20,22]\` — 150 человек,
-  чередующееся boys/girls распределение по \`index%2\`,
+- `simulation/src/scenarios/school-population.ts`:
+  Gryffindor cohorts `[22,20,23,21,22,20,22]` — 150 человек,
+  чередующееся boys/girls распределение по `index%2`,
   вместимость **5 на спальню**.
 - Точный результат: курсы по парам wings =
   **6 + 4 + 6 + 5 + 6 + 4 + 6 = 37** исследовательских спален.
@@ -39,10 +39,10 @@
   показываются отдельно как комнаты без жильцов; всего **39**.
 - Граф привязывает гостиную к **floor=4**. Это **[GAME]**,
   расхождение с седьмым этажом из книжной справки. Клиент использует
-  \`west_landing_4\` как идентификатор, а не выдаёт его за книжный факт.
-- \`client/scripts/generate-graph.mjs\` получает комнаты и связи
+  `west_landing_4` как идентификатор, а не выдаёт его за книжный факт.
+- `client/scripts/generate-graph.mjs` получает комнаты и связи
   **из настоящей созданной симуляции**, считает население через
-  \`world.occupants\`; \`client/tests/graph.test.mjs\` ловит дрейф
+  `world.occupants`; `client/tests/graph.test.mjs` ловит дрейф
   количества и связей при будущих изменениях ядра.
 
 ## Художественный язык [GAME]
@@ -71,7 +71,7 @@
    экспериментальной: точные координаты, поведение коллизий и плавная
    межкомнатная навигация — задачи следующего интеграционного этапа.
 5. При публичной публикации фанатского прототипа соблюдать
-   \`docs/production/ip-and-asset-policy.md\`; никакого копирования
+   `docs/production/ip-and-asset-policy.md`; никакого копирования
    студийных материалов в client bundle.
 
 См. также [общий Hogwarts geometry research](hogwarts-geometry.md).
