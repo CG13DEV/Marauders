@@ -70,6 +70,29 @@ try{
   const bedroom=await page.evaluate(()=>window.__towerTest.snapshot());
   assert.ok(bedroom.roomKey.startsWith('research_dorm_gryffindor'));
   assert.equal(bedroom.openings.length,3);
+  assert.equal(bedroom.layout.kind,'bedroom');
+  assert.equal(bedroom.layout.reservedSlots,5);
+  assert.ok(bedroom.layout.occupied>0&&bedroom.layout.occupied<=5);
+  assert.equal(bedroom.layout.bedPositions.length,bedroom.layout.occupied);
+  for(const bed of bedroom.layout.bedPositions)
+    assert.ok(Math.hypot(bed.x,bed.z)>5,'Bed is improperly in center');
+  await page.screenshot({path:resolve('artifacts/bedroom.png'),
+    animations:'disabled'});
+  await page.locator('#go-common').click();
+  assert.equal((await page.evaluate(()=>
+    window.__towerTest.snapshot())).roomKey,'dorm_gryffindor');
+  // The actual portrait passage now leads to a long RECTANGULAR landing.
+  await page.locator('.wing-card button').last().click();
+  const landing=await page.evaluate(()=>window.__towerTest.snapshot());
+  assert.equal(landing.roomKey,'west_landing_4');
+  assert.equal(landing.layout.kind,'landing');
+  assert.ok(landing.layout.bounds.maxZ>landing.layout.bounds.minZ);
+  assert.deepEqual(landing.openings.sort(),[
+    'wall-slot:return','wall-slot:west_window','wall-slot:east_window'
+  ].sort());
+  assert.deepEqual(landing.activePortals,['return']);
+  await page.screenshot({path:resolve('artifacts/landing.png'),
+    animations:'disabled'});
   await page.locator('#go-common').click();
   assert.equal((await page.evaluate(()=>
     window.__towerTest.snapshot())).roomKey,'dorm_gryffindor');
