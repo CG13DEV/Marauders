@@ -44,8 +44,14 @@ try{
   assert.ok(initial.canvasWidth>300);
   // The real keyboard input and rendered scene must move the real avatar.
   await page.keyboard.down('w');
-  await page.waitForTimeout(450);
-  await page.keyboard.up('w');
+  // Software WebGL on CI can take >450 ms/frame. Wait for actual motion,
+  // not an arbitrary wall-clock interval that flakes under CPU pressure.
+  try{
+    await page.waitForFunction(start=>{
+      const now=window.__towerTest.snapshot().player;
+      return Math.hypot(now.x-start.x,now.z-start.z)>.11;
+    },initial.player,{timeout:20000});
+  }finally{await page.keyboard.up('w');}
   const afterW=await page.evaluate(()=>window.__towerTest.snapshot());
   console.log('[smoke] after W',JSON.stringify(afterW),'errors',errors);
   const screenshot=resolve('artifacts/tower.png');
