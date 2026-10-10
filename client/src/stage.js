@@ -4,6 +4,7 @@
  * coordinates, while authoritative room-to-room links come from manifest.
  */
 import * as THREE from 'three';
+import {wallFrame,onCameraSide} from './wall-geometry.js';
 const C={
   stone:0x868388,stoneDeep:0x55545c,grout:0x39383f,
   wood:0x684630,woodDark:0x39271f,gold:0xd1a35b,
@@ -84,9 +85,8 @@ function circularChamber(g,b,r){
   const foundationMat=mat(C.stoneDeep);
   const mortarMat=mat(C.grout);
   for(let i=0;i<segments;i++){
-    const a=(i+.5)*2*Math.PI/segments;
-    const x=Math.sin(a)*r,z=Math.cos(a)*r;
-    const direction=a+Math.PI/2; // local Z is tangent, never radial
+    const frame=wallFrame(i,segments,r);
+    const {x,z,rotation:direction}=frame;
     const high=new THREE.Group();
     high.position.set(x,0,z);high.rotation.y=direction;
     const wall=new THREE.Mesh(
@@ -116,7 +116,7 @@ function circularChamber(g,b,r){
       new THREE.BoxGeometry(.57,.115,width+.055),wallMat);
     coping.position.y=.48;cut.add(coping);
     g.add(cut);
-    walls.push({normalX:Math.sin(a),normalZ:Math.cos(a),high,cut});
+    walls.push({frame,high,cut});
   }
   const innerRim=new THREE.Mesh(
     new THREE.TorusGeometry(r-.55,.045,5,64),foundationMat);
@@ -126,10 +126,8 @@ function circularChamber(g,b,r){
     mat(C.carpet));
   rug.rotation.x=-Math.PI/2;rug.position.y=.07;g.add(rug);
   return (yaw)=>{
-    const towardX=Math.sin(yaw),towardZ=Math.cos(yaw);
     for(const section of walls){
-      const close=section.normalX*towardX+
-        section.normalZ*towardZ>.08;
+      const close=onCameraSide(section.frame,yaw);
       section.high.visible=!close;
       section.cut.visible=close;
     }
