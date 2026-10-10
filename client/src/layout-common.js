@@ -43,7 +43,8 @@ export function validateCommonPlan(plan){
     ...plan.couches.map(p=>({...p,r:1.24})),
     ...plan.sideTables.map(p=>({...p,r:.8})),
     ...plan.writingDesks.map(p=>({...p,r:1.0})),
-    ...plan.windowSeats.map(p=>({...p,r:.74}))
+    ...plan.windowSeats.map(p=>({...p,r:.74})),
+    ...plan.bookshelves.map(p=>({...p,r:.83}))
   ];
   // A central cross acts as the traversable circulation spine. The soft rug
   // occupies the center but is NOT a collider.
