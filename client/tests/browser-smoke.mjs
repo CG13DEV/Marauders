@@ -47,6 +47,10 @@ try{
   await page.waitForTimeout(450);
   await page.keyboard.up('w');
   const afterW=await page.evaluate(()=>window.__towerTest.snapshot());
+  console.log('[smoke] after W',JSON.stringify(afterW),'errors',errors);
+  const screenshot=resolve('artifacts/tower.png');
+  await mkdir(resolve('artifacts'),{recursive:true});
+  await page.screenshot({path:screenshot,animations:'disabled'});
   assert.ok(Math.hypot(afterW.player.x-initial.player.x,
     afterW.player.z-initial.player.z)>.10,
     'W did not move the avatar in the rendered WebGL scene');
