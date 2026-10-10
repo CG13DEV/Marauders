@@ -68,9 +68,6 @@ try{
   assert.equal((await page.evaluate(()=>
     window.__towerTest.snapshot())).roomKey,'dorm_gryffindor');
   assert.deepEqual(errors,[],'Runtime errors in real Chromium page');
-  const screenshot=resolve('artifacts/tower.png');
-  await mkdir(resolve('artifacts'),{recursive:true});
-  await page.screenshot({path:screenshot,animations:'disabled'});
   console.log('[browser smoke] real WebGL scene, W movement, camera, graph-safe dorm, screenshot PASS');
 }finally{
   await browser?.close();
