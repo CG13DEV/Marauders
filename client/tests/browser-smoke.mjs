@@ -31,7 +31,9 @@ try{
   await page.goto(origin+'?testMode=1',{waitUntil:'networkidle'});
   await page.waitForFunction(()=>Boolean(window.__towerTest?.snapshot()?.canvasWidth),
     {timeout:15000});
+  await page.waitForTimeout(500);
   const initial=await page.evaluate(()=>window.__towerTest.snapshot());
+  console.log('[smoke] initial',JSON.stringify(initial),'errors',errors);
   assert.equal(initial.roomKey,'dorm_gryffindor');
   assert.equal(initial.extras,3);
   assert.equal(initial.openings.length,6);
