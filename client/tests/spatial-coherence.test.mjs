@@ -54,7 +54,8 @@ test('T4.4 the common room leaves central walking and three portals clear',()=>{
     ...plan.couches.map(p=>({...p,r:1.18})),
     ...plan.sideTables.map(p=>({...p,r:.6})),
     ...plan.writingDesks.map(p=>({...p,r:.85})),
-    ...plan.windowSeats.map(p=>({...p,r:.64}))
+    ...plan.windowSeats.map(p=>({...p,r:.64})),
+    ...plan.bookshelves.map(p=>({...p,r:.83}))
   ];
   for(const p of plan.approaches)
     assert.ok(!objects.some(o=>Math.hypot(o.x-p.x,o.z-p.z)<o.r+.55),
