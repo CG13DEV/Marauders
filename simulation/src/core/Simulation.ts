@@ -14,6 +14,7 @@ import { perceiveCrash } from './perception-rules.ts';
 import { copyClaim, type Claim, type Belief } from './beliefs.ts';
 import { assessReports, type Assessment, type Trust } from './cognition.ts';
 import {relationshipFromExperience} from './relationship-evidence.ts';
+import {contextualRelationship} from './social-context.ts';
 import {ownUnrepairedCommitment} from './reconciliation.ts';
 
 import { createRuntimeStores } from './runtime-stores.ts';
@@ -535,6 +536,15 @@ export function createSimulation() {
     return relationshipOf(observer,source).trust;
   }
 
+  /** A character's OWN assessment in a particular meeting context. */
+  function trustForPurpose(observer:EntityId,source:EntityId,purpose:MeetingPurpose):Trust{
+    if(!isCharacter(observer)||!isCharacter(source)||
+       !dailyPlans.get(observer)?.contextualRelationships)
+      return trustOf(observer,source);
+    return contextualRelationship(explicitTrustOf(observer,source),
+      commitmentMemories.get(observer)??[],source,purpose).trust;
+  }
+
   function setInquisitive(character: EntityId, enabled: boolean): void {
     if (!isCharacter(character)) throw new Error('Inquisitiveness requires a character');
     if (enabled) addComponent(ecs, character, Inquisitive);
@@ -630,6 +640,8 @@ export function createSimulation() {
         (plan.socialChoice!==undefined && plan.socialChoice!=='reflective') ||
         (plan.relationshipLearning!==undefined &&
           typeof plan.relationshipLearning!=='boolean') ||
+        (plan.contextualRelationships!==undefined &&
+          typeof plan.contextualRelationships!=='boolean') ||
         (plan.repairInitiative!==undefined &&
           typeof plan.repairInitiative!=='boolean') ||
         (plan.repairResponse!==undefined &&
@@ -1828,7 +1840,8 @@ export function createSimulation() {
       exits: room => getRelationTargets(ecs, room, PassageTo),
       knownExits,passageMinutes,planActorRoute,usesUnifiedTravel,
       canAnswerWitnessQuestion:actor=>patrolPlans.get(actor)?.kind!=='animal',
-      execute, currentRoom, occupants, observations, assessment, trustOf, knowledgeGaps,
+      execute, currentRoom, occupants, observations, assessment, trustOf,
+      trustForPurpose, knowledgeGaps,
       pendingTutoring, attemptedTutors, searches, timetables, routines,
       dailyPlans, meals, conversations, rests,
       commitments, commitmentMemories, intentions, bodilyNeeds,
@@ -2306,7 +2319,7 @@ export function createSimulation() {
     registerHouse, grantPointAuthority, houseOf, housePoints, pointHistory,
     knownPointNews, pointReactions,
     captureRuntime, hydrateRuntime,
-    setTrust, trustOf, explicitTrustOf, relationshipOf, setInquisitive, setSocialInvestigator, setGuarded, setRoutine, assessment,
+    setTrust, trustOf, trustForPurpose, explicitTrustOf, relationshipOf, setInquisitive, setSocialInvestigator, setGuarded, setRoutine, assessment,
     setTimetable, setManualControl, attendance, learningDebt, knowledgeGaps,
     setDailyLife,setTravelMode,usesUnifiedTravel,
     mealHistory, conversationHistory, restHistory,

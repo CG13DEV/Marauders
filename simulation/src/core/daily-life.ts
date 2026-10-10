@@ -40,6 +40,8 @@ export type DailyLifePlan = {
   repairInitiative?:boolean;
   /** [GAME] #31.8: may consider a concrete offer, or refuse it. */
   repairResponse?:'open'|'guarded';
+  /** [GAME] #31.10 opt-in: study/explore reliability stays context-specific. */
+  contextualRelationships?:boolean;
 };
 export type MealMemory = { day: number; kind: MealKind; minute: number };
 export type ConversationMemory = {
