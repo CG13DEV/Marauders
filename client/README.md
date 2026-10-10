@@ -59,6 +59,24 @@ Neither stair alcoves nor window openings create ECS rooms; graph
 change. Rendering can be connected to a future spatial/room-presentation
 layer without altering the existing school simulation.
 
+### Tower 0.4 — spatial coherence
+
+- **Dormitories:** five stable radial bed positions; only currently occupied
+  positions render canopy beds, with foot-of-bed trunks, two genuinely embedded
+  windows, window seats and a study nook. Central corridor is open.
+- **Portrait landing:** `west_landing_4` is now a narrow, **rectangular**
+  stair-connected corridor with the portrait in the far end wall, not a
+  second circular room. Client movement respects rectangular bounds.
+- **Common room:** cozy reading/study islands, tangent-facing bookcases,
+  window seats, warm candles and clear approach routes to each real portal.
+- **Verification:** pure spatial invariants for **all 39 bedroom nodes** and
+  real Chromium/SwiftShader screenshots of three room types in
+  `tower-04-spatial-coherence-screenshots`.
+
+See [Tower 0.4 technical audit](../docs/technical/tower-04-spatial-coherence.md).
+**All visual niches retain the old simulation edges.** The wall and geometry
+do not secretly create additional ECS destinations.
+
 ### Graph source, not an invented dorm count
 
 Build-time scene is exactly the simulation's 600-pupil research school.
