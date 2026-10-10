@@ -97,7 +97,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
     advanceClock, actors, has, visibleFragiles, intactFragiles, passageAction,
     exits, knownExits, passageMinutes, planActorRoute, usesUnifiedTravel,
     execute:executeRaw, currentRoom, occupants, canAnswerWitnessQuestion,observations, assessment,
-    trustOf, knowledgeGaps, pendingTutoring, attemptedTutors, searches,
+    trustOf, trustForPurpose, knowledgeGaps, pendingTutoring, attemptedTutors, searches,
     timetables, routines, dailyPlans, meals, conversations, rests,
     commitments, commitmentMemories, intentions, bodilyNeeds,toiletNeeds,
     transitionIntention, resolveMeetings,
