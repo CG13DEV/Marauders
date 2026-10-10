@@ -24,6 +24,10 @@ export function commonPlan(radius=10){
       {...roomAnchor(radius-2.05,-2.42),angle:-2.42},
       {...roomAnchor(radius-2.05,2.42),angle:2.42}
     ],
+    bookshelves:[
+      {x:-7.20,z:4.4,angle:Math.atan2(-7.20,4.4)+Math.PI/2},
+      {x:7.20,z:4.4,angle:Math.atan2(7.20,4.4)+Math.PI/2}
+    ],
     carpet:{x:0,z:0,radius:2.65},
     clearance:1.05,
     approaches:[
