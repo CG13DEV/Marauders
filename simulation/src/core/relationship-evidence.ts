@@ -25,9 +25,12 @@ export function relationshipFromExperience(
     const latest=latestPersonalOutcome(history,partner);
     // The new successful experience may repair one particular wrong, but
     // it cannot erase separate failures. No numerical friendship score.
+    const unresolvedIds=new Set(pending.map(m=>m.meetingId));
+    const didRepair=history.some(m=>m.partner===partner&&
+      m.kind==='waited_alone'&&!unresolvedIds.has(m.meetingId));
     return {
       trust:baseline==='trusted'?'neutral':'distrusted',
-      basis:latest?.kind==='met'?'partial_repair':'waited_alone',
+      basis:latest?.kind==='met'&&didRepair?'partial_repair':'waited_alone',
       meetingId:latestPending.meetingId,minute:latestPending.minute
     };
   }
