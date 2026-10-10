@@ -238,8 +238,10 @@ function applyCommonLayout(group,b,radius){
     b.box(o.x,.78,o.z,1.35,.18,.80,C.wood);
     b.box(o.x,.38,o.z-.31,1.18,.65,.14,C.woodDark);
     b.block(o.x,o.z,.85);
-    bookshelf(b,o.x+(o.x<0?-1.75:1.75),o.z-.2);
   }
+  // Even the bookcase faces follow the local tangent of the round tower.
+  for(const o of plan.bookshelves)
+    bookshelf(b,o.x,o.z,o.angle);
   for(const o of plan.windowSeats)
     paddedBench(b,o.x,o.z,o.angle+Math.PI/2);
   for(const o of [{x:-2.7,z:-5.9},{x:2.7,z:-5.9}]){
