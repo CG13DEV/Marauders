@@ -309,7 +309,9 @@ window.addEventListener('keyup',e=>{
 });
 window.addEventListener('blur',()=>keys.clear());
 window.addEventListener('resize',calculateCamera);
+let renderedFrames=0;
 function tick(){
+  renderedFrames++;
   const dt=Math.min(clock.getDelta(),.055);
   const blocked=!$('dialog-backdrop').hidden;
   const front={x:-Math.sin(yaw),z:-Math.cos(yaw)};
