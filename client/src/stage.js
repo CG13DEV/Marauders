@@ -12,7 +12,7 @@ const C={
   black:0x27252b,carpet:0x5a2936
 };
 const mat=(color,roughness=1)=>new THREE.MeshStandardMaterial({
-  color,roughness,metalness:color===C.gold?.26:0
+  color,roughness,metalness:color===C.gold ? 0.26 : 0
 });
 function makeBuilder(group,obstacles){
   const box=(x,y,z,w,h,d,color,angle=0)=>{
@@ -146,7 +146,7 @@ function fourPoster(b,x,z,angle=0,occupied=true){
   mBox(0,2.35,0,1.55,.18,2.22,C.wood);
   for(const dx of [-.72,.72])
     mBox(dx,1.54,0,.07,1.32,1.45,C.wine);
-  g.parent; b.block(x,z,1.2);
+  b.block(x,z,1.2);
   return g;
 }
 function addPortrait(b,x,z){
