@@ -4,7 +4,7 @@
  * witnessed. A global expired state is NOT a private mental observation.
  */
 import type { SpellId } from './spellcraft.ts';
-import {latestPersonalOutcome} from './personal-outcomes.ts';
+import {unresolvedPersonalAbsences} from './personal-outcomes.ts';
 export type MeetingPurpose = 'study' | 'explore';
 export type CommitmentPriority = 'school_first' | 'promise_first';
 export type MeetingStatus =
@@ -67,5 +67,5 @@ export function hasMeetingConflict(
 export function personallyAvoids(
   history: readonly CommitmentMemory[], partner: number
 ): boolean {
-  return latestPersonalOutcome(history,partner)?.kind === 'waited_alone';
+  return unresolvedPersonalAbsences(history,partner).length>0;
 }
