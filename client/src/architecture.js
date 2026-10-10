@@ -23,8 +23,10 @@ export const BEDROOM_SLOTS=Object.freeze([
 ]);
 export const LANDING_SLOTS=Object.freeze([
   slot('return','portrait',PI,2.60,{portal:'return'}),
-  slot('west_window','window',-2.3,1.45),
-  slot('east_window','window',2.3,1.45)
+  // On west_landing_4 the shell is RECTANGULAR: the side windows face
+  // exact ±X, unlike the circular bedroom shell.
+  slot('west_window','window',-PI/2,1.45),
+  slot('east_window','window',PI/2,1.45)
 ]);
 export function signedAngle(a,b){
   return Math.atan2(Math.sin(a-b),Math.cos(a-b));
