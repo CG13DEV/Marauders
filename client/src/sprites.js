@@ -1,124 +1,163 @@
-/** Eight distinct pixel-art orientations on a camera-facing THREE.Sprite.
- * All frames are painted locally from primitive pixels: no licensed art.
+/** Hand-drawn procedural 2D school-uniform sprites.
+ * Eight substantially different head/body angles, four genuine walk poses.
+ * Works offline: textures are Canvas2D, no licensed or downloaded assets.
  */
 import * as THREE from 'three';
-const N=8, W=40,H=64;
-const palette={
-  outline:'#201923',robe:'#35343d',robeLit:'#514953',shirt:'#eee0c9',
-  gold:'#bf9555',red:'#8e3543',skin:'#ebbf93',
-  skinShadow:'#bd8a6e',hair:'#58372c',hairLight:'#81503b',
-  boots:'#30252b',eyes:'#24212a',shadow:'#15141c'
+import {VIEWS,WALK_FRAMES,SPRITE_VARIANTS,
+  directionFrame,animationFrame} from './sprite-motion.js';
+const W=48,H=72;
+const styles={
+  player:{hair:'#51362c',hairHi:'#79503c',coat:'#35343c',
+    robeHi:'#514750',scarf:'#922e43',trim:'#cda359',skin:'#e8b995'},
+  ginger:{hair:'#b75e34',hairHi:'#e28c4f',coat:'#393341',
+    robeHi:'#645365',scarf:'#9d3b48',trim:'#e1b15b',skin:'#f4c7a0'},
+  dark:{hair:'#24212c',hairHi:'#4d4250',coat:'#302e3d',
+    robeHi:'#52475e',scarf:'#923c48',trim:'#d3a864',skin:'#bb8c70'},
+  blond:{hair:'#c0a06a',hairHi:'#e0c593',coat:'#353740',
+    robeHi:'#555968',scarf:'#913849',trim:'#ddb767',skin:'#e7bd9b'}
 };
-const PIX=2;
-function paintFrame(view){
+export function paintFrame(view,stride,variant='player'){
+  if(view<0||view>=VIEWS||stride<0||stride>=WALK_FRAMES)
+    throw RangeError('Invalid sprite view or stride');
+  const palette=styles[variant]??styles.player;
   const c=document.createElement('canvas');c.width=W;c.height=H;
-  const ctx=c.getContext('2d');
-  ctx.imageSmoothingEnabled=false;
-  const p=(x,y,w,h,col)=>{ctx.fillStyle=col;ctx.fillRect(
-    Math.round(x),Math.round(y),Math.round(w),Math.round(h));};
-  // view = 0 front, 2 right profile, 4 back, 6 left profile.
-  const front=view===0,back=view===4;
-  const left=view>=5&&view<=7,right=view>=1&&view<=3;
+  const ctx=c.getContext('2d');ctx.imageSmoothingEnabled=false;
+  const p=(x,y,w,h,color)=>{
+    ctx.fillStyle=color;ctx.fillRect(Math.round(x),Math.round(y),
+      Math.round(w),Math.round(h));
+  };
+  const moving=stride!==0;
+  const step=[0,3,0,-3][stride];
+  const swing=[0,-3,0,3][stride];
+  const right=view===1||view===2||view===3;
+  const left=view===5||view===6||view===7;
   const side=view===2||view===6;
-  const quarter=view===1||view===7||view===3||view===5;
-  const lean=right?1:left?-1:0;
-  const face=front||quarter;
-  // soft ground pixel cluster
-  p(9,59,22,3,'rgba(24,21,23,.35)');
-  // cloak hems / boots
-  p(11,54,8,7,palette.boots);p(22,54,8,7,palette.boots);
-  p(9,35,23,21,palette.outline);
-  p(11,37,19,18,palette.robe);
-  p(12,39,2,12,palette.robeLit);
-  p(26,39,2,12,'#2a2a31');
-  if(back){
-    p(16,38,8,16,palette.red);p(18,38,4,14,palette.gold);
+  const behind=view===3||view===4||view===5;
+  const front=view===0,back=view===4;
+  const quarterFront=view===1||view===7;
+  const quarterBack=view===3||view===5;
+  const sideShift=right?2:left?-2:0;
+  // Shadows and shoe silhouettes alternate at WALK poses 1 and 3.
+  p(11,65,26,3,'rgba(20,18,24,.20)');
+  p(13+step,59,8,7,'#28232c');
+  p(27-step,59,8,7,'#28232c');
+  p(12+step,63,11,4,'#211d26');
+  p(25-step,63,11,4,'#211d26');
+  // Mantle hem flares when stepping.
+  p(10-(moving?2:0),40,28+(moving?4:0),20,'#211f28');
+  p(13,42,22,18,palette.coat);
+  p(14,42,4,16,palette.robeHi);
+  p(31,42,4,16,'#292530');
+  if(back||quarterBack){
+    p(19,43,10,18,palette.scarf);
+    p(23,43,2,18,palette.trim);
   }else if(!side){
-    p(18,38,4,14,palette.shirt);
-    p(16,38,2,12,palette.gold);
-    p(22,38,2,12,palette.gold);
-  }else {
-    p(lean>0?22:17,39,2,13,palette.gold);
-  }
-  // arms with some asymmetry
-  p(7,38,5,14,palette.robe);p(29,38,5,14,palette.robe);
-  p(8,48,4,4,palette.skinShadow);p(29,48,4,4,palette.skin);
-  // neck
-  p(17,31,7,8,palette.skinShadow);
-  p(16+lean,29,8,9,palette.skin);
-  // face / hair. Every direction shifts the visible anatomy.
-  const headLeft=side?15+lean*2:12;
-  const headWidth=side?14:17;
-  p(headLeft-1,14,headWidth+3,20,palette.outline);
-  p(headLeft,16,headWidth,16,back?palette.hair:palette.skin);
-  if(back){
-    p(headLeft,15,headWidth,14,palette.hair);
-    p(headLeft+3,15,5,13,palette.hairLight);
+    p(20,42,8,17,'#f0e1c7');
+    p(18,42,2,16,palette.trim);
+    p(28,42,2,16,palette.trim);
+    p(23,44,3,12,'#b1a091');
   }else{
-    p(headLeft-1,13,headWidth+2,8,palette.hair);
-    p(headLeft-1,18,4,9,palette.hair);
-    p(headLeft+headWidth-3,18,4,9,palette.hair);
-    p(headLeft+2,14,8,3,palette.hairLight);
-    if(front){
-      p(17,24,2,2,palette.eyes);p(24,24,2,2,palette.eyes);
-      p(20,29,3,1,palette.skinShadow);
-    }else if(side){
-      const eyeX=right?headLeft+headWidth-5:headLeft+3;
-      p(eyeX,24,2,2,palette.eyes);
-      p(right?headLeft+headWidth-1:headLeft-1,27,2,3,palette.skinShadow);
-    }else if(face){
-      if(view===1||view===7){
-        p(lean>0?21:18,24,2,2,palette.eyes);
-        p(lean>0?26:23,24,2,2,palette.eyes);
-      }else{
-        p(lean>0?26:15,24,2,2,palette.eyes);
-        p(lean>0?27:14,25,1,3,palette.skinShadow);
-      }
-    }
+    p(right?27:18,42,3,16,palette.trim);
   }
-  // Gryffindor scarf
-  p(16,36,11,4,palette.red);p(21,36,3,4,palette.gold);
-  if(!back){p(24,40,4,11,palette.red);p(24,44,4,2,palette.gold);}
-  // Tiny wand on side
-  if(right)p(34,43,2,14,'#86613c');
-  if(left)p(4,43,2,14,'#86613c');
-  const tex=new THREE.CanvasTexture(c);
-  tex.magFilter=THREE.NearestFilter;tex.minFilter=THREE.NearestFilter;
-  tex.colorSpace=THREE.SRGBColorSpace;
-  return tex;
+  // Left/right sleeve gait is actually drawn, not applied by sprite bounce.
+  const leftArm=left?-3:0,rightArm=right?3:0;
+  p(8+leftArm,40+swing,7,16,palette.coat);
+  p(33+rightArm,40-swing,7,16,palette.coat);
+  p(8+leftArm,51+swing,6,5,palette.skin);
+  p(34+rightArm,51-swing,6,5,palette.skin);
+  // Tucked neck.
+  p(20,34,8,8,'#b68064');
+  p(21,34,7,8,palette.skin);
+  // Head differences: front, 3/4, profile, back of skull.
+  const hX=side?16+sideShift:14+sideShift;
+  const hW=side?16:19;
+  p(hX-1,14,hW+2,22,'#211d25');
+  p(hX,16,hW,18,palette.hair);
+  if(!back){
+    p(hX+2,19,hW-3,15,palette.skin);
+    if(behind){
+      // Back quarter: narrower cheek, visible hairline on far side.
+      const earX=right?hX+hW-5:hX+1;
+      p(earX,24,5,9,palette.skin);
+      p(right?hX:hX+hW-7,19,7,18,palette.hair);
+    }else if(side){
+      // Profile with only one eye and a projecting nose.
+      const eyeX=right?hX+hW-5:hX+3;
+      p(eyeX,26,2,2,'#28212d');
+      p(right?hX+hW-1:hX-2,28,3,3,'#bc8c74');
+    }else if(quarterFront){
+      p(right?hX+10:hX+4,26,2,2,'#2d222b');
+      p(right?hX+15:hX+10,26,2,2,'#2d222b');
+    }else if(front){
+      p(hX+5,26,2,2,'#24202b');
+      p(hX+13,26,2,2,'#24202b');
+      p(hX+9,31,3,1,'#b8816a');
+    }
+    p(hX-1,14,hW+3,8,palette.hair);
+    p(hX+2,14,8,3,palette.hairHi);
+    p(hX-1,18,4,12,palette.hair);
+    p(hX+hW-3,18,4,12,palette.hair);
+  }else{
+    p(hX,15,hW,19,palette.hair);
+    p(hX+3,15,6,14,palette.hairHi);
+    p(hX-1,28,4,9,palette.hair);
+    p(hX+hW-3,28,4,9,palette.hair);
+  }
+  // Scarf and Gryffindor trim change side based on view.
+  if(!back){
+    p(17,37,15,4,palette.scarf);
+    p(right?27:18,37,3,4,palette.trim);
+    const tailX=right?28:quarterFront?16:29;
+    p(tailX,40,5,12,palette.scarf);
+    p(tailX,46,5,2,palette.trim);
+  }
+  // Wand hand projects toward the direction of travel.
+  if(side)p(right?41:5,48,2,14,'#89603f');
+  const texture=new THREE.CanvasTexture(c);
+  texture.magFilter=THREE.NearestFilter;
+  texture.minFilter=THREE.NearestFilter;
+  texture.colorSpace=THREE.SRGBColorSpace;
+  return texture;
 }
-export function createAvatar(){
-  const textures=Array.from({length:N},(_,i)=>paintFrame(i));
+export function createAvatar({variant='player',scale=1}={}){
+  if(!SPRITE_VARIANTS.includes(variant))throw Error('Unknown sprite: '+variant);
+  const frames=Array.from({length:VIEWS},(_,view)=>
+    Array.from({length:WALK_FRAMES},(_,stride)=>
+      paintFrame(view,stride,variant)));
   const material=new THREE.SpriteMaterial({
-    map:textures[0],transparent:true,depthWrite:false,alphaTest:0.08
+    map:frames[0][0],transparent:true,
+    depthWrite:false,alphaTest:.07
   });
   const sprite=new THREE.Sprite(material);
-  sprite.scale.set(1.52,2.45,1);
-  sprite.position.y=1.3;
-  const disc=new THREE.Mesh(new THREE.CircleGeometry(.58,24),
-    new THREE.MeshBasicMaterial({color:0x101015,transparent:true,opacity:.24,
-      depthWrite:false}));
-  disc.rotation.x=-Math.PI/2;disc.position.y=.025;
+  sprite.scale.set(1.8*scale,2.72*scale,1);
+  sprite.position.y=1.42*scale;
+  const disc=new THREE.Mesh(new THREE.CircleGeometry(.54*scale,24),
+    new THREE.MeshBasicMaterial({
+      color:0x15131b,transparent:true,opacity:.25,depthWrite:false
+    }));
+  disc.rotation.x=-Math.PI/2;disc.position.y=.03;
   const group=new THREE.Group();group.add(disc,sprite);
-  let view=0,phase=0;
+  let selected=-1,elapsed=0;
   return {
     group,
     update(delta,moving,facing,cameraYaw){
-      if(moving)phase+=delta*11;
-      else phase=0;
-      // Facing relative to the viewer, snapped to eight actual frames.
-      const angleToViewer=cameraYaw;
-      const difference=((facing-angleToViewer+Math.PI*2)%(Math.PI*2));
-      const next=Math.round(difference/(Math.PI/4))%N;
-      if(next!==view){view=next;material.map=textures[view];material.needsUpdate=true;}
-      sprite.position.y=1.3+(moving?Math.abs(Math.sin(phase))*.055:0);
-      disc.scale.setScalar(moving?1.06:1);
+      elapsed=moving?elapsed+delta:0;
+      const view=directionFrame(facing,cameraYaw);
+      const stride=animationFrame(elapsed,moving);
+      const index=view*WALK_FRAMES+stride;
+      if(index!==selected){
+        selected=index;material.map=frames[view][stride];
+        material.needsUpdate=true;
+      }
+      // Minimal breathing while idle: gait comes from leg/arm pixels.
+      sprite.position.y=1.42*scale+
+        (moving?0:Math.sin(elapsed*1.8)*.01);
       return view;
     },
     dispose(){
-      textures.forEach(t=>t.dispose());
-      material.dispose();
+      frames.flat().forEach(t=>t.dispose());
       disc.geometry.dispose();disc.material.dispose();
+      material.dispose();
     }
   };
 }
