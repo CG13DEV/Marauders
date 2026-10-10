@@ -218,6 +218,10 @@ function refreshHint(){
 }
 $('interact-button').addEventListener('click',()=>usePortal(interact));
 function clipMovement(x,z){
+  if(stage.bounds)return {
+    x:THREE.MathUtils.clamp(x,stage.bounds.minX,stage.bounds.maxX),
+    z:THREE.MathUtils.clamp(z,stage.bounds.minZ,stage.bounds.maxZ)
+  };
   const radius=stage.radius-1.15;
   const length=Math.hypot(x,z);
   if(length>radius){const scale=radius/length;x*=scale;z*=scale;}
