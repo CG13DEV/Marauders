@@ -36,6 +36,7 @@ for(const [a,b] of graph.links){
 let stage=null,pendingPortal=null,target=null;
 const player={x:STARTS.common.x,z:STARTS.common.z,facing:0,walking:false};
 const avatar=createAvatar();scene.add(avatar.group);
+const standIns=[]; // presentation-only students; NOT simulated NPCs
 const keys=new Set();
 let lastView=-1,toastTimeout=null,interact=null,dialogWing=null;
 const clock=new THREE.Clock();
@@ -57,7 +58,7 @@ function labelFor(room){
 }
 function detailFor(room){
   if(room.key===graph.common.key)
-    return 'Красное бархатное кресло, золотые отблески и лестницы в спальни.';
+    return 'Камин, проходы в стенах и три тестовых спрайта (пока без ИИ).';
   if(room.key===graph.landing.key)
     return 'Условная точка соединения башни с графом замка.';
   if(room.type==='legacy')
@@ -79,6 +80,11 @@ function updateHeader(){
   updateNavigator();
 }
 function rebuildScene(){
+  for(const actor of standIns){
+    scene.remove(actor.sprite.group);
+    actor.sprite.dispose();
+  }
+  standIns.length=0;
   if(stage){scene.remove(stage.group);stage.dispose();}
   const room=byKey.get(roomKey);
   stage=buildStage(room,graph);
@@ -91,6 +97,20 @@ function rebuildScene(){
   // A fresh room inherits the current camera orientation and cutaway.
   stage.setCameraYaw(yaw);
   avatar.group.position.set(player.x,0,player.z);
+  if(roomKey===graph.common.key){
+    // Three local sprite stand-ins let us judge scale, silhouettes and
+    // all eight view directions; NO fabricated ECS simulation behaviour.
+    for(const sample of [
+      {variant:'ginger',x:-4.7,z:3.9,facing:1.5},
+      {variant:'dark',x:4.5,z:4.1,facing:-1.1},
+      {variant:'blond',x:.4,z:-4.8,facing:-2.5}
+    ]){
+      const sprite=createAvatar({variant:sample.variant,scale:.96});
+      sprite.group.position.set(sample.x,0,sample.z);
+      scene.add(sprite.group);
+      standIns.push({...sample,sprite});
+    }
+  }
   updateHeader();
 }
 function enter(next){
@@ -289,7 +309,9 @@ window.addEventListener('keyup',e=>{
 });
 window.addEventListener('blur',()=>keys.clear());
 window.addEventListener('resize',calculateCamera);
+let renderedFrames=0;
 function tick(){
+  renderedFrames++;
   const dt=Math.min(clock.getDelta(),.055);
   const blocked=!$('dialog-backdrop').hidden;
   const front={x:-Math.sin(yaw),z:-Math.cos(yaw)};
@@ -324,6 +346,7 @@ function tick(){
   }
   avatar.group.position.set(player.x,0,player.z);
   const frame=avatar.update(dt,moving,player.facing,yaw);
+  for(const actor of standIns)actor.sprite.update(dt,false,actor.facing,yaw);
   if(frame!==lastView){lastView=frame;
     $('sprite-facing').textContent='РАКУРС '+(frame+1)+' / 8';}
   $('heading-rose').style.transform='rotate('+(-yaw*180/Math.PI)+'deg)';
@@ -337,6 +360,21 @@ function tick(){
 }
 rebuildScene();calculateCamera();
 renderer.setAnimationLoop(tick);
+// Opt-in browser smoke diagnostics; no access to the simulation, network,
+// credentials or hidden NPC state. Production default exposes nothing.
+if(new URLSearchParams(window.location.search).has('testMode')){
+  window.__towerTest=Object.freeze({
+    snapshot:()=>Object.freeze({
+      player:Object.freeze({x:player.x,z:player.z}),
+      roomKey,extras:standIns.length,
+      openings:stage?.group.children
+        .filter(o=>o.name.startsWith('wall-slot:')).map(o=>o.name),
+      cameraYaw:yaw,
+      frames:renderedFrames,
+      canvasWidth:renderer.domElement.width
+    })
+  });
+}
 if(window.Telegram?.WebApp){
   window.Telegram.WebApp.ready();
   window.Telegram.WebApp.expand();

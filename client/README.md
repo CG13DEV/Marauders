@@ -37,6 +37,28 @@ authoritative ECS simulation or create a remote server.
 - **Render:** 8 independent pixel-art canvas frames are selected from facing
   direction relative to camera, NOT a single sprite rotated 8 ways.
 
+### Architectural shell 0.3 and animated sprite system
+
+Room shells declare `slotsFor('common'|'bedroom'|'landing')`:
+* a wall opening **removes the corresponding full-height masonry segments**;
+* each opening is mounted at `(sin(angle) * radius, cos(angle) * radius)`;
+* the mount's tangent rotation is `angle + π/2`, shared by doorway,
+  window embrasure, hearth, portrait and stone wall;
+* the two bedroom stairwells are rendered as separate vestibules **outside**
+  the common room wall. The portrait stays **in** its wall opening;
+* the camera cutaway still works without moving or duplicating ECS edges.
+
+`sprites.js` now draws **8 camera-relative directions × 4 real walking
+poses = 32 frames per character style**, rather than eight fixed images with
+vertical bobbing. Three additional distinctly coloured students are **local
+decorative sprite stand-ins**, explicitly *not NPC simulation*. For now they
+exist to check scale, silhouette legibility, camera angles and visual variety.
+
+Neither stair alcoves nor window openings create ECS rooms; graph
+`39` bedrooms, connections, occupancy and authoritative room IDs do not
+change. Rendering can be connected to a future spatial/room-presentation
+layer without altering the existing school simulation.
+
 ### Graph source, not an invented dorm count
 
 Build-time scene is exactly the simulation's 600-pupil research school.

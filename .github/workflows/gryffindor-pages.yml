@@ -61,6 +61,19 @@ jobs:
           test -n "$asset"
           curl --silent --show-error --fail "http://127.0.0.1:4173$asset" -o /dev/null
 
+      - name: Install Chromium for actual WebGL smoke
+        working-directory: client
+        run: npx playwright install --with-deps chromium
+      - name: Test WebGL scene, keyboard, camera and graph-safe room transitions
+        working-directory: client
+        run: npm run browser-smoke
+      - name: Upload visual verification screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tower-03-chromium-screenshot
+          path: client/artifacts/tower.png
+          if-no-files-found: ignore
       - name: Setup Pages
         if: github.event_name != 'pull_request'
         uses: actions/configure-pages@v5
