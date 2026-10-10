@@ -87,6 +87,12 @@ if(conflictPressure){
 }
 const ledger=world.meetingLedger();
 const repairs=ledger.filter(m=>m.repairOfMeetingId!==undefined);
+if(conflictPressure){
+  assert.ok(repairs.length>0,
+    'Broken promises must provoke concrete, autonomous offers of repair');
+  assert.ok(repairs.some(m=>m.status==='kept'),
+    'At least some openly considered repairs must be physically kept; otherwise scale-level reconciliation is deadlocked');
+}
 const saved=world.checkpoint();
 const checkpointBytes=Buffer.byteLength(JSON.stringify(saved));
 const restored=restoreCheckpoint(saved);
