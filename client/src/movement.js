@@ -38,3 +38,13 @@ export function moveWithCollision(stage,position,dx,dz){
     if(walkable(stage,candidate.x,candidate.z))return candidate;
   return position;
 }
+
+const PHYSICAL_KEYS=Object.freeze({
+  KeyW:'w',KeyA:'a',KeyS:'s',KeyD:'d',
+  KeyQ:'q',KeyE:'e',KeyF:'f',
+  ArrowUp:'arrowup',ArrowDown:'arrowdown',
+  ArrowLeft:'arrowleft',ArrowRight:'arrowright'
+});
+export function keyForControl(event){
+  return PHYSICAL_KEYS[event.code]??null;
+}
