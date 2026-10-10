@@ -172,6 +172,31 @@ https://www.harrypotter.com/fact-file/locations/the-room-of-requirement
 ### Everything you need to know about the Room of Requirement
 https://www.harrypotter.com/features/everything-you-need-to-know-about-the-room-of-requirement
 
+## Gryffindor Tower · интерьер и топология
+
+### Official Harry Potter Encyclopedia — The Gryffindor common room
+https://www.harrypotter.com/fact-file/locations/the-gryffindor-common-room
+
+Круглая гостиная, камин, красные и золотые тона, портрет Толстой дамы, лестницы в спальни.
+
+### Official Harry Potter — Everything we know about the Hogwarts common rooms
+https://www.harrypotter.com/features/everything-we-know-about-the-hogwarts-common-rooms
+
+Две винтовые лестницы, отдельные мужские и женские спальни.
+
+### Official Harry Potter — Behind the scenes: Creating the Gryffindor common room
+https://www.harrypotter.com/features/gryffindor-common-room
+
+Киношные декорации (камины, красная мебель, ковры, гобелены) — художественные референсы, не метрический канонический чертёж.
+
+### Harry Potter Lexicon — Gryffindor Tower and Harry's dormitory
+https://www.hp-lexicon.org/place/hogwarts-school-of-witchcraft-and-wizardry/gryffindor-tower/
+https://www.hp-lexicon.org/place/hogwarts-school-of-witchcraft-and-wizardry/gryffindor-tower/harrys-dormitory/
+
+Книжные сведения: седьмой этаж, лестницы по полу и курсу, занавеси кроватей, круглые спальни. Не путать с игровыми 39 узлами спален, генерируемыми из исследовательского графа.
+
+См. [подробное исследование башни Гриффиндора](gryffindor-tower-visual.md) для разделения CANON / INFERENCE / GAME.
+
 ## Hogwarts exterior / geometry
 
 ### Hogwarts Model Scan — Warner Bros Studio

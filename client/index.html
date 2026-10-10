@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover"/>
+  <meta name="theme-color" content="#10151b"/>
+  <meta name="description" content="Мародёры — исследование трёхмерной башни Гриффиндора. Первый безсерверный прототип."/>
+  <title>Мародёры · Башня Гриффиндора</title>
+</head>
+<body>
+  <main id="app">
+    <div id="viewport" aria-label="Трёхмерная сцена башни Гриффиндора"></div>
+    <div class="vignette" aria-hidden="true"></div>
+    <header class="masthead glass">
+      <div class="crest" aria-hidden="true">G</div>
+      <div><div class="eyebrow">МАРОДЁРЫ <span class="dot">✦</span> ПРОТОТИП 01</div>
+        <div class="brand">Башня <i>Гриффиндора</i></div></div>
+      <div class="live-tag"><span class="pulse"></span> ЛОКАЛЬНАЯ СЦЕНА</div>
+    </header>
+    <section class="location glass">
+      <div class="eyebrow">ТЫ НАХОДИШЬСЯ</div>
+      <h1 id="room-title">Гостиная Гриффиндора</h1>
+      <p id="room-subtitle">Тёплый свет, потрескивание камина и сотни историй.</p>
+      <div class="pillrow"><span id="room-meta">ГРАФ СИМУЛЯЦИИ</span><span id="room-counter">39 СПАЛЕН</span></div>
+    </section>
+    <section class="right-panel glass" aria-label="Навигация по башне">
+      <div class="panel-head">
+        <div><div class="eyebrow">ПЛАН РЕКОНСТРУКЦИИ</div><h2>Карта башни</h2></div>
+        <span class="archive-icon" aria-hidden="true">✧</span>
+      </div>
+      <p class="panel-explain">Переходы соответствуют реальному графу. Спальни доступны через гостиную.</p>
+      <button id="go-common" class="nav-primary">⌂ <span>Вернуться в гостиную</span></button>
+      <div id="room-navigator"></div>
+      <div class="source-key"><span class="source-dot"></span>
+        <span>39 узлов спален: 37 исследовательских + 2 исходных</span></div>
+    </section>
+    <div class="bottom-left">
+      <div class="controls glass">
+        <div class="control-row"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>идти</span></div>
+        <div class="control-row"><kbd>Q</kbd><kbd>E</kbd><span>камера</span><kbd>F</kbd><span>действие</span></div>
+        <div class="control-row"><span class="tap-dot">◎</span><span>нажми на пол, чтобы идти</span></div>
+      </div>
+      <button id="controls-toggle" class="small-glass" aria-label="Показать подсказки по управлению">?</button>
+    </div>
+    <div class="bottom-right glass">
+      <div class="heading-direction"><span id="sprite-facing">РАКУРС 1 / 8</span>
+        <div class="heading-rose" id="heading-rose">↑</div></div>
+      <div class="camera-controls">
+        <button id="rotate-left" aria-label="Повернуть камеру влево">↶</button>
+        <button id="zoom-out" aria-label="Отдалить камеру">−</button>
+        <button id="zoom-in" aria-label="Приблизить камеру">+</button>
+        <button id="rotate-right" aria-label="Повернуть камеру вправо">↷</button>
+      </div>
+    </div>
+    <div class="action-hint glass" id="action-hint" hidden><span>✦</span>
+      <span id="action-hint-text">Подойти к лестнице</span>
+      <button id="interact-button">Открыть <span>F</span></button>
+    </div>
+    <div id="dialog-backdrop" class="dialog-backdrop" hidden>
+      <div class="dialog glass" role="dialog" aria-modal="true" aria-label="Лестницы и спальни">
+        <div class="dialog-heading"><div><div class="eyebrow">БАШНЯ ГРИФФИНДОРА</div>
+          <h2 id="dialog-title">Спальни учеников</h2></div>
+          <button class="close-btn" id="dialog-close" aria-label="Закрыть">×</button></div>
+        <p class="dialog-note" id="dialog-note"></p>
+        <div class="dialog-scroll" id="dialog-rooms"></div>
+      </div>
+    </div>
+    <div class="footer-credit">WORLD RULES → SIMULATION · VISUALS → THREE.JS <span>·</span> [GAME / INFERENCE]</div>
+    <div class="toast" id="toast" aria-live="polite"></div>
+  </main>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
