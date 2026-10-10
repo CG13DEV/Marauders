@@ -58,7 +58,7 @@ function labelFor(room){
 }
 function detailFor(room){
   if(room.key===graph.common.key)
-    return 'Красное бархатное кресло, золотые отблески и лестницы в спальни.';
+    return 'Камин, проходы в стенах и три тестовых спрайта (пока без ИИ).';
   if(room.key===graph.landing.key)
     return 'Условная точка соединения башни с графом замка.';
   if(room.type==='legacy')
