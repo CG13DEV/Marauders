@@ -97,7 +97,7 @@ try{
   assert.equal((await page.evaluate(()=>
     window.__towerTest.snapshot())).roomKey,'dorm_gryffindor');
   assert.deepEqual(errors,[],'Runtime errors in real Chromium page');
-  console.log('[browser smoke] real WebGL scene, W movement, camera, graph-safe dorm, screenshot PASS');
+  console.log('[browser smoke 0.4] common, arc beds, non-circular landing, W, camera, portrait connectivity and three screenshots PASS');
 }finally{
   await browser?.close();
   server.kill('SIGTERM');
