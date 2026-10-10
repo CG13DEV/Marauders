@@ -370,6 +370,7 @@ if(new URLSearchParams(window.location.search).has('testMode')){
       openings:stage?.group.children
         .filter(o=>o.name.startsWith('wall-slot:')).map(o=>o.name),
       cameraYaw:yaw,
+      frames:renderedFrames,
       canvasWidth:renderer.domElement.width
     })
   });
