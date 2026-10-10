@@ -374,6 +374,8 @@ if(new URLSearchParams(window.location.search).has('testMode')){
       openings:stage?.group.children
         .filter(o=>o.name.startsWith('wall-slot:')).map(o=>o.name),
       cameraYaw:yaw,
+      layout:stage?.layout,
+      activePortals:stage?.portals.map(p=>p.kind),
       frames:renderedFrames,
       canvasWidth:renderer.domElement.width
     })
