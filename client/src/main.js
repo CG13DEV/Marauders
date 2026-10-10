@@ -358,6 +358,20 @@ function tick(){
 }
 rebuildScene();calculateCamera();
 renderer.setAnimationLoop(tick);
+// Opt-in browser smoke diagnostics; no access to the simulation, network,
+// credentials or hidden NPC state. Production default exposes nothing.
+if(new URLSearchParams(window.location.search).has('testMode')){
+  window.__towerTest=Object.freeze({
+    snapshot:()=>Object.freeze({
+      player:Object.freeze({x:player.x,z:player.z}),
+      roomKey,extras:standIns.length,
+      openings:stage?.group.children
+        .filter(o=>o.name.startsWith('wall-slot:')).map(o=>o.name),
+      cameraYaw:yaw,
+      canvasWidth:renderer.domElement.width
+    })
+  });
+}
 if(window.Telegram?.WebApp){
   window.Telegram.WebApp.ready();
   window.Telegram.WebApp.expand();
