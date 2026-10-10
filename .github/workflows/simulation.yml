@@ -90,6 +90,8 @@ jobs:
         run: npm run social-school-stress -- --baseline
       - name: Experiment 32.0 full 624-agent social policy load
         run: npm run social-school-stress -- --all-eligible
+      - name: Experiment 32.0 full social load with lived evening-duty conflicts
+        run: npm run social-school-stress -- --conflict-full
       - name: Experiment 30.9 GC and ECS retention audit
         run: npm run memory-audit-demo
       - name: Experiment 31.1 counterfactual causal autonomy
