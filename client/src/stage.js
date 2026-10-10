@@ -4,8 +4,9 @@
  * coordinates, while authoritative room-to-room links come from manifest.
  */
 import * as THREE from 'three';
+import {wallFrame,onCameraSide} from './wall-geometry.js';
 const C={
-  stone:0x817567,stoneDeep:0x5f5955,grout:0x474448,
+  stone:0x868388,stoneDeep:0x55545c,grout:0x39383f,
   wood:0x684630,woodDark:0x39271f,gold:0xd1a35b,
   wine:0x702e3d,red:0xa84a46,cream:0xe1c9a0,
   floor:0x826e5f,blue:0x729ab1,fire:0xfcb55c,
@@ -64,28 +65,73 @@ function window(group,b,x,y,z,orientation=0){
   }
   b.box(x,y-1.2,z,1.65,.25,.28,C.stoneDeep,orientation);
 }
+/**
+ * Assemble an actual CURVED masonry wall, not radial fins.
+ *
+ * The original code placed every long wall box along the RADIUS (angle=a).
+ * A circular wall needs its long edge TANGENT to the circle (angle=a+π/2).
+ * Each segment has two versions: high masonry on the far side of the camera,
+ * and a low cross-section parapet on the near side. This means a 360° orbit
+ * keeps the room readable, instead of rotating behind opaque walls.
+ */
 function circularChamber(g,b,r){
-  const {cylinder,box,plane}=b;
-  cylinder(0,-.29,0,r+.32,r+.32,.5,C.stoneDeep,64);
-  cylinder(0,-.08,0,r,r,.22,C.floor,64);
-  // concentric low-poly stone tiles; procedural and intentionally varied.
-  const count=68;
-  for(let i=0;i<count;i++){
-    const a=i*2*Math.PI/count;
-    const x=Math.cos(a)*(r-.54),z=Math.sin(a)*(r-.54);
-    box(x,.045,z,1.3,.07,.14,i%5===0?C.gold:C.stoneDeep,a+Math.PI/2);
+  const {cylinder,box}=b;
+  cylinder(0,-.29,0,r+.32,r+.32,.50,C.stoneDeep,64);
+  cylinder(0,-.075,0,r,r,.25,C.floor,64);
+  const walls=[];
+  const segments=48;
+  const width=(2*Math.PI*r/segments)+.075;
+  const wallMat=mat(C.stone);
+  const foundationMat=mat(C.stoneDeep);
+  const mortarMat=mat(C.grout);
+  for(let i=0;i<segments;i++){
+    const frame=wallFrame(i,segments,r);
+    const {x,z,rotation:direction}=frame;
+    const high=new THREE.Group();
+    high.position.set(x,0,z);high.rotation.y=direction;
+    const wall=new THREE.Mesh(
+      new THREE.BoxGeometry(.40,3.25,width),wallMat);
+    wall.position.y=1.625;high.add(wall);
+    // Two inconspicuous mortar courses emphasize stone rather than planks.
+    for(const y of [.82,1.72,2.59]){
+      const joint=new THREE.Mesh(
+        new THREE.BoxGeometry(.425,.035,width+.01),mortarMat);
+      joint.position.set(0,y,0);high.add(joint);
+    }
+    if(i%4===0){
+      const pier=new THREE.Mesh(
+        new THREE.BoxGeometry(.56,3.47,.38),foundationMat);
+      pier.position.y=1.735;high.add(pier);
+      const cap=new THREE.Mesh(
+        new THREE.BoxGeometry(.78,.19,.56),wallMat);
+      cap.position.y=3.40;high.add(cap);
+    }
+    g.add(high);
+    const cut=new THREE.Group();
+    cut.position.set(x,0,z);cut.rotation.y=direction;
+    const plinth=new THREE.Mesh(
+      new THREE.BoxGeometry(.46,.43,width),foundationMat);
+    plinth.position.y=.215;cut.add(plinth);
+    const coping=new THREE.Mesh(
+      new THREE.BoxGeometry(.57,.115,width+.055),wallMat);
+    coping.position.y=.48;cut.add(coping);
+    g.add(cut);
+    walls.push({frame,high,cut});
   }
-  for(let i=0;i<40;i++){
-    const a=(i+.5)*2*Math.PI/40;
-    if(Math.cos(a)>.37&&Math.sin(a)>.37)continue; // cutaway camera side
-    const x=Math.sin(a)*r,z=Math.cos(a)*r;
-    box(x,1.6,z,.2,3.2,2*Math.PI*r/40+.13,
-      i%7===0?C.stoneDeep:C.stone,a);
-    if(i%5===0)cylinder(x,1.43,z,.21,.27,2.9,C.stoneDeep,8);
-  }
-  const circle=new THREE.Mesh(new THREE.TorusGeometry(r-.15,.07,6,64),
-    mat(C.gold));circle.rotation.x=Math.PI/2;circle.position.y=.12;g.add(circle);
-  plane(0,.06,0,3.4,2.8,C.carpet);
+  const innerRim=new THREE.Mesh(
+    new THREE.TorusGeometry(r-.55,.045,5,64),foundationMat);
+  innerRim.rotation.x=Math.PI/2;innerRim.position.y=.057;g.add(innerRim);
+  // Circular inset rug, not a single floating rectangular decal.
+  const rug=new THREE.Mesh(new THREE.CircleGeometry(2.2,48),
+    mat(C.carpet));
+  rug.rotation.x=-Math.PI/2;rug.position.y=.07;g.add(rug);
+  return (yaw)=>{
+    for(const section of walls){
+      const close=onCameraSide(section.frame,yaw);
+      section.high.visible=!close;
+      section.cut.visible=close;
+    }
+  };
 }
 function couch(b,x,z,angle=0){
   const {box,block}=b;
@@ -160,7 +206,7 @@ export function buildStage(room,graph){
   const isCommon=room.key===graph.common.key;
   const isLanding=room.key===graph.landing.key;
   const radius=isCommon?10:isLanding?7.4:7.6;
-  circularChamber(group,b,radius);
+  const setCameraYaw=circularChamber(group,b,radius);
   const candle=(x,z)=>{
     b.cylinder(x,.88,z,.12,.15,.2,C.woodDark,10);
     b.cylinder(x,1.18,z,.09,.11,.45,C.cream,12);
@@ -249,7 +295,7 @@ export function buildStage(room,graph){
     }
   });
   return {
-    group,obstacles,portals,radius,fire,
+    group,obstacles,portals,radius,fire,setCameraYaw,
     dispose(){for(const res of new Set(resources))res?.dispose?.();}
   };
 }

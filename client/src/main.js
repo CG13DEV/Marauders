@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import graph from './tower-graph.generated.json';
 import {createAvatar} from './sprites.js';
 import {buildStage} from './stage.js';
+import {STARTS,safeSpawn,moveWithCollision,keyForControl} from './movement.js';
 import './style.css';
 
 const $=(id)=>document.getElementById(id);
@@ -33,7 +34,7 @@ for(const [a,b] of graph.links){
   adjacent.get(a).add(b);adjacent.get(b).add(a);
 }
 let stage=null,pendingPortal=null,target=null;
-const player={x:0,z:3.3,facing:0,walking:false};
+const player={x:STARTS.common.x,z:STARTS.common.z,facing:0,walking:false};
 const avatar=createAvatar();scene.add(avatar.group);
 const keys=new Set();
 let lastView=-1,toastTimeout=null,interact=null,dialogWing=null;
@@ -83,13 +84,12 @@ function rebuildScene(){
   stage=buildStage(room,graph);
   scene.add(stage.group);
   pendingPortal=null;target=null;
-  if(roomKey===graph.common.key){
-    player.x=0;player.z=3.3;
-  }else if(roomKey===graph.landing.key){
-    player.x=0;player.z=1.0;
-  }else{
-    player.x=0;player.z=2.5;
-  }
+  const preference=roomKey===graph.common.key?STARTS.common:
+    roomKey===graph.landing.key?STARTS.landing:STARTS.bedroom;
+  const spawn=safeSpawn(stage,preference);
+  player.x=spawn.x;player.z=spawn.z;
+  // A fresh room inherits the current camera orientation and cutaway.
+  stage.setCameraYaw(yaw);
   avatar.group.position.set(player.x,0,player.z);
   updateHeader();
 }
@@ -203,19 +203,9 @@ function clipMovement(x,z){
   if(length>radius){const scale=radius/length;x*=scale;z*=scale;}
   return {x,z};
 }
-function free(x,z){
-  return !stage.obstacles.some(o=>
-    Math.hypot(x-o.x,z-o.z)<o.r+.30);
-}
 function move(dx,dz){
-  const first=clipMovement(player.x+dx,player.z+dz);
-  if(free(first.x,first.z)){
-    player.x=first.x;player.z=first.z;return;
-  }
-  const onlyX=clipMovement(player.x+dx,player.z);
-  if(free(onlyX.x,onlyX.z)){player.x=onlyX.x;return;}
-  const onlyZ=clipMovement(player.x,player.z+dz);
-  if(free(onlyZ.x,onlyZ.z)){player.z=onlyZ.z;}
+  const next=moveWithCollision(stage,player,dx,dz);
+  player.x=next.x;player.z=next.z;
 }
 function calculateCamera(){
   const ratio=area.clientWidth/Math.max(1,area.clientHeight);
@@ -227,6 +217,8 @@ function redrawCamera(){
   camera.position.set(player.x+Math.sin(yaw)*24,19.8,
     player.z+Math.cos(yaw)*24);
   camera.lookAt(player.x,0,player.z);
+  // The cutaway must follow the actual camera, including Q/E/drag.
+  stage?.setCameraYaw(yaw);
 }
 function rotate(amount){yaw=(yaw+amount+Math.PI*2)%(Math.PI*2);redrawCamera();}
 function changeZoom(amount){zoom=THREE.MathUtils.clamp(zoom+amount,6.6,16);
@@ -282,15 +274,19 @@ area.addEventListener('wheel',e=>{
 },{passive:false});
 window.addEventListener('keydown',e=>{
   if(e.key==='Escape'){closeDialog();return;}
-  const key=e.key.toLowerCase();
-  if(['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright',
-    'q','e','f'].includes(key))e.preventDefault();
-  if(key==='f'&&$('dialog-backdrop').hidden)usePortal(nearestPortal());
-  if(key==='q')rotate(-Math.PI/8);
-  if(key==='e')rotate(Math.PI/8);
+  // KeyboardEvent.code is physical: KeyW works under Russian layout too.
+  const key=keyForControl(e);
+  if(key===null)return;
+  e.preventDefault();
+  if(key==='f'&&!e.repeat&&$('dialog-backdrop').hidden)usePortal(nearestPortal());
+  if(key==='q'&&!e.repeat)rotate(-Math.PI/8);
+  if(key==='e'&&!e.repeat)rotate(Math.PI/8);
   keys.add(key);
 });
-window.addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));
+window.addEventListener('keyup',e=>{
+  const key=keyForControl(e);
+  if(key!==null)keys.delete(key);
+});
 window.addEventListener('blur',()=>keys.clear());
 window.addEventListener('resize',calculateCamera);
 function tick(){
