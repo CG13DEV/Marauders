@@ -7,6 +7,9 @@ import * as THREE from 'three';
 import {wallFrame,onCameraSide} from './wall-geometry.js';
 import {slotsFor,slotAt,validateSlots} from './architecture.js';
 import {buildOpenings} from './openings.js';
+import {bedroomPlan,validateBedroomPlan} from './layout-bedroom.js';
+import {commonPlan,validateCommonPlan} from './layout-common.js';
+import {buildLandingSpace} from './layout-landing.js';
 const C={
   stone:0x868388,stoneDeep:0x55545c,grout:0x39383f,
   wood:0x684630,woodDark:0x39271f,gold:0xd1a35b,
@@ -120,30 +123,50 @@ function circularChamber(g,b,r,slots){
   };
 }
 function couch(b,x,z,angle=0){
-  const {box,block}=b;
-  box(x,.47,z,2,.72,.78,C.red,angle);
-  box(x,.83,z-.39,2,1.1,.27,C.wine,angle);
-  box(x-1,.60,z,.2,.9,.85,C.wine,angle);
-  box(x+1,.60,z,.2,.9,.85,C.wine,angle);
-  box(x-.43,.88,z-.18,.7,.16,.5,C.cream,angle);
-  block(x,z,1.2);
+  const cos=Math.cos(angle),sin=Math.sin(angle);
+  const part=(dx,y,dz,w,h,d,color)=>{
+    const px=x+dx*cos+dz*sin,pz=z-dx*sin+dz*cos;
+    b.box(px,y,pz,w,h,d,color,angle);
+  };
+  part(0,.47,0,2,.72,.78,C.red);
+  part(0,.83,-.39,2,1.1,.27,C.wine);
+  part(-1,.60,0,.2,.9,.85,C.wine);
+  part(1,.60,0,.2,.9,.85,C.wine);
+  part(-.43,.88,-.18,.7,.16,.5,C.cream);
+  b.block(x,z,1.18);
 }
 function table(b,x,z,w=1.4,d=1){
   b.box(x,.78,z,w,.17,d,C.wood);
   for(const dx of [-1,1])for(const dz of [-1,1])
-    b.box(x+dx*(w/2-.12),.38,z+dz*(d/2-.12),.12,.7,.12,C.woodDark);
+    b.box(x+dx*(w/2-.12),.38,z+dz*(d/2-.12),
+      .12,.7,.12,C.woodDark);
   b.block(x,z,Math.max(w,d)/2);
 }
-function fourPoster(b,x,z,angle=0,occupied=true){
-  const {box,block}=b;
+function bookshelf(b,x,z,angle=0){
+  b.box(x,1.18,z,1.65,2.35,.42,C.woodDark,angle);
+  for(let y=.5;y<=1.92;y+=.43){
+    b.box(x,y,z,1.51,.12,.48,C.wood,angle);
+    for(let i=0;i<7;i++)
+      b.box(x-.55+i*.18,y+.15,z+.27,.13,.26+(i%3)*.035,
+        .13,i%3===0?C.wine:i%3===1?C.gold:C.blue,angle);
+  }
+  b.block(x,z,.83);
+}
+function paddedBench(b,x,z,angle=0){
+  b.box(x,.38,z,1.18,.43,.61,C.woodDark,angle);
+  b.box(x,.64,z,1.10,.16,.58,C.wine,angle);
+  b.block(x,z,.64);
+}
+function fourPoster(b,x,z,angle=0){
   const g=new THREE.Group();g.position.set(x,0,z);g.rotation.y=angle;
-  const mBox=(a,bp,c,w,h,d,color)=>{
+  const mBox=(a,y,c,w,h,d,color)=>{
     const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat(color));
-    m.position.set(a,bp,c);g.add(m);
+    m.position.set(a,y,c);g.add(m);
   };
-  // five-foot-long canopy bed with hanging red curtains
+  // Pillow at local -Z; rotation = bed angle + PI points the head
+  // OUT toward the castle wall and feet INTO the circulation ring.
   mBox(0,.52,0,1.5,.3,2.18,C.woodDark);
-  mBox(0,.77,0,1.32,.20,1.99,occupied?C.red:C.stone);
+  mBox(0,.77,0,1.32,.2,1.99,C.red);
   mBox(0,.9,-.76,1.12,.25,.35,C.cream);
   for(const dx of [-.7,.7])for(const dz of [-1.03,1.03]){
     mBox(dx,1.18,dz,.15,2.36,.15,C.wood);
@@ -151,66 +174,119 @@ function fourPoster(b,x,z,angle=0,occupied=true){
   }
   mBox(0,2.35,0,1.55,.18,2.22,C.wood);
   for(const dx of [-.72,.72])
-    mBox(dx,1.54,0,.07,1.32,1.45,C.wine);
-  b.block(x,z,1.2);
+    mBox(dx,1.54,0,.075,1.32,1.45,C.wine);
+  b.block(x,z,1.23);
   return g;
 }
+function addTrunk(b,x,z,angle=0){
+  b.box(x,.31,z,.82,.57,.62,C.woodDark,angle);
+  b.box(x,.61,z,.85,.11,.64,C.wood,angle);
+  b.box(x,.46,z,.84,.08,.68,C.gold,angle);
+  b.block(x,z,.46);
+}
+function cozyCandle(b,group,x,z){
+  b.cylinder(x,.83,z,.13,.15,.24,C.woodDark);
+  b.cylinder(x,1.16,z,.09,.11,.45,C.cream);
+  b.cylinder(x,1.48,z,.085,.10,.16,C.fire,8);
+  const lamp=new THREE.PointLight(0xffbc73,1.9,4.8,2);
+  lamp.position.set(x,1.7,z);group.add(lamp);
+}
+function applyBedroomLayout(group,b,room,radius){
+  const plan=bedroomPlan({
+    radius,
+    students:room.type==='legacy'?0:room.students,
+    capacity:5
+  });
+  validateBedroomPlan(plan);
+  for(const spot of plan.beds){
+    if(spot.occupied){
+      const bed=fourPoster(b,spot.center.x,spot.center.z,
+        spot.rotation);
+      bed.name='bed:occupied:'+spot.index;
+      group.add(bed);
+      addTrunk(b,spot.trunk.x,spot.trunk.z,spot.rotation);
+    }
+  }
+  // Ambient furniture follows a spare sector, and never blocks the door.
+  b.box(plan.desk.x,.76,plan.desk.z,1.55,.16,.82,C.wood);
+  for(const dx of [-.63,.63])
+    b.box(plan.desk.x+dx,.39,plan.desk.z,.12,.72,.12,C.woodDark);
+  b.block(plan.desk.x,plan.desk.z,.94);
+  b.box(plan.readingChair.x,.47,plan.readingChair.z,
+    .69,.58,.65,C.wine);
+  b.block(plan.readingChair.x,plan.readingChair.z,.49);
+  for(const seat of plan.windowBenches)
+    paddedBench(b,seat.x,seat.z,seat.angle+Math.PI/2);
+  // A little moonlight in the actual window alcoves.
+  for(const angle of [-2.5,2.5]){
+    const point={x:Math.sin(angle)*(radius-1.3),
+      z:Math.cos(angle)*(radius-1.3)};
+    const blue=new THREE.PointLight(0x9dbdd4,1.35,4.5,2);
+    blue.position.set(point.x,2.0,point.z);group.add(blue);
+  }
+  cozyCandle(b,group,plan.desk.x,plan.desk.z);
+  return plan;
+}
+function applyCommonLayout(group,b,radius){
+  const plan=commonPlan(radius);
+  validateCommonPlan(plan);
+  for(const o of plan.couches)couch(b,o.x,o.z,o.angle);
+  for(const o of plan.sideTables){
+    table(b,o.x,o.z,o.w,o.d);cozyCandle(b,group,o.x,o.z);
+  }
+  for(const o of plan.writingDesks){
+    b.box(o.x,.78,o.z,1.35,.18,.80,C.wood);
+    b.box(o.x,.38,o.z-.31,1.18,.65,.14,C.woodDark);
+    b.block(o.x,o.z,.85);
+    bookshelf(b,o.x+(o.x<0?-1.75:1.75),o.z-.2);
+  }
+  for(const o of plan.windowSeats)
+    paddedBench(b,o.x,o.z,o.angle+Math.PI/2);
+  for(const o of [{x:-2.7,z:-5.9},{x:2.7,z:-5.9}]){
+    // Low reading stools beside the fire, clear of the central passage.
+    b.cylinder(o.x,.25,o.z,.42,.45,.48,C.wood,10);
+    b.block(o.x,o.z,.46);
+  }
+  return plan;
+}
 export function buildStage(room,graph){
-  const group=new THREE.Group();
-  const obstacles=[];
+  const group=new THREE.Group(),obstacles=[];
   const b=makeBuilder(group,obstacles);
   const isCommon=room.key===graph.common.key;
   const isLanding=room.key===graph.landing.key;
   const radius=isCommon?10:isLanding?7.4:7.6;
-  const slots=slotsFor(isCommon?'common':isLanding?'landing':'bedroom');
-  validateSlots(slots,radius);
-  const rotateWalls=circularChamber(group,b,radius,slots);
-  const openings=buildOpenings(group,radius,slots);
-  const portals=[...openings.portals];
-  const candle=(x,z)=>{
-    b.cylinder(x,.88,z,.12,.15,.2,C.woodDark,10);
-    b.cylinder(x,1.18,z,.09,.11,.45,C.cream,12);
-    b.cylinder(x,1.47,z,.09,.12,.18,C.fire,6);
-    const lamp=new THREE.PointLight(0xffbb70,1.4,4);
-    lamp.position.set(x,1.5,z);group.add(lamp);
-  };
-  if(isCommon){
-    // All passages, fireplace and windows are in the shell, not furniture.
-    // Leave an unobstructed path between portrait / both stair entrances.
-    couch(b,-3,-2.2,.2);
-    couch(b,3,-2.2,-.2);
-    couch(b,0,2.3,Math.PI);
-    table(b,0,-.5,2.2,1.4);
-    candle(0,-.5);
-    table(b,5,2.1,1.1,.8);candle(5,2.1);
-    table(b,-5,2.3,1.1,.8);
-    b.box(5.3,.66,-5.3,1.25,1.32,.47,C.woodDark);
-    b.box(-5.1,.75,-5.6,1.4,1.5,.5,C.wood);
-    b.block(5.3,-5.3,.75);b.block(-5.1,-5.6,.75);
-    portals.push({kind:'fire',x:0,z:-(radius-2.10),
-      desc:'В камине потрескивают поленья'});
-  }else if(isLanding){
-    b.plane(0,.07,0,3,5,C.carpet);
-    for(let i=0;i<6;i++){
-      const x=-5.1+i*.66;
-      b.box(x,.15,4.4,1,.24,3.2,C.stoneDeep);
-    }
-    b.box(4.4,1.2,0,.8,2.4,3.2,C.stoneDeep);
+  let slots,portals,fire=null,rotate,layout,bounds=null;
+  if(isLanding){
+    // Rectangular portrait corridor: no fake circular second common room.
+    const entrance=buildLandingSpace(group,b);
+    portals=entrance.portals;
+    slots=entrance.architecture;
+    bounds=entrance.bounds;
+    rotate=entrance.setCameraYaw;
+    layout={kind:'landing',bounds};
   }else{
-    // Keep five canopy beds per GRAPH bedroom, not an invented room count.
-    const angles=[-1.1,-.43,.36,1.05,2.65];
-    for(let i=0;i<5;i++){
-      const a=angles[i];
-      const x=Math.sin(a)*4.25,z=Math.cos(a)*4.25;
-      group.add(fourPoster(b,x,z,-a,
-        room.type==='legacy'||i<(room.students??0)));
-      b.box(x*.8,.28,z*.8,.7,.52,.55,C.wood);
+    slots=slotsFor(isCommon?'common':'bedroom');
+    validateSlots(slots,radius);
+    const rotateWalls=circularChamber(group,b,radius,slots);
+    const openings=buildOpenings(group,radius,slots);
+    portals=[...openings.portals];
+    fire=openings.fire;
+    rotate=yaw=>{rotateWalls(yaw);openings.setCameraYaw(yaw);};
+    if(isCommon){
+      const plan=applyCommonLayout(group,b,radius);
+      layout={kind:'common',plan};
+      portals.push({kind:'fire',x:0,z:-(radius-2.1),
+        desc:'В камине потрескивают поленья'});
+    }else{
+      const plan=applyBedroomLayout(group,b,room,radius);
+      layout={kind:'bedroom',
+        occupied:plan.students,
+        capacity:plan.capacity,
+        reservedSlots:plan.beds.length,
+        bedPositions:plan.beds.filter(x=>x.occupied)
+          .map(x=>({...x.center})),
+        centerClearance:plan.centerClearance};
     }
-    const rug=new THREE.Mesh(new THREE.CircleGeometry(2.15,30),
-      new THREE.MeshStandardMaterial({color:C.carpet,roughness:1}));
-    rug.rotation.x=-Math.PI/2;rug.position.y=.07;group.add(rug);
-    b.box(0,.84,-5.15,2.2,1.6,.55,C.woodDark);
-    b.block(0,-5.15,1.2);candle(0,-5.2);
   }
   const resources=[];
   group.traverse(obj=>{
@@ -224,12 +300,8 @@ export function buildStage(room,graph){
     }
   });
   return {
-    group,obstacles,portals,radius,fire:openings.fire,
-    architecture:slots,
-    setCameraYaw(yaw){
-      rotateWalls(yaw);
-      openings.setCameraYaw(yaw);
-    },
+    group,obstacles,portals,radius,bounds,fire,architecture:slots,layout,
+    setCameraYaw:rotate,
     dispose(){for(const res of new Set(resources))res?.dispose?.();}
   };
 }
