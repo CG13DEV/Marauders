@@ -174,7 +174,7 @@ export function buildOpenings(group,radius,slots){
         // far wall, all frames and alcoves are embedded in the ring.
         const frame={normalX:Math.sin(slot.angle),
           normalZ:Math.cos(slot.angle)};
-        high.visible=!onCameraSide(frame,yaw);
+        high.visible=slot.type==='stair'||slot.type==='portrait'||slot.type==='door'||!onCameraSide(frame,yaw);
       }
     }
   };
