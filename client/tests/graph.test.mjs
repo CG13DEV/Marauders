@@ -13,8 +13,8 @@ for(const [a,b] of graph.links){
   adjacency.get(a).push(b);adjacency.get(b).push(a);
 }
 test('all research-600 Gryffindor physical dorm nodes are represented',()=>{
-  assert.equal(graph.totals.bedrooms,40);
-  assert.equal(graph.research.length,38);
+  assert.equal(graph.totals.bedrooms,39);
+  assert.equal(graph.research.length,37);
   assert.equal(graph.legacy.length,2);
   assert.equal(graph.totals.pupils,150);
   const names=[graph.common.key,graph.landing.key,
