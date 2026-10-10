@@ -1,0 +1,23 @@
+{
+  "name": "marauders-tower-client",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=22.16.0"
+  },
+  "scripts": {
+    "graph": "node scripts/generate-graph.mjs",
+    "dev": "npm run graph && vite --host 0.0.0.0",
+    "build": "npm run graph && vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "test": "npm run graph && node --test tests/*.test.mjs",
+    "check": "npm run test && npm run build"
+  },
+  "dependencies": {
+    "three": "0.180.0"
+  },
+  "devDependencies": {
+    "vite": "7.1.7"
+  }
+}
