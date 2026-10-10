@@ -125,7 +125,7 @@ export function createTextSession(initial = createStarterSchool()) {
       if(!result.ok)return 'Приглашение невозможно: '+result.reason;
       const offered=world.promiseHistory(player()).at(-1)!;
       advance(1);
-      const response=world.promiseHistory(player()).findLast(m=>
+      const response=[...world.promiseHistory(player())].reverse().find(m=>
         m.meetingId===offered.meetingId &&
         (m.kind==='accepted'||m.kind==='declined'));
       return 'Предложение сделано при личной встрече. '+(
