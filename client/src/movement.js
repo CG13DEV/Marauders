@@ -9,8 +9,10 @@ export const STARTS=Object.freeze({
 });
 export const PLAYER_RADIUS=.30;
 export function walkable(stage,x,z){
-  const max=stage.radius-1.15;
-  if(Math.hypot(x,z)>max) return false;
+  if(stage.bounds){
+    if(x<stage.bounds.minX||x>stage.bounds.maxX||
+       z<stage.bounds.minZ||z>stage.bounds.maxZ)return false;
+  }else if(Math.hypot(x,z)>stage.radius-1.15)return false;
   return !stage.obstacles.some(o=>
     Math.hypot(x-o.x,z-o.z)<o.r+PLAYER_RADIUS);
 }

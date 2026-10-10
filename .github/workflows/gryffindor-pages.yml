@@ -71,8 +71,8 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: tower-03-chromium-screenshot
-          path: client/artifacts/tower.png
+          name: tower-04-spatial-coherence-screenshots
+          path: client/artifacts/*.png
           if-no-files-found: ignore
       - name: Setup Pages
         if: github.event_name != 'pull_request'

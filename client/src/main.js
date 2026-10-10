@@ -50,7 +50,7 @@ function toast(text){
 }
 function labelFor(room){
   if(room.key===graph.common.key)return 'Гостиная Гриффиндора';
-  if(room.key===graph.landing.key)return 'Портретный коридор';
+  if(room.key===graph.landing.key)return 'Лестничная площадка у портрета';
   if(room.type==='legacy')return room.wing==='boys'
     ?'Старая спальня мальчиков':'Старая спальня девочек';
   return String(room.year)+'-й курс · '+(room.wing==='boys'?'мальчики':'девочки')+
@@ -60,7 +60,7 @@ function detailFor(room){
   if(room.key===graph.common.key)
     return 'Камин, проходы в стенах и три тестовых спрайта (пока без ИИ).';
   if(room.key===graph.landing.key)
-    return 'Условная точка соединения башни с графом замка.';
+    return 'С лестницы замка — по каменной площадке к портрету Толстой дамы.';
   if(room.type==='legacy')
     return 'Узел старого графа. В исследовательской конфигурации здесь никто не живёт.';
   return 'По текущему графу здесь живут '+room.students+
@@ -218,6 +218,10 @@ function refreshHint(){
 }
 $('interact-button').addEventListener('click',()=>usePortal(interact));
 function clipMovement(x,z){
+  if(stage.bounds)return {
+    x:THREE.MathUtils.clamp(x,stage.bounds.minX,stage.bounds.maxX),
+    z:THREE.MathUtils.clamp(z,stage.bounds.minZ,stage.bounds.maxZ)
+  };
   const radius=stage.radius-1.15;
   const length=Math.hypot(x,z);
   if(length>radius){const scale=radius/length;x*=scale;z*=scale;}
@@ -370,6 +374,8 @@ if(new URLSearchParams(window.location.search).has('testMode')){
       openings:stage?.group.children
         .filter(o=>o.name.startsWith('wall-slot:')).map(o=>o.name),
       cameraYaw:yaw,
+      layout:stage?.layout,
+      activePortals:stage?.portals.map(p=>p.kind),
       frames:renderedFrames,
       canvasWidth:renderer.domElement.width
     })
