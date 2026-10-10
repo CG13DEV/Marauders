@@ -12,10 +12,11 @@ import assert from 'node:assert/strict';
 import {performance} from 'node:perf_hooks';
 import {createPersistentSimulation,restoreCheckpoint} from '../core/persistence.ts';
 import {createSchoolWeek,reportSchoolWeek} from '../scenarios/school-week.ts';
-import {installSchoolwideSocialPolicy,
+import {installSchoolwideSocialPolicy,installEveningStudyPressure,
   type SchoolSocialMode} from '../scenarios/schoolwide-social.ts';
 
-const mode:SchoolSocialMode=process.argv.includes('--all-eligible')
+const conflictPressure=process.argv.includes('--conflict-full');
+const mode:SchoolSocialMode=process.argv.includes('--all-eligible')||conflictPressure
   ?'all-eligible':'baseline';
 const DAYS=7,TICKS=144*DAYS,MIB=1024*1024;
 const start=performance.now();
@@ -23,6 +24,7 @@ const world=createPersistentSimulation();
 const scene=createSchoolWeek(world,'adaptive','autonomous',
   '96-all','expanded','research-600','foundations-27','unified-30');
 const rollout=installSchoolwideSocialPolicy(scene,mode);
+const studyPressure=conflictPressure?installEveningStudyPressure(scene):null;
 const setupMs=performance.now()-start;
 assert.equal(rollout.roster,634);
 assert.equal(rollout.students,600);
@@ -79,6 +81,10 @@ assert.ok(school.pupilConversations>0);
 assert.ok(school.invitations>0,'Social invites must actually occur');
 assert.ok(school.acceptedInvitations+school.declinedInvitations>0,
   'NPCs must actually exercise autonomous consent');
+if(conflictPressure){
+  assert.ok(school.missedMeetings>0,
+    'A socially dense world with competing school duties should produce real missed meetings');
+}
 const ledger=world.meetingLedger();
 const repairs=ledger.filter(m=>m.repairOfMeetingId!==undefined);
 const saved=world.checkpoint();
@@ -96,6 +102,7 @@ const percentile=(q:number)=>Math.round(
 const memory=process.memoryUsage();
 const result={
   experiment:'32.0',classification:'[GAME]',mode,
+  pressure:studyPressure,
   setupMs:Math.round(setupMs),rollout,
   ticks:TICKS,days:DAYS,stepCpuMs:Math.round(costs.reduce((a,b)=>a+b,0)),
   perTickMs:{p50:percentile(.50),p95:percentile(.95),
@@ -122,7 +129,8 @@ const result={
     'Not every 634 resident qualifies for human social policy: 624 do; special roles keep their physics.',
     'One academic week is an empirical capacity probe, not an asymptotic or multi-year guarantee.',
     'Memory and timing are measured on one GitHub runner; CPU/memory comparisons are indicative, not hard universal limits.',
-    'The audit tests naturally emergent relationships; zero spontaneous repair events would mean the rare repair path is not yet exercised at this scale.'
+    'The pressure fork adds authentic evening classes before simulation, but still never scripts NPC actions.',
+    'If a scenario has zero repairs, the rare repair action has not been exercised there at scale.'
   ]
 };
 console.log(JSON.stringify(result,null,2));
