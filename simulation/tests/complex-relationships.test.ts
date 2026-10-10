@@ -76,6 +76,8 @@ test('31.9: false lineage, mere promises and other people do not absolve old abs
   assert.equal(personallyAvoids(history,11),true);
   assert.equal(personallyAvoids(history,12),false);
   assert.equal(relationshipFromExperience('neutral',history,11).trust,'distrusted');
+  assert.equal(relationshipFromExperience('neutral',history,11).basis,'waited_alone',
+    'A wrong repair reference must not claim a partial reconciliation');
   assert.equal(unresolvedPersonalAbsence(history,3000,1500)?.meetingId,2);
 });
 
