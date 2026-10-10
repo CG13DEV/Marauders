@@ -50,7 +50,7 @@ function toast(text){
 }
 function labelFor(room){
   if(room.key===graph.common.key)return 'Гостиная Гриффиндора';
-  if(room.key===graph.landing.key)return 'Портретный коридор';
+  if(room.key===graph.landing.key)return 'Лестничная площадка у портрета';
   if(room.type==='legacy')return room.wing==='boys'
     ?'Старая спальня мальчиков':'Старая спальня девочек';
   return String(room.year)+'-й курс · '+(room.wing==='boys'?'мальчики':'девочки')+
