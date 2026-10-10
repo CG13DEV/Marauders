@@ -86,6 +86,10 @@ jobs:
           MARAUDERS_ROUTE_PROFILE: '1'
       - name: Experiment 30.8 seven-day 634-resident soak
         run: npm run week-soak-demo
+      - name: Experiment 32.0 baseline 634-resident social load
+        run: npm run social-school-stress -- --baseline
+      - name: Experiment 32.0 full 624-agent social policy load
+        run: npm run social-school-stress -- --all-eligible
       - name: Experiment 30.9 GC and ECS retention audit
         run: npm run memory-audit-demo
       - name: Experiment 31.1 counterfactual causal autonomy
