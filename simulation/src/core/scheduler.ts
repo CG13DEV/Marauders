@@ -372,9 +372,15 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
         :personallyAvoids(ownEvidence,offer.promisor);
       const ordinaryConsent=!avoids&&
         !(plan.style==='reserved'&&offer.purpose==='explore');
+      // Ordinary contact can be vetoed by a history of broken promises.
+      // A SPECIFIC, firsthand evidenced offer to make amends is different:
+      // an open recipient may consider it even when general reliability is
+      // distrusted. Consent is still independently chosen; only physically
+      // keeping the new meeting reconciles the remembered failure.
+      const acceptsOrdinary=ordinaryConsent&&
+        trustForPurpose(actor,offer.promisor,offer.purpose)!=='distrusted';
       const accept=academicHelp&&!appointmentClashes&&
-        trustForPurpose(actor,offer.promisor,offer.purpose)!=='distrusted'&&
-        (offer.repairOfMeetingId===undefined?ordinaryConsent:canRespondToRepair);
+        (offer.repairOfMeetingId===undefined?acceptsOrdinary:canRespondToRepair);
       const action:Command={type:'answer_meeting',actor,meetingId:offer.id,accept};
       const result=execute(action);
       recordDecision({actor,action,result});
