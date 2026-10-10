@@ -7,6 +7,7 @@ import type {CommitmentMemory} from './social-commitments.ts';
 import type {Trust} from './cognition.ts';
 import {livedMischiefMotive} from './mischief.ts';
 import {latestPersonalOutcome} from './personal-outcomes.ts';
+import {personallyAvoids} from './social-commitments.ts';
 
 export type SocialResponse =
   | {kind:'chat';listener:number;reason:'reconnect'|'other_company'|'habit'}
@@ -50,6 +51,7 @@ export function chooseSocialResponse(input:{
   // again, but neither friendship nor another person's mood is inferred.
   const reunited=[...history].reverse().find(m=>m.kind==='met'&&
     local.includes(m.partner)&&trust(m.partner)!=='distrusted'&&
+    !personallyAvoids(history,m.partner)&&
     latestPersonalOutcome(history,m.partner)?.kind==='met');
   if(reunited)return {kind:'chat',listener:reunited.partner,reason:'habit'};
   const other=alternatives()[0];

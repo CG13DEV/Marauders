@@ -9,10 +9,11 @@
  */
 import {createPersistentSimulation,restoreCheckpoint} from '../core/persistence.ts';
 import type {Trust} from '../core/cognition.ts';
-import {latestPersonalOutcome} from '../core/personal-outcomes.ts';
+import {latestPersonalOutcome,unresolvedPersonalAbsences} from '../core/personal-outcomes.ts';
 
 export type SocialWorldVariant='mutual'|'reserved_reply'|'no_invitations'|'separated'|
-  'lesson_first'|'promise_first'|'repair_open'|'repair_guarded'|'repair_unneeded';
+  'lesson_first'|'promise_first'|'repair_open'|'repair_guarded'|'repair_unneeded'|
+  'repeat_repair';
 export type TraceEntry={
   minute:number;day:number;actor:string;action:string;
   target?:string;ok:boolean;repairOfMeetingId?:number;
@@ -45,7 +46,7 @@ export function runOpenSocialWorld(
   };
   ids.forEach((id,i)=>{
     const repairing=variant==='repair_open'||variant==='repair_guarded'||
-      variant==='repair_unneeded';
+      variant==='repair_unneeded'||variant==='repeat_repair';
     world.setDailyLife(id,{
       ...defaultPlan,
       ...(repairing&&i===0?{repairInitiative:true}:{}),
@@ -61,15 +62,22 @@ export function runOpenSocialWorld(
   // #31.7: The competing academic duty exists from world creation.
   // No NPC is ordered to leave, break a promise or repair a relationship.
   if(variant==='lesson_first'||variant==='promise_first'||
-    variant==='repair_open'||variant==='repair_guarded'){
+    variant==='repair_open'||variant==='repair_guarded'||
+    variant==='repeat_repair'){
     const james=ids[0]!;
     const original={...defaultPlan,
       ...(variant==='promise_first'?{commitmentPriority:'promise_first' as const}:{}),
-      ...(variant==='repair_open'||variant==='repair_guarded'
-        ?{repairInitiative:true}:{})};
+      ...(variant==='repair_open'||variant==='repair_guarded'||
+        variant==='repeat_repair'?{repairInitiative:true}:{})};
     world.setDailyLife(james,original);
-    world.setTimetable(james,[{id:'evening-study',subject:'Supervised study',
-      room:library,startsAt:2610,endsAt:2670}], 'lesson_first');
+    world.setTimetable(james,[
+      {id:'evening-study',subject:'Supervised study',
+       room:library,startsAt:2610,endsAt:2670},
+      ...(variant==='repeat_repair'?[{
+        id:'second-school-duty',subject:'Supervised study',
+        room:library,startsAt:5480,endsAt:5550
+      }]:[])
+    ], 'lesson_first');
   }
   // Fixed initial relationship configuration, not a pre-seeded experience.
   world.setTrust(ids[0]!,ids[1]!,'trusted');
@@ -94,6 +102,7 @@ export function runOpenSocialWorld(
     lessonStatus:string|null;
     selfMissedMyPromise:boolean;
     repairStatus:string|null;
+    unresolvedForSirius:number[];
   }>=[];
   const totalTicks=days*144;
   for(let i=0;i<totalTicks;i++){
@@ -111,7 +120,7 @@ export function runOpenSocialWorld(
     }));
     const decisions=world.step();
     const minute=world.clock().absoluteMinute;
-    if(minute===2640||minute===4070||minute===5520){
+    if(minute===2640||minute===4070||minute===5520||minute===8400){
       const [james,sirius]=ids;
       conflictSnapshots.push({
         minute,
@@ -125,7 +134,9 @@ export function runOpenSocialWorld(
         lessonStatus:world.attendance(james!)[0]?.status??null,
         selfMissedMyPromise:world.promiseHistory(james!).some(m=>
           m.partner===sirius&&m.kind==='missed_my_promise'),
-        repairStatus:world.meetingLedger().find(m=>m.repairOfMeetingId!==undefined)?.status??null
+        repairStatus:world.meetingLedger().find(m=>m.repairOfMeetingId!==undefined)?.status??null,
+        unresolvedForSirius:unresolvedPersonalAbsences(
+          world.promiseHistory(sirius!),james!).map(m=>m.meetingId)
       });
     }
     for(const decision of decisions){
@@ -186,7 +197,9 @@ export function runOpenSocialWorld(
       rememberedMeetings:world.promiseHistory(actor)
         .filter(x=>x.kind==='met').length,
       personallyUnmet:world.promiseHistory(actor)
-        .filter(x=>x.kind==='waited_alone').length
+        .filter(x=>x.kind==='waited_alone').length,
+      outstandingToSirius:unresolvedPersonalAbsences(
+        world.promiseHistory(actor),ids[1]!).map(m=>m.meetingId)
     }))
   };
   const restored=restoreCheckpoint(world.checkpoint());
@@ -197,8 +210,21 @@ export function runOpenSocialWorld(
       world.trustOf(actor,partner)===restored.trustOf(actor,partner)))
   };
   return {
-    experiment:'31.6',classification:'[GAME]' as const,variant,days,
+    experiment:variant==='repeat_repair'?'31.9':'31.6',
+    classification:'[GAME]' as const,variant,days,
     initial,trace,events,summary,checkpoint,conflictSnapshots,
+    finalPersonalEvidence:{
+      siriusToJames:world.relationshipOf(ids[1]!,ids[0]!),
+      jamesToSirius:world.relationshipOf(ids[0]!,ids[1]!),
+      siriusOutstandingMeetingIds:unresolvedPersonalAbsences(
+        world.promiseHistory(ids[1]!),ids[0]!).map(m=>m.meetingId),
+      jamesMissedOwnPromises:world.promiseHistory(ids[0]!).filter(m=>
+        m.kind==='missed_my_promise').map(m=>m.meetingId),
+      siriusWitnessedAbsences:world.promiseHistory(ids[1]!).filter(m=>
+        m.kind==='waited_alone').map(m=>m.meetingId),
+      siriusMetMeetings:world.promiseHistory(ids[1]!).filter(m=>
+        m.kind==='met').map(m=>({id:m.meetingId,repairOfMeetingId:m.repairOfMeetingId??null}))
+    },
     interpretation:'Trace records pre-tick personal inputs and actual autonomous actions; it does not claim to reveal a hidden thought process.'
   };
 }

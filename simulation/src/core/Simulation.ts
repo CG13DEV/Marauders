@@ -1734,7 +1734,9 @@ export function createSimulation() {
         commitmentMemories.get(who)!.push({
           meetingId:meeting.id,partner,kind,minute,room:meeting.room,
           purpose:meeting.purpose,
-          ...(meeting.spell===undefined?{}:{spell:meeting.spell})
+          ...(meeting.spell===undefined?{}:{spell:meeting.spell}),
+          ...(meeting.repairOfMeetingId===undefined?{}
+            :{repairOfMeetingId:meeting.repairOfMeetingId})
         });
       };
       if(kept) {
