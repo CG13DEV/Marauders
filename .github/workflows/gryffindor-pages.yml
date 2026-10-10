@@ -44,6 +44,22 @@ jobs:
         run: npm run build
       - name: Validate Pages artifact entry
         run: test -s client/dist/index.html
+      - name: Smoke test actual /Marauders/ URL and hashed JS asset
+        working-directory: client
+        shell: bash
+        run: |
+          npm run preview -- --host 127.0.0.1 --port 4173 &
+          server=$!
+          trap 'kill $server' EXIT
+          for attempt in $(seq 1 20); do
+            if curl --silent --fail http://127.0.0.1:4173/Marauders/ -o /tmp/gryffindor.html; then break; fi
+            sleep 1
+          done
+          grep -q 'Башня Гриффиндора' /tmp/gryffindor.html
+          asset=$(grep -oE '/Marauders/assets/[^"]+\.js' /tmp/gryffindor.html | head -n 1)
+          test -n "$asset"
+          curl --silent --show-error --fail "http://127.0.0.1:4173$asset" -o /dev/null
+
       - name: Setup Pages
         if: github.event_name != 'pull_request'
         uses: actions/configure-pages@v5
