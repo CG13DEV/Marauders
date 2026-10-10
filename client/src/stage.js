@@ -204,7 +204,7 @@ export function buildStage(room,graph){
     window(group,b,4,1.8,-8.45,0);
     sign(group,'GRYFFINDOR',0,4.15,-8.72,3.2);
   }else if(isLanding){
-    arch(0,-6.25,'ПОЛНАЯ ДАМА');
+    arch(0,-6.25,'ТОЛСТАЯ ДАМА');
     portals.push({kind:'return',x:0,z:-4.95,
       desc:'Войти в гостиную Гриффиндора'});
     b.plane(0,.07,0,3,5,C.carpet);
