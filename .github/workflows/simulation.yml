@@ -40,6 +40,8 @@ jobs:
         run: npm run repair-initiative-demo
       - name: Experiment 31.9 cumulative first-person relationships
         run: npm run complex-relationships-demo
+      - name: Experiments 31.10–31.12 contextual trust and player agency audit
+        run: npm run social-integration-demo
       - run: npm run demo
       - run: npm run perception-demo
       - run: npm run social-demo
