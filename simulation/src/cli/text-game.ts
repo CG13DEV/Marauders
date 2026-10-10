@@ -37,6 +37,13 @@ export function createStarterSchool(): PersistentSimulation {
   world.setHelpSeeking(remus, true);
   world.setTrust(remus, lily, 'trusted');
   world.setRoutine(peter, [library]);
+  // 31.11: the player may negotiate a concrete meeting with a real NPC.
+  // Peter's reply comes from the ordinary scheduler, not the text adapter.
+  world.setDailyLife(peter,{
+    homeRoom:common,diningRoom:common,socialRoom:common,
+    style:'outgoing',interest:'castle',socialInvitations:true,
+    relationshipLearning:true,contextualRelationships:true
+  });
   return world;
 }
 
@@ -89,6 +96,7 @@ export function createTextSession(initial = createStarterSchool()) {
     if (action === 'help') return [
       'look | status | people | go <room> | wait <ticks> | ask <person> lumos',
       'chat <person> <lessons|castle|hobbies> (only same room)',
+      'offer <person> <study|explore> | mymeetings (your own memory)',
       'practice lumos <professor> | practice lumos | cast lumos',
       'events | save <file> | load <file> | exit'
     ].join('\n');
@@ -99,6 +107,32 @@ export function createTextSession(initial = createStarterSchool()) {
       return place === null ? '' : world.occupants(place).map(id => keyOf(id) + ': ' + world.label(id)).join('\n');
     }
     if (action === 'events') return JSON.stringify(world.events().slice(-10), null, 2);
+    if (action === 'mymeetings') {
+      const memories=world.promiseHistory(player());
+      return memories.length===0?'Ты пока не договаривался о встречах.':
+        memories.slice(-12).map(m=>keyOf(m.partner)+': '+m.kind+
+          ' / '+m.purpose+' / встреча №'+m.meetingId).join('\n');
+    }
+    if (action === 'offer') {
+      const listener=arg?world.id(arg):undefined;
+      if(listener===undefined)return 'Неизвестный собеседник.';
+      if(extra!=='study'&&extra!=='explore')return 'Выбери study или explore.';
+      const room=world.currentRoom(player());
+      if(room===null)return 'Нужно находиться в комнате.';
+      const atMinute=(world.clock().day+1)*1440+1180;
+      const result=world.execute({type:'offer_meeting',actor:player(),
+        listener,room,atMinute,purpose:extra});
+      if(!result.ok)return 'Приглашение невозможно: '+result.reason;
+      const offered=world.promiseHistory(player()).at(-1)!;
+      advance(1);
+      const response=world.promiseHistory(player()).findLast(m=>
+        m.meetingId===offered.meetingId &&
+        (m.kind==='accepted'||m.kind==='declined'));
+      return 'Предложение сделано при личной встрече. '+(
+        response?.kind==='accepted'?'Собеседник согласился.':
+        response?.kind==='declined'?'Собеседник отказался.':
+        'Ответа пока нет.')+' Смотри mymeetings.';
+    }
     if (action === 'go') {
       const destination = arg ? world.id(arg) : undefined;
       if (destination === undefined) return 'Неизвестный адрес. Напиши look.';
