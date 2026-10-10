@@ -18,6 +18,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+  pages: write
 concurrency:
   group: gryffindor-pages-${{ github.ref }}
   cancel-in-progress: true
