@@ -60,3 +60,28 @@ export function installSchoolwideSocialPolicy(
     facultyPolicies:professors.filter(p=>actuallyEnabled.includes(p.id)).length
   };
 }
+
+/** Extra [GAME] school duties existing BEFORE any character acts.
+ * They are not scripted failures. A pupil may still choose to keep a meeting,
+ * but their ordinary school-first policy will create real competing demands.
+ */
+export function installEveningStudyPressure(scene:SchoolScene){
+  const {world,students,foundationSpaces,library}=scene;
+  const rooms=foundationSpaces.map(s=>s.id);
+  if(!rooms.length)rooms.push(library);
+  const affected=students.filter((_,index)=>index%5===0);
+  for(const [index,student] of affected.entries()){
+    const room=rooms[index%rooms.length]!;
+    const extras=[1,3].map(day=>({
+      id:'evening_study_d'+day+'_'+student.key,
+      subject:'Обязательная вечерняя самоподготовка',
+      room,startsAt:day*1440+19*60+10,
+      endsAt:day*1440+20*60+20
+    }));
+    const records=[...world.attendance(student.id),...extras]
+      .sort((a,b)=>a.startsAt-b.startsAt);
+    world.setTimetable(student.id,records,'lesson_first');
+  }
+  return {affected:affected.length,additionalDuties:affected.length*2,
+    days:[1,3],roomCount:rooms.length};
+}
