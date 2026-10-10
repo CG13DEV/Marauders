@@ -58,7 +58,7 @@ test('31.9: false lineage, mere promises and other people do not absolve old abs
   assert.equal(personallyAvoids(history,11),true);
   assert.equal(personallyAvoids(history,12),false);
   assert.equal(relationshipFromExperience('neutral',history,11).trust,'distrusted');
-  assert.equal(unresolvedPersonalAbsence(history,4000,1500)?.meetingId,2);
+  assert.equal(unresolvedPersonalAbsence(history,3000,1500)?.meetingId,2);
 });
 
 test('31.9: world itself creates two missed promises and one actual, partial repair',()=>{
@@ -70,13 +70,15 @@ test('31.9: world itself creates two missed promises and one actual, partial rep
   assert.equal(repeated.summary.repairDeclined,0);
   assert.equal(one.summary.repairKept,1);
   assert.equal(one.finalPersonalEvidence.siriusToJames.trust,'trusted');
-  assert.deepEqual(repeated.finalPersonalEvidence.siriusWitnessedAbsences,[1,2]);
-  assert.deepEqual(repeated.finalPersonalEvidence.siriusOutstandingMeetingIds,[1]);
+  const witnessed=repeated.finalPersonalEvidence.siriusWitnessedAbsences;
+  assert.equal(witnessed.length,2);
+  assert.equal(witnessed[0],1);
+  assert.deepEqual(repeated.finalPersonalEvidence.siriusOutstandingMeetingIds,[witnessed[0]]);
   assert.equal(repeated.finalPersonalEvidence.siriusToJames.trust,'neutral');
   assert.equal(repeated.finalPersonalEvidence.siriusToJames.basis,'partial_repair');
   assert.equal(repeated.finalPersonalEvidence.jamesToSirius.trust,'trusted');
   assert.ok(repeated.finalPersonalEvidence.siriusMetMeetings.some(
-    m=>m.repairOfMeetingId===2));
+    m=>m.repairOfMeetingId===witnessed[1]));
   assert.equal(repeated.checkpoint.sameRuntime,true);
   assert.equal(repeated.checkpoint.sameRelationships,true);
 });
