@@ -18,9 +18,9 @@ Open the local Vite URL. Build/test:
     npm run build
     npm run preview
 
-IMPORTANT: \`npm run graph\` starts the real, independent
-\`createSchoolWeek(..., 'research-600', 'foundations-27', 'unified-30')\`
-at **build time** and emits \`src/tower-graph.generated.json\`.
+IMPORTANT: `npm run graph` starts the real, independent
+`createSchoolWeek(..., 'research-600', 'foundations-27', 'unified-30')`
+at **build time** and emits `src/tower-graph.generated.json`.
 It is gitignored, never hand-edited. The browser bundles only the resulting
 plain JSON, Three.js and our home-grown scene/sprites. It does not bundle the
 authoritative ECS simulation or create a remote server.
@@ -42,7 +42,7 @@ authoritative ECS simulation or create a remote server.
 Build-time scene is exactly the simulation's 600-pupil research school.
 Gryffindor: 150 assigned pupils, **37 physically distinct research bedrooms**
 and **2 legacy fixture bedrooms** (39 graph nodes), all directly adjacent to
-\`dorm_gryffindor\`; its sole upstream connection is \`west_landing_4\`.
+`dorm_gryffindor`; its sole upstream connection is `west_landing_4`.
 Each research room has an observed count from actual world occupancy (1–5).
 
 Seven years and two staircases are lore; splitting some year/sex cohorts into
@@ -53,8 +53,8 @@ a topology convenience while book references say seventh-floor entrance.
 
 ### Publishing
 
-\`.github/workflows/gryffindor-pages.yml\` checks the graph, builds the client
-and on pushes to \`main\` attempts GitHub Pages deployment to:
+`.github/workflows/gryffindor-pages.yml` checks the graph, builds the client
+and on pushes to `main` attempts GitHub Pages deployment to:
 
     https://cg13dev.github.io/Marauders/
 
@@ -68,7 +68,7 @@ artifact only contains scene code + graph-derived room metadata.
 Do not publish any proprietary source files, third-party images or private
 credentials through Pages. The tiny 3D geometry and all 8 sprites are original
 procedural placeholders; the setting itself is fan-IP and should be reviewed
-under \`docs/production/ip-and-asset-policy.md\` before external announcement.
+under `docs/production/ip-and-asset-policy.md` before external announcement.
 
 ### Limits
 
