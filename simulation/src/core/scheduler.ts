@@ -24,6 +24,7 @@ import { chooseMischiefTarget, livedMischiefMotive } from './mischief.ts';
 import {arbitrateAutonomousAction} from './action-arbitration.ts';
 import {chooseSocialResponse} from './social-choice.ts';
 import {ownUnrepairedCommitment,considersConcreteRepair} from './reconciliation.ts';
+import {contextualAvoidance} from './social-context.ts';
 import { spellDefinitions, type SpellId, type LearningRecord } from './spellcraft.ts';
 import type { Belief } from './beliefs.ts';
 import { willingToTutor, type TutoringRequest } from './social-learning.ts';
@@ -58,6 +59,8 @@ export type SchedulerContext = {
   observations(actor: EntityId): Observation[];
   assessment(observer: EntityId, object: EntityId): Assessment;
   trustOf(observer: EntityId, source: EntityId): Trust;
+  trustForPurpose(observer: EntityId, source: EntityId,
+    purpose:MeetingCommitment['purpose']): Trust;
   knowledgeGaps(actor: EntityId): SpellId[];
   pendingTutoring: Map<EntityId, TutoringRequest>;
   attemptedTutors: Map<EntityId, Set<string>>;
@@ -364,10 +367,13 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
         });
       // An acknowledgement may be considered, not magically accepted.
       // Ordinary invitations still respect the same refusal gates as before.
-      const ordinaryConsent=!personallyAvoids(ownEvidence,offer.promisor)&&
+      const avoids=plan.contextualRelationships
+        ?contextualAvoidance(ownEvidence,offer.promisor,offer.purpose)
+        :personallyAvoids(ownEvidence,offer.promisor);
+      const ordinaryConsent=!avoids&&
         !(plan.style==='reserved'&&offer.purpose==='explore');
       const accept=academicHelp&&!appointmentClashes&&
-        trustOf(actor,offer.promisor)!=='distrusted'&&
+        trustForPurpose(actor,offer.promisor,offer.purpose)!=='distrusted'&&
         (offer.repairOfMeetingId===undefined?ordinaryConsent:canRespondToRepair);
       const action:Command={type:'answer_meeting',actor,meetingId:offer.id,accept};
       const result=execute(action);
@@ -1068,18 +1074,21 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
         dayOf(m.minute)>=dayOf(minute)-6)) continue;
       const local=new Set(occupants(room));
       const past=conversations.get(actor)??[];
+      const invitationPurpose=plan.interest==='lessons'?'study' as const:'explore' as const;
       const candidate=past.map(m=>m.partner).find(other=>
         local.has(other) && other!==actor && has(other,'hearing') &&
         !has(other,'manual') && !socialParticipants.has(other) &&
         !occupiedBySchool.has(other) &&
         !decidedActors.has(other) &&
-        trustOf(actor,other)!=='distrusted' &&
-        !personallyAvoids(ownHistory,other));
+        trustForPurpose(actor,other,invitationPurpose)!=='distrusted' &&
+        !(plan.contextualRelationships
+          ?contextualAvoidance(ownHistory,other,invitationPurpose)
+          :personallyAvoids(ownHistory,other)));
       if(candidate===undefined) continue;
       const atMinute=(dayOf(minute)+1)*1440 + 19*60+40;
       const action:Command={
         type:'offer_meeting',actor,listener:candidate,
-        room,atMinute,purpose:plan.interest==='lessons'?'study':'explore'
+        room,atMinute,purpose:invitationPurpose
       };
       const result=execute(action);
       if(result.ok){
