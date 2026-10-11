@@ -11,6 +11,7 @@ export class TimedWorldBridge {
   readonly clock=new ActionTimeline();
   private routes=new Map<number,{legs:TimedMove[];committed:number}>();
   private commits:CommittedMove[]=[];
+  private processedEvents=0;
   constructor(private readonly currentRoom:(actor:number)=>number|null,
     private readonly execute:(command:Command)=>CommandResult){}
   begin(actor:number,goal:number,legs:readonly TimedMove[]){
@@ -26,8 +27,10 @@ export class TimedWorldBridge {
     this.clock.advance(until);
     // The RB-2 timeline emits arrival timestamps in deterministic order.
     // Each arrival is validated against the live world before committing.
-    const arrivals=this.clock.events().filter(e=>e.kind==='arrive')
+    const history=this.clock.events();
+    const arrivals=history.slice(this.processedEvents).filter(e=>e.kind==='arrive')
       .sort((a,b)=>a.at-b.at||a.actor.localeCompare(b.actor));
+    this.processedEvents=history.length;
     for(const event of arrivals){
       const actor=Number(event.actor);
       const route=this.routes.get(actor);
