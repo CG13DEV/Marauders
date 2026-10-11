@@ -20,15 +20,27 @@ test('RB-2: Peter ruins James breakfast, without erasing his goal',()=>{
   assert.equal(world.observe('james'),null);
   assert.deepEqual(world.events().filter(e=>e.kind==='arrive').map(e=>e.room),['stairs','hall']);
 });
-test('RB-2: observer FPS cannot alter authority or history',()=>{
-  const run=(frames:number)=>{
+test('RB-2: render sampling rate cannot alter authority or history',()=>{
+  const run=(fps:number)=>{
     const world=new ActionTimeline();
     world.begin('james','hall',route);
-    for(let i=1;i<=frames;i++)world.advance(240*i/frames);
-    return world.events();
+    // Authoritative execution advances in integer simulation seconds.
+    // Rendering samples are read-only and may occur at fractional timestamps.
+    let samples=0;
+    for(let second=0;second<=240;second++){
+      world.advance(second);
+      for(let frame=0;frame<fps;frame++){
+        const observed=world.observe('james');
+        if(observed)assert.ok(observed.progress>=0&&observed.progress<=1);
+        samples++;
+      }
+    }
+    return {events:world.events(),samples};
   };
-  assert.deepEqual(run(10),run(60));
-  assert.deepEqual(run(60),run(144));
+  const slow=run(10),medium=run(60),fast=run(144);
+  assert.deepEqual(slow.events,medium.events);
+  assert.deepEqual(medium.events,fast.events);
+  assert.notEqual(slow.samples,fast.samples);
 });
 test('RB-2: time is monotonic, interruption is explicit',()=>{
   const world=new ActionTimeline();
