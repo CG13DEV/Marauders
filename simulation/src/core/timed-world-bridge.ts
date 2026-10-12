@@ -12,8 +12,13 @@ export class TimedWorldBridge {
   private routes=new Map<number,{legs:TimedMove[];committed:number}>();
   private commits:CommittedMove[]=[];
   private processedEvents=0;
-  constructor(private readonly currentRoom:(actor:number)=>number|null,
-    private readonly execute:(command:Command)=>CommandResult){}
+  private readonly currentRoom:(actor:number)=>number|null;
+  private readonly execute:(command:Command)=>CommandResult;
+  constructor(currentRoom:(actor:number)=>number|null,
+    execute:(command:Command)=>CommandResult){
+    this.currentRoom=currentRoom;
+    this.execute=execute;
+  }
   begin(actor:number,goal:number,legs:readonly TimedMove[]){
     if(!legs.length||legs[0]!.from!==this.currentRoom(actor)||
       legs.at(-1)!.to!==goal||legs.some((l,i)=>i>0&&legs[i-1]!.to!==l.from))
