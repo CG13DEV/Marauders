@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {TimedWorldBridge} from '../src/core/timed-world-bridge.ts';
-import type {CommandResult} from '../src/core/Simulation.ts';
+import {createSimulation, type CommandResult} from '../src/core/Simulation.ts';
 
 test('RB-3: only validated timed arrival mutates authoritative room',()=>{
   const rooms=new Map([[7,1]]);
@@ -62,4 +62,24 @@ test('RB-3.1: rejected first leg cancels all future arrivals',()=>{
   assert.equal(bridge.observe(7),null);
   assert.deepEqual(bridge.events().map(e=>e.at),[10]);
   assert.equal(bridge.clock.events().filter(e=>e.kind==='arrive').length,1);
+});
+
+test('RB-3.2: real simulation commits timed movement to ECS and world journal',()=>{
+  const world=createSimulation();
+  const tower=world.room('rb3-tower','Tower');
+  const stairs=world.room('rb3-stairs','Stairs');
+  const hall=world.room('rb3-hall','Hall');
+  world.connect(tower,stairs);
+  world.connect(stairs,hall);
+  const james=world.character('rb3-james','James',tower);
+  const bridge=world.createTimedMovement();
+  bridge.begin(james,hall,[{from:tower,to:stairs,seconds:60},{from:stairs,to:hall,seconds:60}]);
+  bridge.advance(59);
+  assert.equal(world.currentRoom(james),tower);
+  assert.deepEqual(world.occupants(stairs),[]);
+  bridge.advance(120);
+  assert.equal(world.currentRoom(james),hall);
+  assert.deepEqual(world.occupants(hall),[james]);
+  assert.deepEqual(world.events().filter(e=>e.type==='entity_moved').map(e=>e.to),[stairs,hall]);
+  assert.deepEqual(bridge.events().map(e=>e.at),[60,120]);
 });
