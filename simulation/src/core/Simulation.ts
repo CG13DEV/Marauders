@@ -1,4 +1,5 @@
 import {TimedWorldBridge} from './timed-world-bridge.ts';
+import {WorldClock} from './world-clock.ts';
 import {
   addComponent,
   addEntity,
@@ -275,6 +276,8 @@ export function createSimulation() {
     toiletNeeds,patrolPlans
   } = createRuntimeStores();
   let tick = 0;
+  let worldClock = new WorldClock();
+  let timedMovement: TimedWorldBridge | null = null;
 
   function addNamedEntity(key: string, label: string): EntityId {
     if (keys.has(key)) throw new Error(`Duplicate entity key: ${key}`);
@@ -1826,7 +1829,14 @@ export function createSimulation() {
       routine: HasRoutine, dailyLife: HasDailyLife
     };
     const decisions=runWorldStep({
-      advanceClock: () => schoolTime(++tick).absoluteMinute,
+      advanceClock: () => {
+        const next = (tick + 1) * 600;
+        if (worldClock.nowSeconds() > next) throw Error('Timed world is ahead of school step');
+        timedMovement?.advance(next);
+        worldClock.advanceTo(next);
+        tick++;
+        return worldClock.absoluteMinute();
+      },
       actors: trait => Array.from(query(ecs, [Character, agentComponents[trait]])),
       has: (actor, flag) => hasComponent(ecs, actor, flags[flag]),
       visibleFragiles: room => Array.from(query(ecs, [Fragile, LocatedIn(room)])),
@@ -2312,11 +2322,20 @@ export function createSimulation() {
     events.length=0;
     for(const event of state.events)events.push(event);
     tick = state.tick;
+    worldClock = new WorldClock(tick * 600);
   }
 
   return {
     room, roomInfo, character, fragileObject, connect, execute, step,
-    createTimedMovement: () => new TimedWorldBridge(currentRoom,execute),
+    createTimedMovement: () => {
+      if (!timedMovement) {
+        timedMovement = new TimedWorldBridge(currentRoom,execute,
+          seconds => worldClock.advanceTo(seconds));
+        timedMovement.advance(worldClock.nowSeconds());
+      }
+      return timedMovement;
+    },
+    worldSeconds: () => worldClock.nowSeconds(),
     configureToilet,toiletState,configurePatrol,patrolState,
     registerHouse, grantPointAuthority, houseOf, housePoints, pointHistory,
     knownPointNews, pointReactions,
