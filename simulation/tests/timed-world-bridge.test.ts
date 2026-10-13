@@ -83,3 +83,19 @@ test('RB-3.2: real simulation commits timed movement to ECS and world journal',(
   assert.deepEqual(world.events().filter(e=>e.type==='entity_moved').map(e=>e.to),[stairs,hall]);
   assert.deepEqual(bridge.events().map(e=>e.at),[60,120]);
 });
+
+test('RB-3.3c: owning clock sees each arrival time before world execution',()=>{
+  const observed:number[]=[];
+  let time=0;
+  const rooms=new Map([[7,1]]);
+  const bridge=new TimedWorldBridge(actor=>rooms.get(actor)??null,command=>{
+    if(command.type!=='move')throw Error('not a move');
+    observed.push(time);
+    rooms.set(command.actor,command.destination);
+    return {ok:true,events:[]};
+  },seconds=>{time=seconds;});
+  bridge.begin(7,3,[{from:1,to:2,seconds:10},{from:2,to:3,seconds:20}]);
+  bridge.advance(100);
+  assert.deepEqual(observed,[10,30]);
+  assert.equal(time,100);
+});
