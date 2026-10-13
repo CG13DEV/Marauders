@@ -1,3 +1,4 @@
+import {TimedWorldBridge} from './timed-world-bridge.ts';
 import {
   addComponent,
   addEntity,
@@ -2315,6 +2316,7 @@ export function createSimulation() {
 
   return {
     room, roomInfo, character, fragileObject, connect, execute, step,
+    createTimedMovement: () => new TimedWorldBridge(currentRoom,execute),
     configureToilet,toiletState,configurePatrol,patrolState,
     registerHouse, grantPointAuthority, houseOf, housePoints, pointHistory,
     knownPointNews, pointReactions,
