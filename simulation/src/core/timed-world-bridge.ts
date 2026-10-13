@@ -14,10 +14,13 @@ export class TimedWorldBridge {
   private processedEvents=0;
   private readonly currentRoom:(actor:number)=>number|null;
   private readonly execute:(command:Command)=>CommandResult;
+  private readonly onAdvance?:(seconds:number)=>void;
   constructor(currentRoom:(actor:number)=>number|null,
-    execute:(command:Command)=>CommandResult){
+    execute:(command:Command)=>CommandResult,
+    onAdvance?:(seconds:number)=>void){
     this.currentRoom=currentRoom;
     this.execute=execute;
+    this.onAdvance=onAdvance;
   }
   begin(actor:number,goal:number,legs:readonly TimedMove[]){
     if(!legs.length||legs[0]!.from!==this.currentRoom(actor)||
@@ -34,9 +37,11 @@ export class TimedWorldBridge {
       const next=this.clock.nextArrival();
       if(next===null||next>until)break;
       this.clock.advance(next);
+      this.onAdvance?.(next);
       this.commitArrivals();
     }
     this.clock.advance(until);
+    this.onAdvance?.(until);
     this.commitArrivals();
   }
   private commitArrivals(){
