@@ -99,3 +99,23 @@ test('RB-3.3c: owning clock sees each arrival time before world execution',()=>{
   assert.deepEqual(observed,[10,30]);
   assert.equal(time,100);
 });
+
+test('RB-3.3c: Simulation owns bridge time and legacy school steps',()=>{
+  const world=createSimulation();
+  const a=world.room('rb33-a','A');
+  const b=world.room('rb33-b','B');
+  world.connect(a,b);
+  const james=world.character('rb33-james','James',a);
+  const bridge=world.createTimedMovement();
+  assert.equal(world.createTimedMovement(),bridge);
+  bridge.begin(james,b,[{from:a,to:b,seconds:60}]);
+  world.step();
+  assert.equal(world.currentRoom(james),b);
+  assert.equal(world.worldSeconds(),600);
+  assert.equal(world.tick(),1);
+  assert.equal(world.clock().absoluteMinute,490);
+  assert.equal(bridge.events()[0]?.at,60);
+  world.step();
+  assert.equal(world.worldSeconds(),1200);
+  assert.equal(world.tick(),2);
+});
