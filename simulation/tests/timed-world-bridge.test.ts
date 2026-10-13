@@ -35,3 +35,31 @@ test('RB-3: rejected world command does not mutate authoritative room',()=>{
   bridge.advance(10);
   assert.equal(bridge.events()[0]?.result.ok,false);
 });
+
+test('RB-3.1: a large time jump commits each leg before the next one',()=>{
+  const rooms=new Map([[7,1]]);
+  const bridge=new TimedWorldBridge(actor=>rooms.get(actor)??null,command=>{
+    if(command.type!=='move')throw Error('not a move');
+    const from=rooms.get(command.actor)!;
+    rooms.set(command.actor,command.destination);
+    return {ok:true,events:[{type:'entity_moved',actor:command.actor,from,to:command.destination}]};
+  });
+  bridge.begin(7,3,[{from:1,to:2,seconds:10},{from:2,to:3,seconds:10}]);
+  bridge.advance(100);
+  assert.equal(rooms.get(7),3);
+  assert.deepEqual(bridge.events().map(e=>[e.at,e.result.ok]),[[10,true],[20,true]]);
+});
+
+test('RB-3.1: rejected first leg cancels all future arrivals',()=>{
+  let attempts=0;
+  const bridge=new TimedWorldBridge(()=>1,():CommandResult=>{
+    attempts++;
+    return {ok:false,reason:'unknown_passage',events:[]};
+  });
+  bridge.begin(7,3,[{from:1,to:2,seconds:10},{from:2,to:3,seconds:10}]);
+  bridge.advance(100);
+  assert.equal(attempts,1);
+  assert.equal(bridge.observe(7),null);
+  assert.deepEqual(bridge.events().map(e=>e.at),[10]);
+  assert.equal(bridge.clock.events().filter(e=>e.kind==='arrive').length,1);
+});
