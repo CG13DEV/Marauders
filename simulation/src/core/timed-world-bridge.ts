@@ -29,7 +29,17 @@ export class TimedWorldBridge {
     this.routes.set(actor,{legs:legs.map(l=>({...l})),committed:0});
   }
   advance(until:number){
+    if(!Number.isSafeInteger(until)||until<this.clock.now())throw Error('Invalid time');
+    while(true){
+      const next=this.clock.nextArrival();
+      if(next===null||next>until)break;
+      this.clock.advance(next);
+      this.commitArrivals();
+    }
     this.clock.advance(until);
+    this.commitArrivals();
+  }
+  private commitArrivals(){
     // The RB-2 timeline emits arrival timestamps in deterministic order.
     // Each arrival is validated against the live world before committing.
     const history=this.clock.events();
@@ -48,8 +58,7 @@ export class TimedWorldBridge {
       this.commits.push({at:event.at,actor,from:leg.from,to:leg.to,result});
       route.committed++;
       if(!result.ok){
-        // This first bridge detects rejection, but does not yet cancel
-        // downstream scheduled legs. A production integration must do so.
+        this.clock.cancel(String(actor));
         this.routes.delete(actor);
       }else if(route.committed===route.legs.length)this.routes.delete(actor);
     }
