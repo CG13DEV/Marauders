@@ -17,6 +17,16 @@
         <div class="brand">Башня <i>Гриффиндора</i></div></div>
       <div class="live-tag"><span class="pulse"></span> МИКРОМИР · ECS</div>
     </header>
+    <section class="player-panel glass" aria-label="Твой персонаж">
+      <label for="player-choice" class="eyebrow">G1 · ВЫБЕРИ МАРОДЁРА</label>
+      <select id="player-choice" aria-label="Выбрать игрового персонажа">
+        <option value="james">Джеймс Поттер</option>
+        <option value="sirius">Сириус Блэк</option>
+        <option value="remus">Ремус Люпин</option>
+        <option value="peter">Питер Петтигрю</option>
+      </select>
+      <small id="player-status">ТЫ ИГРАЕШЬ: Питер</small>
+    </section>
     <section class="location glass">
       <div class="eyebrow">ТЫ НАХОДИШЬСЯ</div>
       <h1 id="room-title">Гостиная Гриффиндора</h1>
@@ -36,11 +46,17 @@
     </section>
     <section class="living-panel glass" aria-label="Наблюдение за гостиной">
       <div class="eyebrow">RB-4 · АВТОНОМНАЯ ЖИЗНЬ</div>
-      <div class="living-status"><strong id="living-clock">ДЕНЬ 1 · 19:10</strong>
+      <div class="living-status"><strong id="living-clock">ДЕНЬ 1 · 11:10</strong>
         <span id="living-population">0 В КОМНАТЕ / 4 NPC</span></div>
       <div id="living-events" class="living-events" aria-live="off"></div>
       <div id="living-people" class="living-people" aria-label="Текущие занятия"></div>
-      <small>Локальная ECS-микросимуляция · 4 ученика · [GAME]</small>
+      <small>Самостоятельные NPC + управляемый персонаж в той же ECS · [GAME]</small>
+    </section>
+    <section id="cup-actions" class="cup-actions glass" hidden aria-label="Старинная чашка">
+      <div id="cup-inspection">Старинная чашка</div>
+      <div class="cup-buttons">
+        <button id="cup-break" title="Попробовать разбить предмет">Разбить чашку</button>
+      </div>
     </section>
     <div class="bottom-left">
       <div class="controls glass">

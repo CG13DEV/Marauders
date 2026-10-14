@@ -60,3 +60,20 @@ kbd{font-family:inherit;border:1px solid #756a59;border-bottom:2px solid #6e5c43
 .living-people div{font-size:10px;color:#e6d0aa;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 @media(max-width:850px){.living-people{grid-template-columns:1fr;max-height:35px;overflow:auto}}
+
+/* G1: player agency panel; debug tower graph remains an explicit dev aid. */
+.player-panel{position:absolute;z-index:3;top:85px;right:18px;
+  display:flex;flex-direction:column;gap:6px;padding:11px 14px;
+  min-width:204px;border-radius:9px}
+.player-panel select{background:#262329;border:1px solid #93744b;
+  color:#f2d8af;border-radius:5px;padding:7px 8px;font:inherit;font-size:12px}
+.player-panel small{color:#cfba97;font-size:10px;letter-spacing:.04em}
+.cup-actions{position:absolute;z-index:4;bottom:98px;left:50%;
+  transform:translateX(-50%);padding:11px 14px;border-radius:8px;
+  text-align:center;color:#efcf99;font-size:12px}
+.cup-actions[hidden]{display:none}
+.cup-actions button{margin-top:8px;background:#785035;color:#fbe2ba;
+  padding:7px 14px;border:1px solid #bd8d5e;border-radius:6px;cursor:pointer}
+.cup-actions button:disabled{opacity:.45;cursor:not-allowed}
+@media(max-width:850px){.player-panel{top:76px;right:9px;min-width:155px;
+  max-width:41vw;padding:8px}.cup-actions{bottom:185px;max-width:50vw}}

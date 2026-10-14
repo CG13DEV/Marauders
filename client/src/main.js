@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import graph from './tower-graph.generated.json';
 import {createAvatar} from './sprites.js';
-import {createLivingRoom,LIVING_ACTORS} from './living-room.js';
+import {createLivingRoom,LIVING_ACTORS,PLAYER_CAST} from './living-room.js';
 import {buildStage} from './stage.js';
 import {STARTS,safeSpawn,moveWithCollision,keyForControl} from './movement.js';
 import './style.css';
@@ -25,6 +25,10 @@ renderer.toneMappingExposure=1.22;
 area.append(renderer.domElement);
 const camera=new THREE.OrthographicCamera(-12,12,12,-12,.05,140);
 let yaw=Math.PI/4,zoom=11.4;
+const params=new URLSearchParams(window.location.search);
+const chosen=params.get('playAs');
+const playerDefinition=PLAYER_CAST.find(a=>a.key===chosen)??PLAYER_CAST[3];
+const playerKey=playerDefinition.key;
 let roomKey=graph.common.key;
 const byKey=new Map([graph.common,graph.landing,...graph.research,...graph.legacy]
   .map(x=>[x.key,x]));
@@ -34,10 +38,19 @@ for(const [a,b] of graph.links){
   if(!adjacent.has(b))adjacent.set(b,new Set());
   adjacent.get(a).add(b);adjacent.get(b).add(a);
 }
-let stage=null,pendingPortal=null,target=null;
+let stage=null,pendingPortal=null,target=null,artifactVisual=null;
 const player={x:STARTS.common.x,z:STARTS.common.z,facing:0,walking:false};
-const avatar=createAvatar();scene.add(avatar.group);
-const living=createLivingRoom(graph);
+const avatar=createAvatar({variant:playerDefinition.variant});
+scene.add(avatar.group);
+const living=createLivingRoom(graph,{playerKey});
+$('player-choice').value=playerKey;
+$('player-choice').addEventListener('change',event=>{
+  if(!PLAYER_CAST.some(c=>c.key===event.target.value))return;
+  const location=new URL(window.location.href);
+  location.searchParams.set('playAs',event.target.value);
+  window.location.assign(location.href);
+});
+$('player-status').textContent='ТЫ ИГРАЕШЬ: '+playerDefinition.name;
 const inTestMode=new URLSearchParams(window.location.search).has('testMode');
 const standIns=[]; // presentation of actual ECS NPCs; never a decision source
 const keys=new Set();
@@ -92,9 +105,11 @@ function rebuildScene(){
   }
   standIns.length=0;
   if(stage){scene.remove(stage.group);stage.dispose();}
+  artifactVisual=null;
   const room=byKey.get(roomKey);
   stage=buildStage(room,graph);
   scene.add(stage.group);
+  if(roomKey===graph.common.key)buildCupVisual();
   pendingPortal=null;target=null;
   const preference=roomKey===graph.common.key?STARTS.common:
     roomKey===graph.landing.key?STARTS.landing:STARTS.bedroom;
@@ -185,11 +200,42 @@ function scheduleLivingMovement(move){
   }
 }
 
+const CUP_POINT=Object.freeze({x:0,z:0});
+function buildCupVisual(){
+  const group=new THREE.Group();
+  const metal=new THREE.MeshStandardMaterial({
+    color:0xa98242,metalness:.64,roughness:.38});
+  const black=new THREE.MeshStandardMaterial({
+    color:0x473822,metalness:.35,roughness:.75});
+  const stand=new THREE.Mesh(new THREE.CylinderGeometry(.54,.64,.26,14),black);
+  stand.position.y=.15;group.add(stand);
+  const stem=new THREE.Mesh(new THREE.CylinderGeometry(.07,.11,.27,10),metal);
+  stem.position.y=.41;group.add(stem);
+  const bowl=new THREE.Mesh(new THREE.CylinderGeometry(.26,.13,.33,14),metal);
+  bowl.position.y=.68;group.add(bowl);
+  const highlight=new THREE.PointLight(0xffc983,.5,2);
+  highlight.position.y=.9;group.add(highlight);
+  group.position.set(CUP_POINT.x,0,CUP_POINT.z);
+  group.userData={bowl,stem};
+  stage.group.add(group);
+  artifactVisual=group;
+}
+function updateCupVisual(view){
+  if(!artifactVisual)return;
+  const broken=view.cup?.broken===true;
+  artifactVisual.userData.bowl.rotation.z=broken?1.3:0;
+  artifactVisual.userData.bowl.position.y=broken?.30:.68;
+  artifactVisual.userData.stem.visible=!broken;
+}
+
 function updateLivingUi(snapshot){
   $('living-clock').textContent='ДЕНЬ '+(Math.floor(snapshot.worldSeconds/86400)+1)+
     ' · '+snapshot.clock;
   const locals=snapshot.locations.filter(([,room])=>room===roomKey).length;
-  $('living-population').textContent=locals+' В КОМНАТЕ / 4 NPC';
+  $('living-population').textContent=locals+' В КОМНАТЕ / '+
+    snapshot.locations.length+' NPC';
+  $('player-status').textContent='ТЫ ИГРАЕШЬ: '+snapshot.player.name;
+  updateCupVisual(snapshot.player);
   const log=$('living-events');log.replaceChildren();
   for(const line of snapshot.recent){
     const p=document.createElement('p');p.textContent=line;log.append(p);
@@ -269,8 +315,15 @@ function enter(next){
     return;
   }
   if(!byKey.has(next)){toast('Комната пока за пределами прототипа.');return;}
-  roomKey=next;rebuildScene();
-  toast('Ты вошёл: '+labelFor(byKey.get(next)));
+  const result=living.submit({type:'move',destination:next});
+  if(!result.ok){
+    toast('Мир отказал в переходе: '+result.reason);
+    return;
+  }
+  roomKey=result.player.room;
+  rebuildScene();
+  updateLivingUi(living.snapshot());
+  toast('Ты вошёл: '+labelFor(byKey.get(roomKey)));
 }
 function updateNavigator(){
   const panel=$('room-navigator');panel.replaceChildren();
@@ -344,6 +397,15 @@ $('dialog-backdrop').addEventListener('click',e=>{
 $('go-common').addEventListener('click',()=>enter(graph.common.key));
 function usePortal(portal){
   if(!portal)return;
+  if(portal.kind==='inspect_cup'){
+    const result=living.submit({type:'inspect_cup'});
+    toast(result.ok
+      ?(result.player.cup?.broken
+        ?'На полу лежат осколки старой чашки.'
+        :'Старая чашка цела. Тяжёлая, с потемневшим ободком.')
+      :'Осмотр не удался: '+result.reason);
+    updateLivingUi(living.snapshot());return;
+  }
   if(portal.kind==='wing'){openDorms(portal.wing);return;}
   if(portal.kind==='outside'){enter(graph.landing.key);return;}
   if(portal.kind==='return'){enter(graph.common.key);return;}
@@ -359,13 +421,31 @@ function nearestPortal(max=2.25){
   return winner;
 }
 function refreshHint(){
-  const portal=nearestPortal();
+  const nearCup=roomKey===graph.common.key&&
+    Math.hypot(player.x-CUP_POINT.x,player.z-CUP_POINT.z)<1.85;
+  $('cup-actions').hidden=!nearCup;
+  const state=living.snapshot().player;
+  $('cup-inspection').textContent=state.cup?.broken?
+    'Старинная чашка разбита':state.cup?.inspected?
+    'Ты осмотрел старинную чашку':'Старинная чашка · неизвестный предмет';
+  $('cup-break').disabled=state.cup?.broken===true;
+  const portal=nearCup?{kind:'inspect_cup',desc:'Осмотреть старую чашку'}:
+    nearestPortal();
   const hint=$('action-hint');
   hint.hidden=!portal;
   if(portal)$('action-hint-text').textContent=portal.desc;
   interact=portal;
 }
 $('interact-button').addEventListener('click',()=>usePortal(interact));
+$('cup-break').addEventListener('click',()=>{
+  const near=roomKey===graph.common.key &&
+    Math.hypot(player.x-CUP_POINT.x,player.z-CUP_POINT.z)<1.85;
+  if(!near)return;
+  const result=living.submit({type:'break_cup'});
+  toast(result.ok?'Чашка разбилась. Это событие осталось в истории мира.':
+    'Нельзя разбить чашку: '+result.reason);
+  updateLivingUi(living.snapshot());
+});
 function clipMovement(x,z){
   if(stage.bounds)return {
     x:THREE.MathUtils.clamp(x,stage.bounds.minX,stage.bounds.maxX),
@@ -539,6 +619,7 @@ if(inTestMode){
   window.__towerTest=Object.freeze({
     snapshot:()=>Object.freeze({
       player:Object.freeze({x:player.x,z:player.z}),
+      identity:playerKey,
       roomKey,extras:standIns.length,
       live:living.snapshot(),
       visibleActors:standIns.map(actor=>({key:actor.key,x:actor.x,z:actor.z,
@@ -551,6 +632,7 @@ if(inTestMode){
       frames:renderedFrames,
       canvasWidth:renderer.domElement.width
     }),
+    submitPlayer:intent=>living.submit(intent),
     advanceLiving:()=>stepLiving(),
     advanceLivingSeconds:seconds=>advanceLivingSeconds(seconds)
   });
