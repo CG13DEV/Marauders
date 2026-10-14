@@ -212,9 +212,9 @@ export function createLivingRoom(graph,{warmupTicks=67,playerKey='peter'}={}){
           hobbies:'увлечениях'}[intent.topic])+'.'
         :statement
           ?(statement.claim.culprit===playerId
-              ?'Я видел(а), что чашку разбил ты.'
+              ?'Насколько мне известно, чашку разбил ты.'
               :statement.claim.culprit!==undefined
-                ?'Я видел(а), что чашку разбил '+(names.get(statement.claim.culprit)??'кто-то')+'.'
+                ?'Насколько мне известно, чашку разбил '+(names.get(statement.claim.culprit)??'кто-то')+'.'
                 :'Я знаю, что чашка была разбита.')
           :answer?.answered===false
             ?'Я не могу достоверно сказать, кто разбил чашку.'
