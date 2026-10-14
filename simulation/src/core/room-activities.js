@@ -88,8 +88,8 @@ export function createRoomActivities({plan,actors,commonKey,nowSeconds,initialLo
       const p=nodes[current];
       for(const [dx,dz] of [[-STEP,0],[STEP,0],[0,-STEP],[0,STEP],
                              [-STEP,-STEP],[-STEP,STEP],[STEP,-STEP],[STEP,STEP]]){
-        const neighbor=nodes.findIndex(q=>
-          Math.abs(q.x-p.x-dx)<.02&&Math.abs(q.z-p.z-dz)<.02);
+        const neighbor=nodeIds.get(key(
+          Math.round((p.x+dx)/STEP),Math.round((p.z+dz)/STEP)))??-1;
         if(neighbor<0)continue;
         const q=nodes[neighbor];
         if(!isClear(p,q))continue;
