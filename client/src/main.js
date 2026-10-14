@@ -38,6 +38,7 @@ let stage=null,pendingPortal=null,target=null;
 const player={x:STARTS.common.x,z:STARTS.common.z,facing:0,walking:false};
 const avatar=createAvatar();scene.add(avatar.group);
 const living=createLivingRoom(graph);
+const inTestMode=new URLSearchParams(window.location.search).has('testMode');
 const standIns=[]; // presentation of actual ECS NPCs; never a decision source
 const keys=new Set();
 let lastView=-1,toastTimeout=null,interact=null,dialogWing=null;
@@ -469,7 +470,7 @@ function tick(){
 rebuildScene();calculateCamera();
 updateLivingUi(living.snapshot());
 renderer.setAnimationLoop(tick);
-const livingTimer=setInterval(()=>{
+const livingTimer=inTestMode?null:setInterval(()=>{
   const now=performance.now();
   const realSeconds=Math.max(0,Math.min(.5,(now-livingLastAt)/1000));
   livingLastAt=now;
@@ -484,10 +485,12 @@ const livingTimer=setInterval(()=>{
 document.addEventListener('visibilitychange',()=>{
   livingLastAt=performance.now();
 });
-window.addEventListener('pagehide',()=>clearInterval(livingTimer));
+window.addEventListener('pagehide',()=>{
+  if(livingTimer!==null)clearInterval(livingTimer);
+});
 // Opt-in browser smoke diagnostics; no access to the simulation, network,
 // credentials or hidden NPC state. Production default exposes nothing.
-if(new URLSearchParams(window.location.search).has('testMode')){
+if(inTestMode){
   window.__towerTest=Object.freeze({
     snapshot:()=>Object.freeze({
       player:Object.freeze({x:player.x,z:player.z}),
