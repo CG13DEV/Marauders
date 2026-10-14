@@ -17,7 +17,7 @@ Options are derived from each NPC's general interest, distance to a free interac
 
 ## Local time bug corrected
 
-The original client added **480 minutes** to `world.worldSeconds()`, displaying 19:10 when the actual school scheduler was at 11:10. Clock display now reads the scheduler's real world seconds; the demo starts after 115 school ticks at the real 19:10 leisure period. No artificial time-of-day adjustment is applied.
+The original client added **480 minutes** to `world.worldSeconds()`, displaying 19:10 when the actual school scheduler was at 11:10. Clock display now reads the scheduler's real world seconds; the demo starts after 67 school ticks at the real 11:10 when these experimental residents are naturally in the common room. At 19:10 their actual plans put them in their dormitories; do not teleport them back simply to fill the shot. No artificial time-of-day adjustment is applied.
 
 ## What remains deliberately unfinished
 
