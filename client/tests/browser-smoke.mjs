@@ -36,12 +36,25 @@ try{
   console.log('[smoke] initial',JSON.stringify(initial),'errors',errors);
   assert.equal(initial.roomKey,'dorm_gryffindor');
   assert.equal(initial.live.locations.length,4);
-  assert.ok(initial.live.tick>=67);
+  assert.equal(initial.live.tick,115);
+  assert.equal(initial.live.clock,'19:10');
+  assert.ok(initial.live.activities.length>0);
   assert.ok(Number.isSafeInteger(initial.live.worldSeconds));
   assert.ok(Array.isArray(initial.live.journeys));
   assert.equal(initial.extras,initial.live.locations
     .filter(([,key])=>key===initial.roomKey).length);
   assert.ok(initial.extras>0,'Expected living NPC occupants in common room');
+  const walked=await page.evaluate(()=>window.__towerTest.advanceLivingSeconds(120));
+  assert.ok(walked.snapshot.activities.some(p=>p.mode!=='idle'),
+    'Living room must make meaningful spatial decisions, not stand immobile');
+  assert.ok(walked.snapshot.activities.some(p=>{
+    const old=initial.live.activities.find(a=>a.actor===p.actor);
+    return old&&Math.hypot(old.x-p.x,old.z-p.z)>.15;
+  }),'No resident physically walked within the common room');
+  await page.waitForFunction(()=>window.__towerTest.snapshot().visibleActors
+    .some(a=>a.mode==='walking'),{timeout:15000});
+  assert.equal(await page.locator('#living-people').locator('div').count(),
+    walked.snapshot.activities.length);
   assert.match(await page.locator('#living-clock').textContent(),/ДЕНЬ/);
   // A browser observer advances the SAME ECS world that draws the avatars.
   const liveStep=await page.evaluate(()=>window.__towerTest.advanceLiving());
@@ -113,7 +126,7 @@ try{
   assert.equal((await page.evaluate(()=>
     window.__towerTest.snapshot())).roomKey,'dorm_gryffindor');
   assert.deepEqual(errors,[],'Runtime errors in real Chromium page');
-  console.log('[browser smoke RB-5.2] WebGL rooms, graph-safe controls and genuine NPC world-time movement PASS');
+  console.log('[browser smoke RB-5.3] real WebGL NPC walking, independent local activities, room architecture and controls PASS');
 }finally{
   await browser?.close();
   server.kill('SIGTERM');
