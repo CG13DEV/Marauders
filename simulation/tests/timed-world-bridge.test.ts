@@ -119,3 +119,29 @@ test('RB-3.3c: Simulation owns bridge time and legacy school steps',()=>{
   assert.equal(world.worldSeconds(),1200);
   assert.equal(world.tick(),2);
 });
+
+test('RB-3 checkpoint: incomplete sub-tick travel is never silently serialized',()=>{
+  const world=createSimulation();
+  const tower=world.room('checkpoint-tower','Tower');
+  const hall=world.room('checkpoint-hall','Hall');
+  world.connect(tower,hall);
+  const james=world.character('checkpoint-james','James',tower);
+  const initial=world.captureRuntime();
+  const bridge=world.createTimedMovement();
+  bridge.begin(james,hall,[{from:tower,to:hall,seconds:60}]);
+  assert.throws(()=>world.captureRuntime(),/checkpoint boundary/);
+  bridge.advance(60);
+  assert.equal(world.currentRoom(james),hall);
+  assert.throws(()=>world.captureRuntime(),/checkpoint boundary/);
+  bridge.advance(600);
+  assert.throws(()=>world.captureRuntime(),/checkpoint boundary/);
+  world.hydrateRuntime(initial);
+  assert.equal(world.currentRoom(james),tower);
+  assert.equal(world.worldSeconds(),0);
+  assert.throws(()=>bridge.advance(660),/invalidated/);
+  const fresh=world.createTimedMovement();
+  assert.notEqual(fresh,bridge);
+  fresh.begin(james,hall,[{from:tower,to:hall,seconds:30}]);
+  fresh.advance(30);
+  assert.equal(world.currentRoom(james),hall);
+});
