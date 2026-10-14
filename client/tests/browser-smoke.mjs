@@ -96,7 +96,14 @@ try{
   await page.keyboard.press('q');
   const afterCamera=await page.evaluate(()=>window.__towerTest.snapshot());
   assert.notEqual(afterCamera.cameraYaw,afterW.cameraYaw);
-  // Use real DOM passage selection, which must respect graph adjacency.
+  // A door label is learned ONLY while physically at that staircase.
+  await page.evaluate(()=>window.__towerTest.driveTo([
+    {x:0,z:.5},{x:-7.9,z:.5}]));
+  const discovered=await page.evaluate(()=>window.__towerTest.submitPlayer({
+    type:'survey_wing',wing:'boys'}));
+  assert.equal(discovered.ok,true);
+  assert.ok(discovered.player.journal.some(note=>note.includes('таблички')));
+  // Even developer navigation must not bypass the actual body in the world.
   await page.locator('.wing-card button').first().click();
   assert.equal(await page.locator('#dialog-backdrop').getAttribute('hidden'),null);
   await page.locator('.dorm-row button').first().click();
@@ -111,10 +118,12 @@ try{
     assert.ok(Math.hypot(bed.x,bed.z)>5,'Bed is improperly in center');
   await page.screenshot({path:resolve('artifacts/bedroom.png'),
     animations:'disabled'});
+  await page.evaluate(()=>window.__towerTest.driveTo([{x:0,z:5.52}]));
   await page.locator('#go-common').click();
   assert.equal((await page.evaluate(()=>
     window.__towerTest.snapshot())).roomKey,'dorm_gryffindor');
-  // The actual portrait passage now leads to a long RECTANGULAR landing.
+  // The portrait passage requires actually approaching the far wall.
+  await page.evaluate(()=>window.__towerTest.driveTo([{x:0,z:7.9}]));
   await page.locator('.wing-card button').last().click();
   const landing=await page.evaluate(()=>window.__towerTest.snapshot());
   assert.equal(landing.roomKey,'west_landing_4');
@@ -126,9 +135,15 @@ try{
   assert.deepEqual(landing.activePortals,['return']);
   await page.screenshot({path:resolve('artifacts/landing.png'),
     animations:'disabled'});
+  await page.evaluate(()=>window.__towerTest.driveTo([{x:0,z:-3.14}]));
   await page.locator('#go-common').click();
   assert.equal((await page.evaluate(()=>
     window.__towerTest.snapshot())).roomKey,'dorm_gryffindor');
+  // Genuine localized action, not a room-wide click from the entrance.
+  const farInspect=await page.evaluate(()=>
+    window.__towerTest.submitPlayer({type:'inspect_cup'}));
+  assert.equal(farInspect.reason,'not_in_reach');
+  await page.evaluate(()=>window.__towerTest.driveTo([{x:0,z:1.5}]));
   // Real player action, not a renderer-only state mutation.
   const oldCup=await page.evaluate(()=>window.__towerTest.snapshot().live.player.cup);
   assert.equal(oldCup.broken,false);
@@ -140,6 +155,13 @@ try{
     window.__towerTest.submitPlayer({type:'break_cup'}));
   assert.equal(broken.ok,true);
   assert.equal(broken.player.cup.broken,true);
+  assert.ok(broken.player.journal.some(note=>note.includes('чашк')));
+  // Choose an unlinked game-mode page: the omniscient technical map is hidden.
+  const gamePage=await browser.newPage({viewport:{width:1280,height:720}});
+  await gamePage.goto(origin,{waitUntil:'networkidle'});
+  assert.equal(await gamePage.locator('#tower-debug').isVisible(),false);
+  assert.equal(await gamePage.locator('#player-journal').isVisible(),true);
+  await gamePage.close();
   // Choosing a different Marauder must give the player that actual ECS
   // identity and remove their autonomous duplicate from the observer.
   await page.selectOption('#player-choice','james');
@@ -151,7 +173,7 @@ try{
   assert.equal(chosen.live.locations.length,3);
   assert.ok(!chosen.live.locations.some(([key])=>key==='james'));
   assert.deepEqual(errors,[],'Runtime errors in real Chromium page');
-  console.log('[browser smoke G1] real ECS player selection, validated cup interaction, tower navigation and NPC continuity PASS');
+  console.log('[browser smoke G2] player-local perceptions, validated walking, stair discovery, object reach, and hidden omniscient map PASS');
 }finally{
   await browser?.close();
   server.kill('SIGTERM');
