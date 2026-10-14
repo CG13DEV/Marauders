@@ -11,7 +11,7 @@
     "dev": "npm run graph && vite --host 0.0.0.0",
     "build": "npm run graph && vite build",
     "preview": "vite preview --host 0.0.0.0",
-    "test": "npm run graph && node --test tests/*.test.mjs",
+    "test": "npm run graph && node --experimental-strip-types --test tests/*.test.mjs",
     "check": "npm run test && npm run build",
     "browser-smoke": "node tests/browser-smoke.mjs"
   },
