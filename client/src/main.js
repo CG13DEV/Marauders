@@ -711,6 +711,7 @@ if(inTestMode){
       cameraYaw:yaw,
       layout:stage?.layout,
       activePortals:stage?.portals.map(p=>p.kind),
+      activeInteraction:interact?.kind??null,
       frames:renderedFrames,
       canvasWidth:renderer.domElement.width
     }),
