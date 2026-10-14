@@ -5,7 +5,8 @@
 export const STARTS=Object.freeze({
   common:Object.freeze({x:0,z:4.4}),
   landing:Object.freeze({x:0,z:1}),
-  bedroom:Object.freeze({x:0,z:2.5})
+  bedroom:Object.freeze({x:0,z:2.5}),
+  gallery:Object.freeze({x:0,z:-4.0})
 });
 export const PLAYER_RADIUS=.30;
 export function walkable(stage,x,z){
