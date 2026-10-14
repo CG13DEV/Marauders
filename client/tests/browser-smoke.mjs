@@ -44,7 +44,7 @@ try{
   assert.equal(initial.extras,initial.live.locations
     .filter(([,key])=>key===initial.roomKey).length);
   assert.ok(initial.extras>0,'Expected living NPC occupants in common room');
-  const walked=await page.evaluate(()=>window.__towerTest.advanceLivingSeconds(120));
+  const walked=await page.evaluate(()=>window.__towerTest.advanceLivingSeconds(30));
   assert.ok(walked.snapshot.activities.some(p=>p.mode!=='idle'),
     'Living room must make meaningful spatial decisions, not stand immobile');
   assert.ok(walked.snapshot.activities.some(p=>{
