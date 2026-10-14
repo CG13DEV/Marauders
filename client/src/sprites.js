@@ -20,6 +20,9 @@ export function paintFrame(view,stride,variant='player'){
   if(view<0||view>=VIEWS||stride<0||stride>=WALK_FRAMES)
     throw RangeError('Invalid sprite view or stride');
   const palette=styles[variant]??styles.player;
+  // Different character silhouettes, not merely recoloured short hair.
+  const longHair=variant==='ginger';
+  const eye=longHair?'#388654':'#24202b';
   const c=document.createElement('canvas');c.width=W;c.height=H;
   const ctx=c.getContext('2d');ctx.imageSmoothingEnabled=false;
   const p=(x,y,w,h,color)=>{
@@ -71,10 +74,12 @@ export function paintFrame(view,stride,variant='player'){
   // Head differences: front, 3/4, profile, back of skull.
   const hX=side?16+sideShift:14+sideShift;
   const hW=side?16:19;
-  p(hX-1,14,hW+2,22,'#211d25');
+  // Dark jaw backing on a ginger character read as a heavy beard.
+  p(hX-1,14,hW+2,22,longHair?palette.hair:'#211d25');
   p(hX,16,hW,18,palette.hair);
   if(!back){
     p(hX+2,19,hW-3,15,palette.skin);
+    if(longHair)p(hX+4,32,hW-7,5,palette.skin); // visible skin-coloured chin
     if(behind){
       // Back quarter: narrower cheek, visible hairline on far side.
       const earX=right?hX+hW-5:hX+1;
@@ -83,25 +88,36 @@ export function paintFrame(view,stride,variant='player'){
     }else if(side){
       // Profile with only one eye and a projecting nose.
       const eyeX=right?hX+hW-5:hX+3;
-      p(eyeX,26,2,2,'#28212d');
+      p(eyeX,26,2,2,eye);
       p(right?hX+hW-1:hX-2,28,3,3,'#bc8c74');
     }else if(quarterFront){
-      p(right?hX+10:hX+4,26,2,2,'#2d222b');
-      p(right?hX+15:hX+10,26,2,2,'#2d222b');
+      p(right?hX+10:hX+4,26,2,2,eye);
+      p(right?hX+15:hX+10,26,2,2,eye);
     }else if(front){
-      p(hX+5,26,2,2,'#24202b');
-      p(hX+13,26,2,2,'#24202b');
+      p(hX+5,26,2,2,eye);
+      p(hX+13,26,2,2,eye);
       p(hX+9,31,3,1,'#b8816a');
     }
     p(hX-1,14,hW+3,8,palette.hair);
     p(hX+2,14,8,3,palette.hairHi);
     p(hX-1,18,4,12,palette.hair);
     p(hX+hW-3,18,4,12,palette.hair);
+    if(longHair){
+      // Shoulder-length side locks remain readable in all front profiles.
+      p(hX-3,23,5,21,palette.hair);
+      p(hX+hW-2,23,6,21,palette.hair);
+      p(hX-2,25,2,16,palette.hairHi);
+      p(hX+hW,25,2,15,palette.hairHi);
+    }
   }else{
     p(hX,15,hW,19,palette.hair);
     p(hX+3,15,6,14,palette.hairHi);
     p(hX-1,28,4,9,palette.hair);
     p(hX+hW-3,28,4,9,palette.hair);
+    if(longHair){
+      p(hX-2,29,hW+4,16,palette.hair);
+      p(hX+3,31,6,12,palette.hairHi);
+    }
   }
   // Scarf and Gryffindor trim change side based on view.
   if(!back){
