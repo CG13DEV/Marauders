@@ -34,7 +34,9 @@ test('RB-4: only real ECS decisions generate observable movement and social even
     const {delta,activity:latest,snapshot}=live.advance();
     assert.equal(snapshot.tick,prior.tick+1);
     assert.equal(delta.sequence,prior.sequence+1);
-    assert.equal(snapshot.locations.length,4);
+    assert.ok(snapshot.locations.length<=4);
+    assert.ok(snapshot.locations.every(([,room])=>room===snapshot.player.room),
+      'public client projection cannot list remote NPCs');
     for(const move of delta.movements){
       moves++;
       assert.ok(links.has(move.from+'|'+move.to),
