@@ -45,7 +45,7 @@ function visibleEvent(event,commonKey,commonId,names,keyByActor,positions){
   return null;
 }
 
-export function createLivingRoom(graph,{warmupTicks=115}={}){
+export function createLivingRoom(graph,{warmupTicks=67}={}){
   if(!Number.isSafeInteger(warmupTicks)||warmupTicks<0)throw Error('Invalid warmup');
   const world=createSimulation();
   const rooms=[graph.common,graph.landing,...graph.research,...graph.legacy];
