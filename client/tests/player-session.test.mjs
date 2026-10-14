@@ -25,21 +25,26 @@ test('G1: all four Marauders become unique manually controlled ECS identities',(
     /playable Marauder/);
 });
 
-test('G1: room transition is ECS-authorized; invalid travel never alters world',()=>{
+test('G1: room transitions follow actual castle topology',()=>{
   const game=createLivingRoom(graph,{playerKey:'peter'});
   const original=game.snapshot().player;
   assert.ok(original.knownExits.includes(graph.landing.key));
-  const shortcut=game.submit({type:'move',destination:bedroom.key});
-  assert.equal(shortcut.ok,false,'far-away bedroom cannot be teleported into');
-  assert.equal(game.snapshot().player.room,graph.common.key);
+  // Research dorms really connect DIRECTLY to common in the current graph.
+  // Do not invent a forbidden edge: verify one actual permissible transition.
+  const bedroomEntry=game.submit({type:'move',destination:bedroom.key});
+  assert.equal(bedroomEntry.ok,true);
+  assert.equal(game.snapshot().player.room,bedroom.key);
+  assert.equal(game.submit({type:'move',destination:graph.common.key}).ok,true);
   const exit=game.submit({type:'move',destination:graph.landing.key});
   assert.equal(exit.ok,true);
   assert.equal(exit.player.room,graph.landing.key);
+  // Landing -> bedroom has no direct edge, so ECS must reject it.
+  const invalid=game.submit({type:'move',destination:bedroom.key});
+  assert.equal(invalid.ok,false);
   assert.equal(game.snapshot().player.room,graph.landing.key);
   const repeated=game.submit({type:'move',destination:graph.landing.key});
-  assert.equal(repeated.ok,false,'same-room move is not a passage');
-  const returnHome=game.submit({type:'move',destination:graph.common.key});
-  assert.equal(returnHome.ok,true);
+  assert.equal(repeated.ok,false);
+  assert.equal(game.submit({type:'move',destination:graph.common.key}).ok,true);
   assert.equal(game.snapshot().player.room,graph.common.key);
   assert.ok(game.snapshot().locations.every(([key])=>key!=='peter'));
 });
