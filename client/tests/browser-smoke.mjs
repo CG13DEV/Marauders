@@ -35,6 +35,10 @@ try{
   const initial=await page.evaluate(()=>window.__towerTest.snapshot());
   console.log('[smoke] initial',JSON.stringify(initial),'errors',errors);
   assert.equal(initial.roomKey,'dorm_gryffindor');
+  assert.equal(initial.identity,'peter');
+  assert.equal(initial.live.player.key,'peter');
+  assert.equal(initial.live.player.room,'dorm_gryffindor');
+  assert.equal(await page.locator('#player-choice').inputValue(),'peter');
   assert.equal(initial.live.locations.length,4);
   assert.equal(initial.live.tick,67);
   assert.equal(initial.live.clock,'11:10');
@@ -125,8 +129,29 @@ try{
   await page.locator('#go-common').click();
   assert.equal((await page.evaluate(()=>
     window.__towerTest.snapshot())).roomKey,'dorm_gryffindor');
+  // Real player action, not a renderer-only state mutation.
+  const oldCup=await page.evaluate(()=>window.__towerTest.snapshot().live.player.cup);
+  assert.equal(oldCup.broken,false);
+  const inspected=await page.evaluate(()=>
+    window.__towerTest.submitPlayer({type:'inspect_cup'}));
+  assert.equal(inspected.ok,true);
+  assert.equal(inspected.player.cup.inspected,true);
+  const broken=await page.evaluate(()=>
+    window.__towerTest.submitPlayer({type:'break_cup'}));
+  assert.equal(broken.ok,true);
+  assert.equal(broken.player.cup.broken,true);
+  // Choosing a different Marauder must give the player that actual ECS
+  // identity and remove their autonomous duplicate from the observer.
+  await page.selectOption('#player-choice','james');
+  await page.waitForFunction(()=>window.__towerTest?.snapshot()?.identity==='james',
+    {timeout:20000});
+  const chosen=await page.evaluate(()=>window.__towerTest.snapshot());
+  assert.equal(chosen.live.player.key,'james');
+  assert.equal(chosen.live.player.room,chosen.roomKey);
+  assert.equal(chosen.live.locations.length,3);
+  assert.ok(!chosen.live.locations.some(([key])=>key==='james'));
   assert.deepEqual(errors,[],'Runtime errors in real Chromium page');
-  console.log('[browser smoke RB-5.3] real WebGL NPC walking, independent local activities, room architecture and controls PASS');
+  console.log('[browser smoke G1] real ECS player selection, validated cup interaction, tower navigation and NPC continuity PASS');
 }finally{
   await browser?.close();
   server.kill('SIGTERM');
