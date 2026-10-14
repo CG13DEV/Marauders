@@ -162,6 +162,48 @@ try{
   assert.equal(await gamePage.locator('#tower-debug').isVisible(),false);
   assert.equal(await gamePage.locator('#player-knowledge').isVisible(),true);
   await gamePage.close();
+  // G3: talk to somebody standing close, then ask about real witnessed events.
+  const socialPage=await browser.newPage({viewport:{width:1380,height:900}});
+  await socialPage.goto(origin+'?testMode=1',{waitUntil:'networkidle'});
+  await socialPage.evaluate(()=>window.__towerTest.driveTo([{x:0,z:1.5}]));
+  await socialPage.waitForFunction(()=>!document.querySelector('#talk-panel').hidden);
+  assert.match(await socialPage.locator('#talk-target').textContent(),/Рядом:/);
+  const brokenSocial=await socialPage.evaluate(()=>
+    window.__towerTest.submitPlayer({type:'break_cup'}));
+  assert.equal(brokenSocial.ok,true);
+  const inspectedSocial=await socialPage.evaluate(()=>
+    window.__towerTest.submitPlayer({type:'inspect_cup'}));
+  assert.equal(inspectedSocial.ok,true);
+  await socialPage.locator('#talk-question').click();
+  assert.match(await socialPage.locator('#talk-reply').textContent(),/чашку разбил ты/);
+  assert.ok((await socialPage.evaluate(()=>
+    window.__towerTest.snapshot().live.player.journal)).some(s=>s.includes('Со слов')));
+  await socialPage.close();
+
+  // G3 geography: cross the real portrait threshold, find the gallery stair,
+  // then physically enter and return — never hand-change the rendered room.
+  const galleryPage=await browser.newPage({viewport:{width:1380,height:900}});
+  await galleryPage.goto(origin+'?testMode=1',{waitUntil:'networkidle'});
+  await galleryPage.evaluate(()=>window.__towerTest.driveTo([{x:0,z:7.9}]));
+  await galleryPage.keyboard.press('f');
+  await galleryPage.waitForFunction(()=>
+    window.__towerTest.snapshot().roomKey==='west_landing_4');
+  await galleryPage.evaluate(()=>window.__towerTest.driveTo([{x:0,z:3.85}]));
+  await galleryPage.keyboard.press('f'); // discover physical stair
+  assert.ok((await galleryPage.evaluate(()=>
+    window.__towerTest.snapshot().live.player.knownRooms)).includes('gallery_4'));
+  await galleryPage.keyboard.press('f'); // enter the actual graph room
+  await galleryPage.waitForFunction(()=>
+    window.__towerTest.snapshot().roomKey==='gallery_4');
+  assert.equal((await galleryPage.evaluate(()=>
+    window.__towerTest.snapshot().layout.kind)),'gallery');
+  assert.ok((await galleryPage.evaluate(()=>
+    window.__towerTest.snapshot().activePortals)).includes('return_landing'));
+  await galleryPage.keyboard.press('f');
+  await galleryPage.waitForFunction(()=>
+    window.__towerTest.snapshot().roomKey==='west_landing_4');
+  await galleryPage.close();
+
   // Choosing a different Marauder must give the player that actual ECS
   // identity and remove their autonomous duplicate from the observer.
   await page.selectOption('#player-choice','james');
