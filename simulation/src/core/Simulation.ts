@@ -194,7 +194,7 @@ export type CommandResult =
   | { ok: false; reason: MoveRejection | BreakRejection | SocialRejection | DoorRejection | InspectRejection | QuestionRejection | SpellRejection | HelpRejection | DailyRejection | MeetingRejection | IntentionRejection | PointRejection | 'no_toilet_need' | 'wrong_toilet' |
       'not_urgent' | 'no_animal_signal' | 'not_partner' | 'no_sighting' |
       'animal_cannot_speak' | 'animal_action_unavailable' | 'listener_cannot_speak' |
-      'unknown_passage' | 'cannot_search_passages'; events: readonly [] };
+      'unknown_passage' | 'cannot_search_passages' | 'timed_action_in_progress'; events: readonly [] };
 
 export type DoorOptions = {
   door?: { key: string; label: string; open: boolean };
@@ -278,6 +278,8 @@ export function createSimulation() {
   let tick = 0;
   let worldClock = new WorldClock();
   let timedMovement: TimedWorldBridge | null = null;
+  // Only a timed arrival may commit its own active actor's room transition.
+  const timedArrivalActors=new Set<number>();
 
   function addNamedEntity(key: string, label: string): EntityId {
     if (keys.has(key)) throw new Error(`Duplicate entity key: ${key}`);
@@ -898,6 +900,8 @@ export function createSimulation() {
 
   function execute(command: Command): CommandResult {
     if (command.type === 'move') {
+      if(timedMovement?.hasActor(command.actor) && !timedArrivalActors.has(command.actor))
+        return {ok:false,reason:'timed_action_in_progress',events:[]};
       const from = currentRoom(command.actor);
       if(from!==null&&weightedPassages.get(pairKey(from,command.destination))?.hidden&&
          !knownHidden.get(command.actor)?.has(pairKey(from,command.destination)))
@@ -2338,8 +2342,11 @@ export function createSimulation() {
     room, roomInfo, character, fragileObject, connect, execute, step,
     createTimedMovement: () => {
       if (!timedMovement) {
-        timedMovement = new TimedWorldBridge(currentRoom,execute,
-          seconds => worldClock.advanceTo(seconds));
+        timedMovement = new TimedWorldBridge(currentRoom,command=>{
+          timedArrivalActors.add(command.actor);
+          try{return execute(command);}
+          finally{timedArrivalActors.delete(command.actor);}
+        },seconds => worldClock.advanceTo(seconds));
         timedMovement.advance(worldClock.nowSeconds());
       }
       return timedMovement;
