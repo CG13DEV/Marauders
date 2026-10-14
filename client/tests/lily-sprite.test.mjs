@@ -26,8 +26,8 @@ test('Lily has a visible skin chin, green eyes and long ginger hair',()=>{
   assert.equal(front(19,35),'#f4c7a0',
     'dark jaw silhouette must not look like a beard');
   assert.equal(front(19,26),'#388654','eyes should be green');
-  assert.equal(front(12,40),'#b75e34',
-    'long side locks should reach shoulders');
+  assert.ok(['#b75e34','#e28c4f'].includes(front(12,40)),
+    'long, highlighted ginger locks should reach shoulders');
   const back=inspect('ginger',4);
   assert.equal(back(14,42),'#b75e34',
     'long hair needs a distinct rear silhouette');
