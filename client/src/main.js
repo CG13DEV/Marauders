@@ -393,13 +393,13 @@ function openDorms(wing){
   if(roomKey!==graph.common.key){
     toast('Сначала нужно вернуться в гостиную.');return;
   }
-  if(!debugMode){
-    const reveal=living.submit({type:'survey_wing',wing});
-    if(!reveal.ok&&reveal.reason!=='already_explored'){
-      toast('Подойди к проходу у лестницы, чтобы рассмотреть двери.');
-      return;
-    }
+  const reveal=living.submit({type:'survey_wing',wing});
+  if(!reveal.ok&&reveal.reason!=='already_explored'){
+    toast('Подойди к проходу у лестницы, чтобы рассмотреть двери.');
+    return;
   }
+  updateLivingUi(living.snapshot());
+  updateHeader();
   dialogWing=wing;
   const isBoy=wing==='boys';
   $('dialog-title').textContent=isBoy?'Лестница мальчиков':'Лестница девочек';
@@ -670,6 +670,25 @@ if(inTestMode){
       canvasWidth:renderer.domElement.width
     }),
     submitPlayer:intent=>living.submit(intent),
+    // Real, incremental game-space walking; test convenience only.
+    driveTo:(points)=>{
+      for(const point of points){
+        for(let i=0;i<140;i++){
+          const dx=point.x-player.x,dz=point.z-player.z;
+          const distance=Math.hypot(dx,dz);
+          if(distance<.08)break;
+          const step=Math.min(.12,distance);
+          const before={x:player.x,z:player.z};
+          move(dx/distance*step,dz/distance*step);
+          if(Math.hypot(player.x-before.x,player.z-before.z)<1e-4)
+            throw Error('G2 test route blocked near '+JSON.stringify(before));
+        }
+        if(Math.hypot(point.x-player.x,point.z-player.z)>.08)
+          throw Error('G2 test route did not reach '+JSON.stringify(point));
+      }
+      avatar.group.position.set(player.x,0,player.z);
+      return living.snapshot().player;
+    },
     advanceLiving:()=>stepLiving(),
     advanceLivingSeconds:seconds=>advanceLivingSeconds(seconds)
   });
