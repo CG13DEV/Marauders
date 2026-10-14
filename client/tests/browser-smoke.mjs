@@ -132,7 +132,7 @@ try{
   assert.deepEqual(landing.openings.sort(),[
     'wall-slot:return','wall-slot:west_window','wall-slot:east_window'
   ].sort());
-  assert.deepEqual(landing.activePortals,['return']);
+  assert.deepEqual(landing.activePortals,['return','stair_gallery']);
   await page.screenshot({path:resolve('artifacts/landing.png'),
     animations:'disabled'});
   await page.evaluate(()=>window.__towerTest.driveTo([{x:0,z:-3.14}]));
