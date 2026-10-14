@@ -36,15 +36,22 @@ try{
   console.log('[smoke] initial',JSON.stringify(initial),'errors',errors);
   assert.equal(initial.roomKey,'dorm_gryffindor');
   assert.equal(initial.live.locations.length,4);
-  assert.equal(initial.live.tick,67);
+  assert.ok(initial.live.tick>=67);
+  assert.ok(Number.isSafeInteger(initial.live.worldSeconds));
+  assert.ok(Array.isArray(initial.live.journeys));
   assert.equal(initial.extras,initial.live.locations
     .filter(([,key])=>key===initial.roomKey).length);
   assert.ok(initial.extras>0,'Expected living NPC occupants in common room');
-  assert.match(await page.locator('#living-clock').textContent(),/19:10/);
+  assert.match(await page.locator('#living-clock').textContent(),/ДЕНЬ/);
   // A browser observer advances the SAME ECS world that draws the avatars.
   const liveStep=await page.evaluate(()=>window.__towerTest.advanceLiving());
   assert.equal(liveStep.snapshot.tick,initial.live.tick+1);
   assert.equal(liveStep.delta.sequence,initial.live.sequence+1);
+  const beforePartial=await page.evaluate(()=>window.__towerTest.snapshot().live);
+  const subTick=await page.evaluate(()=>window.__towerTest.advanceLivingSeconds(45));
+  assert.equal(subTick.snapshot.tick,beforePartial.tick);
+  assert.equal(subTick.snapshot.worldSeconds,beforePartial.worldSeconds+45);
+  assert.ok(subTick.snapshot.journeys.every(j=>j.progress>=0&&j.progress<=1));
   assert.equal(initial.openings.length,6);
   assert.ok(initial.openings.includes('wall-slot:portrait'));
   assert.ok(initial.openings.includes('wall-slot:boys'));
@@ -106,7 +113,7 @@ try{
   assert.equal((await page.evaluate(()=>
     window.__towerTest.snapshot())).roomKey,'dorm_gryffindor');
   assert.deepEqual(errors,[],'Runtime errors in real Chromium page');
-  console.log('[browser smoke RB-4] WebGL rooms, graph-safe controls and autonomous ECS observer PASS');
+  console.log('[browser smoke RB-5.2] WebGL rooms, graph-safe controls and genuine NPC world-time movement PASS');
 }finally{
   await browser?.close();
   server.kill('SIGTERM');

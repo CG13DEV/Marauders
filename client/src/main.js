@@ -38,11 +38,14 @@ let stage=null,pendingPortal=null,target=null;
 const player={x:STARTS.common.x,z:STARTS.common.z,facing:0,walking:false};
 const avatar=createAvatar();scene.add(avatar.group);
 const living=createLivingRoom(graph);
+const inTestMode=new URLSearchParams(window.location.search).has('testMode');
 const standIns=[]; // presentation of actual ECS NPCs; never a decision source
 const keys=new Set();
 let lastView=-1,toastTimeout=null,interact=null,dialogWing=null;
 const clock=new THREE.Clock();
-const LIVING_STEP_MS=3600; // timer-driven; not tied to rendered frame count
+// A real-time timer advances authority independently of WebGL rendering.
+const GAME_SECONDS_PER_REAL_SECOND=30; // 10 min/game tick every 20 real seconds
+let livingLastAt=performance.now(),livingFraction=0;
 const ray=new THREE.Raycaster();
 const plane=new THREE.Plane(new THREE.Vector3(0,1,0),-.10);
 
@@ -120,7 +123,8 @@ function addLivingSprite(key,point){
   const sprite=createAvatar({variant:definition.variant,scale:.96});
   sprite.group.position.set(point.x,0,point.z);
   scene.add(sprite.group);
-  const actor={key,sprite,x:point.x,z:point.z,facing:0,walking:false,motion:null};
+  const actor={key,sprite,x:point.x,z:point.z,facing:0,walking:false,
+    journeyKey:null,journeyStart:null};
   standIns.push(actor);return actor;
 }
 function rebuildLivingSprites(){
@@ -149,23 +153,19 @@ function scheduleLivingMovement(move){
   if(!stage)return;
   const {actor:actorKey,from,to}=move;
   if(from===roomKey && to!==roomKey){
+    // Arrival at the next ECS room is authoritative; never delay it just
+    // to finish a local decorative animation.
     const actor=standIns.find(x=>x.key===actorKey);
-    if(!actor)return;
-    actor.motion={elapsed:0,seconds:2.9,depart:true,
-      from:{x:actor.x,z:actor.z},to:entryPoint(from,to,actorKey)};
+    if(actor){scene.remove(actor.sprite.group);actor.sprite.dispose();
+      standIns.splice(standIns.indexOf(actor),1);}
   }else if(to===roomKey && from!==roomKey){
-    // All arrivals must originate in a successful, authoritative ECS event.
-    const old=standIns.find(x=>x.key===actorKey);
-    if(old){scene.remove(old.sprite.group);old.sprite.dispose();
-      standIns.splice(standIns.indexOf(old),1);}
-    const entry=entryPoint(from,to,actorKey);
-    const actor=addLivingSprite(actorKey,entry);
-    if(actor)actor.motion={elapsed:0,seconds:2.9,depart:false,
-      from:entry,to:positionForActor(actorKey)};
+    if(standIns.some(x=>x.key===actorKey))return;
+    addLivingSprite(actorKey,entryPoint(from,to,actorKey));
   }
 }
+
 function updateLivingUi(snapshot){
-  $('living-clock').textContent='ДЕНЬ '+(Math.floor((snapshot.tick*10+480)/1440)+1)+
+  $('living-clock').textContent='ДЕНЬ '+(Math.floor((snapshot.worldSeconds/60+480)/1440)+1)+
     ' · '+snapshot.clock;
   const locals=snapshot.locations.filter(([,room])=>room===roomKey).length;
   $('living-population').textContent=locals+' В КОМНАТЕ / 4 NPC';
@@ -178,32 +178,39 @@ function updateLivingUi(snapshot){
       'Жители следуют расписанию; ожидаем наблюдаемого события…';log.append(p);
   }
 }
-function stepLiving(){
-  const result=living.advance();
+function paintLivingChange(result){
   for(const movement of result.delta.movements)scheduleLivingMovement(movement);
   updateLivingUi(result.snapshot);
   return result;
 }
+function stepLiving(){
+  // Diagnostic: advance to the next academic decision boundary.
+  return paintLivingChange(living.advance());
+}
+function advanceLivingSeconds(seconds){
+  return paintLivingChange(living.advanceSeconds(seconds));
+}
 function animateLiving(dt){
-  for(let i=standIns.length-1;i>=0;i--){
-    const actor=standIns[i];
-    const motion=actor.motion;
-    if(motion){
-      motion.elapsed=Math.min(motion.seconds,motion.elapsed+dt);
-      const a=motion.elapsed/motion.seconds;
-      const eased=a*a*(3-2*a);
-      const dx=motion.to.x-actor.x,dz=motion.to.z-actor.z;
-      actor.x=motion.from.x+(motion.to.x-motion.from.x)*eased;
-      actor.z=motion.from.z+(motion.to.z-motion.from.z)*eased;
-      if(Math.hypot(dx,dz)>.001)actor.facing=Math.atan2(dx,dz);
-      actor.walking=a<1;
-      if(a>=1){
-        actor.motion=null;
-        if(motion.depart){
-          scene.remove(actor.sprite.group);actor.sprite.dispose();
-          standIns.splice(i,1);continue;
-        }
+  const journeys=new Map(living.snapshot().journeys.map(j=>[j.actor,j]));
+  for(const actor of standIns){
+    const leg=journeys.get(actor.key);
+    if(leg && leg.from===roomKey){
+      const key=leg.from+'→'+leg.to;
+      if(actor.journeyKey!==key){
+        actor.journeyKey=key;
+        actor.journeyStart={x:actor.x,z:actor.z};
       }
+      // RB-5.2: the progress value comes solely from RB-3/WorldClock.
+      // Render sampling cannot advance a character's authoritative position.
+      const target=entryPoint(leg.from,leg.to,actor.key);
+      const x=actor.journeyStart.x+(target.x-actor.journeyStart.x)*leg.progress;
+      const z=actor.journeyStart.z+(target.z-actor.journeyStart.z)*leg.progress;
+      const dx=target.x-actor.journeyStart.x,dz=target.z-actor.journeyStart.z;
+      actor.x=x;actor.z=z;
+      if(Math.hypot(dx,dz)>.001)actor.facing=Math.atan2(dx,dz);
+      actor.walking=!leg.paused&&leg.progress<1;
+    }else{
+      actor.walking=false;actor.journeyKey=null;actor.journeyStart=null;
     }
     actor.sprite.group.position.set(actor.x,0,actor.z);
     actor.sprite.update(dt,actor.walking,actor.facing,yaw);
@@ -463,11 +470,27 @@ function tick(){
 rebuildScene();calculateCamera();
 updateLivingUi(living.snapshot());
 renderer.setAnimationLoop(tick);
-const livingTimer=setInterval(stepLiving,LIVING_STEP_MS);
-window.addEventListener('pagehide',()=>clearInterval(livingTimer));
+const livingTimer=inTestMode?null:setInterval(()=>{
+  const now=performance.now();
+  const realSeconds=Math.max(0,Math.min(.5,(now-livingLastAt)/1000));
+  livingLastAt=now;
+  if(document.hidden)return;
+  livingFraction+=realSeconds*GAME_SECONDS_PER_REAL_SECOND;
+  const seconds=Math.floor(livingFraction);
+  if(seconds>0){
+    livingFraction-=seconds;
+    advanceLivingSeconds(seconds);
+  }
+},90);
+document.addEventListener('visibilitychange',()=>{
+  livingLastAt=performance.now();
+});
+window.addEventListener('pagehide',()=>{
+  if(livingTimer!==null)clearInterval(livingTimer);
+});
 // Opt-in browser smoke diagnostics; no access to the simulation, network,
 // credentials or hidden NPC state. Production default exposes nothing.
-if(new URLSearchParams(window.location.search).has('testMode')){
+if(inTestMode){
   window.__towerTest=Object.freeze({
     snapshot:()=>Object.freeze({
       player:Object.freeze({x:player.x,z:player.z}),
@@ -482,7 +505,8 @@ if(new URLSearchParams(window.location.search).has('testMode')){
       frames:renderedFrames,
       canvasWidth:renderer.domElement.width
     }),
-    advanceLiving:()=>stepLiving()
+    advanceLiving:()=>stepLiving(),
+    advanceLivingSeconds:seconds=>advanceLivingSeconds(seconds)
   });
 }
 if(window.Telegram?.WebApp){

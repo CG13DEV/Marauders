@@ -118,3 +118,7 @@ NPC world.
 Simple local circular collision and direct walk-to-point are client-only
 prototyping physics and must not be mistaken for authoritative simulation
 or multi-room character pathfinding.
+
+## RB-5.2 · Authoritative seconds
+
+The four experimental NPCs now use the opt-in RB-5.1 world-clock travel path. Their walking sprite samples ECS/bridge progress rather than replaying arrival events after a fixed delay. See [RB-5.2](../docs/technical/experiment-rb-5-2-visual-observer.md). The browser micro-world still does not simulate collision-safe continuous floor position or in-progress persistent saves.
