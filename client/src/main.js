@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import graph from './tower-graph.generated.json';
 import {createAvatar} from './sprites.js';
+import {createLivingRoom,LIVING_ACTORS} from './living-room.js';
 import {buildStage} from './stage.js';
 import {STARTS,safeSpawn,moveWithCollision,keyForControl} from './movement.js';
 import './style.css';
@@ -36,10 +37,12 @@ for(const [a,b] of graph.links){
 let stage=null,pendingPortal=null,target=null;
 const player={x:STARTS.common.x,z:STARTS.common.z,facing:0,walking:false};
 const avatar=createAvatar();scene.add(avatar.group);
-const standIns=[]; // presentation-only students; NOT simulated NPCs
+const living=createLivingRoom(graph);
+const standIns=[]; // presentation of actual ECS NPCs; never a decision source
 const keys=new Set();
 let lastView=-1,toastTimeout=null,interact=null,dialogWing=null;
 const clock=new THREE.Clock();
+const LIVING_STEP_MS=3600; // timer-driven; not tied to rendered frame count
 const ray=new THREE.Raycaster();
 const plane=new THREE.Plane(new THREE.Vector3(0,1,0),-.10);
 
@@ -58,7 +61,7 @@ function labelFor(room){
 }
 function detailFor(room){
   if(room.key===graph.common.key)
-    return 'Камин, проходы в стенах и три тестовых спрайта (пока без ИИ).';
+    return 'Четыре автономных ученика из отдельной ECS-микросимуляции. Решения принимает мир.';
   if(room.key===graph.landing.key)
     return 'С лестницы замка — по каменной площадке к портрету Толстой дамы.';
   if(room.type==='legacy')
@@ -97,22 +100,116 @@ function rebuildScene(){
   // A fresh room inherits the current camera orientation and cutaway.
   stage.setCameraYaw(yaw);
   avatar.group.position.set(player.x,0,player.z);
-  if(roomKey===graph.common.key){
-    // Three local sprite stand-ins let us judge scale, silhouettes and
-    // all eight view directions; NO fabricated ECS simulation behaviour.
-    for(const sample of [
-      {variant:'ginger',x:-4.7,z:3.9,facing:1.5},
-      {variant:'dark',x:4.5,z:4.1,facing:-1.1},
-      {variant:'blond',x:.4,z:-4.8,facing:-2.5}
-    ]){
-      const sprite=createAvatar({variant:sample.variant,scale:.96});
-      sprite.group.position.set(sample.x,0,sample.z);
-      scene.add(sprite.group);
-      standIns.push({...sample,sprite});
-    }
-  }
+  rebuildLivingSprites();
   updateHeader();
 }
+
+const ACTOR_POINTS=[
+  {x:-4.7,z:3.9},{x:4.5,z:4.1},{x:.4,z:-4.8},{x:-2.5,z:-1.8}
+];
+function actorDefinition(key){return LIVING_ACTORS.find(actor=>actor.key===key);}
+function positionForActor(key){
+  const index=LIVING_ACTORS.findIndex(actor=>actor.key===key);
+  const pref=roomKey===graph.common.key?ACTOR_POINTS[index]??STARTS.common:
+    roomKey===graph.landing.key?STARTS.landing:STARTS.bedroom;
+  return safeSpawn(stage,pref);
+}
+function addLivingSprite(key,point){
+  const definition=actorDefinition(key);
+  if(!definition)return null;
+  const sprite=createAvatar({variant:definition.variant,scale:.96});
+  sprite.group.position.set(point.x,0,point.z);
+  scene.add(sprite.group);
+  const actor={key,sprite,x:point.x,z:point.z,facing:0,walking:false,motion:null};
+  standIns.push(actor);return actor;
+}
+function rebuildLivingSprites(){
+  const occupants=living.snapshot().locations
+    .filter(([,location])=>location===roomKey).map(([key])=>key);
+  for(const key of occupants)addLivingSprite(key,positionForActor(key));
+}
+function entryPoint(from,to,actorKey){
+  if(!stage)return {x:0,z:0};
+  const fromRoom=byKey.get(from),toRoom=byKey.get(to);
+  const portal=stage.portals.find(p=>{
+    if(from===roomKey && to===graph.landing.key)return p.kind==='outside';
+    if(to===roomKey && from===graph.landing.key)return p.kind==='outside'||p.kind==='return';
+    if(from===roomKey && to===graph.common.key)return p.kind==='return';
+    if(to===roomKey && from===graph.common.key)return p.kind==='return'||p.kind==='wing';
+    if((from===roomKey||to===roomKey) &&
+       (fromRoom?.wing||toRoom?.wing))return p.kind==='wing' &&
+         p.wing===(from===roomKey?toRoom?.wing:fromRoom?.wing);
+    return false;
+  }) ?? stage.portals.find(p=>p.kind==='return'||p.kind==='outside');
+  if(!portal)return positionForActor(actorKey);
+  // The opening is physical architecture; stop inside it, not beyond a wall.
+  return safeSpawn(stage,{x:portal.x*.82,z:portal.z*.82});
+}
+function scheduleLivingMovement(move){
+  if(!stage)return;
+  const {actor:actorKey,from,to}=move;
+  if(from===roomKey && to!==roomKey){
+    const actor=standIns.find(x=>x.key===actorKey);
+    if(!actor)return;
+    actor.motion={elapsed:0,seconds:2.9,depart:true,
+      from:{x:actor.x,z:actor.z},to:entryPoint(from,to,actorKey)};
+  }else if(to===roomKey && from!==roomKey){
+    // All arrivals must originate in a successful, authoritative ECS event.
+    const old=standIns.find(x=>x.key===actorKey);
+    if(old){scene.remove(old.sprite.group);old.sprite.dispose();
+      standIns.splice(standIns.indexOf(old),1);}
+    const entry=entryPoint(from,to,actorKey);
+    const actor=addLivingSprite(actorKey,entry);
+    if(actor)actor.motion={elapsed:0,seconds:2.9,depart:false,
+      from:entry,to:positionForActor(actorKey)};
+  }
+}
+function updateLivingUi(snapshot){
+  $('living-clock').textContent='ДЕНЬ '+(Math.floor((snapshot.tick*10+480)/1440)+1)+
+    ' · '+snapshot.clock;
+  const locals=snapshot.locations.filter(([,room])=>room===roomKey).length;
+  $('living-population').textContent=locals+' В КОМНАТЕ / 4 NPC';
+  const log=$('living-events');log.replaceChildren();
+  for(const line of snapshot.recent){
+    const p=document.createElement('p');p.textContent=line;log.append(p);
+  }
+  if(!snapshot.recent.length){
+    const p=document.createElement('p');p.textContent=
+      'Жители следуют расписанию; ожидаем наблюдаемого события…';log.append(p);
+  }
+}
+function stepLiving(){
+  const result=living.advance();
+  for(const movement of result.delta.movements)scheduleLivingMovement(movement);
+  updateLivingUi(result.snapshot);
+  return result;
+}
+function animateLiving(dt){
+  for(let i=standIns.length-1;i>=0;i--){
+    const actor=standIns[i];
+    const motion=actor.motion;
+    if(motion){
+      motion.elapsed=Math.min(motion.seconds,motion.elapsed+dt);
+      const a=motion.elapsed/motion.seconds;
+      const eased=a*a*(3-2*a);
+      const dx=motion.to.x-actor.x,dz=motion.to.z-actor.z;
+      actor.x=motion.from.x+(motion.to.x-motion.from.x)*eased;
+      actor.z=motion.from.z+(motion.to.z-motion.from.z)*eased;
+      if(Math.hypot(dx,dz)>.001)actor.facing=Math.atan2(dx,dz);
+      actor.walking=a<1;
+      if(a>=1){
+        actor.motion=null;
+        if(motion.depart){
+          scene.remove(actor.sprite.group);actor.sprite.dispose();
+          standIns.splice(i,1);continue;
+        }
+      }
+    }
+    actor.sprite.group.position.set(actor.x,0,actor.z);
+    actor.sprite.update(dt,actor.walking,actor.facing,yaw);
+  }
+}
+
 function enter(next){
   if(next===roomKey)return;
   if(!adjacent.get(roomKey)?.has(next)){
@@ -350,7 +447,8 @@ function tick(){
   }
   avatar.group.position.set(player.x,0,player.z);
   const frame=avatar.update(dt,moving,player.facing,yaw);
-  for(const actor of standIns)actor.sprite.update(dt,false,actor.facing,yaw);
+  // The renderer ONLY paints validated observer data.
+  animateLiving(dt);
   if(frame!==lastView){lastView=frame;
     $('sprite-facing').textContent='РАКУРС '+(frame+1)+' / 8';}
   $('heading-rose').style.transform='rotate('+(-yaw*180/Math.PI)+'deg)';
@@ -363,7 +461,10 @@ function tick(){
   renderer.render(scene,camera);
 }
 rebuildScene();calculateCamera();
+updateLivingUi(living.snapshot());
 renderer.setAnimationLoop(tick);
+const livingTimer=setInterval(stepLiving,LIVING_STEP_MS);
+window.addEventListener('pagehide',()=>clearInterval(livingTimer));
 // Opt-in browser smoke diagnostics; no access to the simulation, network,
 // credentials or hidden NPC state. Production default exposes nothing.
 if(new URLSearchParams(window.location.search).has('testMode')){
@@ -371,6 +472,8 @@ if(new URLSearchParams(window.location.search).has('testMode')){
     snapshot:()=>Object.freeze({
       player:Object.freeze({x:player.x,z:player.z}),
       roomKey,extras:standIns.length,
+      live:living.snapshot(),
+      visibleActors:standIns.map(actor=>({key:actor.key,x:actor.x,z:actor.z})),
       openings:stage?.group.children
         .filter(o=>o.name.startsWith('wall-slot:')).map(o=>o.name),
       cameraYaw:yaw,
@@ -378,7 +481,8 @@ if(new URLSearchParams(window.location.search).has('testMode')){
       activePortals:stage?.portals.map(p=>p.kind),
       frames:renderedFrames,
       canvasWidth:renderer.domElement.width
-    })
+    }),
+    advanceLiving:()=>stepLiving()
   });
 }
 if(window.Telegram?.WebApp){

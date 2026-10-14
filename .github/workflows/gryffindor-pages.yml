@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - 'client/**'
+      - 'simulation/src/core/**'
       - 'simulation/src/scenarios/castle-layout.ts'
       - 'simulation/src/scenarios/school-week.ts'
       - 'simulation/src/scenarios/school-population.ts'
@@ -11,6 +12,7 @@ on:
     branches: [main]
     paths:
       - 'client/**'
+      - 'simulation/src/core/**'
       - 'simulation/src/scenarios/castle-layout.ts'
       - 'simulation/src/scenarios/school-week.ts'
       - 'simulation/src/scenarios/school-population.ts'
@@ -24,7 +26,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   build:
-    name: Generate graph, test and build Three.js
+    name: Test living ECS, graph and build Three.js
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -71,7 +73,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: tower-04-spatial-coherence-screenshots
+          name: rb-4-living-room-screenshots
           path: client/artifacts/*.png
           if-no-files-found: ignore
       - name: Setup Pages
