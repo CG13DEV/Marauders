@@ -15,6 +15,15 @@ export class ActionTimeline {
     this.active.set(actor,{goal,legs:legs.map(l=>({...l})),index:0,start:this.time,elapsed:0,paused:false});
     this.log.push({at:this.time,actor,kind:'start',room:legs[0]!.from});
   }
+  nextArrival(){
+    let next=Infinity;
+    for(const j of this.active.values())if(!j.paused)
+      next=Math.min(next,j.start+j.legs[j.index]!.seconds-j.elapsed);
+    return Number.isFinite(next)?next:null;
+  }
+  cancel(actor:string){
+    return this.active.delete(actor);
+  }
   advance(until:number){
     if(!Number.isSafeInteger(until)||until<this.time)throw Error('Invalid time');
     while(true){

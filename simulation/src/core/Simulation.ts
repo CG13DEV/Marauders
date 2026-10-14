@@ -1,3 +1,5 @@
+import {TimedWorldBridge} from './timed-world-bridge.ts';
+import {WorldClock} from './world-clock.ts';
 import {
   addComponent,
   addEntity,
@@ -192,7 +194,7 @@ export type CommandResult =
   | { ok: false; reason: MoveRejection | BreakRejection | SocialRejection | DoorRejection | InspectRejection | QuestionRejection | SpellRejection | HelpRejection | DailyRejection | MeetingRejection | IntentionRejection | PointRejection | 'no_toilet_need' | 'wrong_toilet' |
       'not_urgent' | 'no_animal_signal' | 'not_partner' | 'no_sighting' |
       'animal_cannot_speak' | 'animal_action_unavailable' | 'listener_cannot_speak' |
-      'unknown_passage' | 'cannot_search_passages'; events: readonly [] };
+      'unknown_passage' | 'cannot_search_passages' | 'timed_action_in_progress'; events: readonly [] };
 
 export type DoorOptions = {
   door?: { key: string; label: string; open: boolean };
@@ -274,6 +276,10 @@ export function createSimulation() {
     toiletNeeds,patrolPlans
   } = createRuntimeStores();
   let tick = 0;
+  let worldClock = new WorldClock();
+  let timedMovement: TimedWorldBridge | null = null;
+  // Only a timed arrival may commit its own active actor's room transition.
+  const timedArrivalActors=new Set<number>();
 
   function addNamedEntity(key: string, label: string): EntityId {
     if (keys.has(key)) throw new Error(`Duplicate entity key: ${key}`);
@@ -894,6 +900,8 @@ export function createSimulation() {
 
   function execute(command: Command): CommandResult {
     if (command.type === 'move') {
+      if(timedMovement?.hasActor(command.actor) && !timedArrivalActors.has(command.actor))
+        return {ok:false,reason:'timed_action_in_progress',events:[]};
       const from = currentRoom(command.actor);
       if(from!==null&&weightedPassages.get(pairKey(from,command.destination))?.hidden&&
          !knownHidden.get(command.actor)?.has(pairKey(from,command.destination)))
@@ -1825,7 +1833,14 @@ export function createSimulation() {
       routine: HasRoutine, dailyLife: HasDailyLife
     };
     const decisions=runWorldStep({
-      advanceClock: () => schoolTime(++tick).absoluteMinute,
+      advanceClock: () => {
+        const next = (tick + 1) * 600;
+        if (worldClock.nowSeconds() > next) throw Error('Timed world is ahead of school step');
+        timedMovement?.advance(next);
+        worldClock.advanceTo(next);
+        tick++;
+        return worldClock.absoluteMinute();
+      },
       actors: trait => Array.from(query(ecs, [Character, agentComponents[trait]])),
       has: (actor, flag) => hasComponent(ecs, actor, flags[flag]),
       visibleFragiles: room => Array.from(query(ecs, [Fragile, LocatedIn(room)])),
@@ -2018,6 +2033,11 @@ export function createSimulation() {
       ]);
   }
   function captureRuntime(): RuntimeSnapshot {
+    // RuntimeSnapshot v2 stores whole school ticks, not in-flight sub-tick
+    // journeys. Reject an incomplete checkpoint instead of silently losing
+    // actor progress or a partial-minute world clock on hydrate.
+    if(timedMovement?.hasInFlight() || worldClock.nowSeconds()!==tick*600)
+      throw Error('Timed world is not at a checkpoint boundary');
     const characters = Array.from(query(ecs, [Character]));
     const traitFlags = (actor: EntityId): StateFlags => ({
       vision: hasComponent(ecs, actor, Vision),
@@ -2311,10 +2331,27 @@ export function createSimulation() {
     events.length=0;
     for(const event of state.events)events.push(event);
     tick = state.tick;
+    worldClock = new WorldClock(tick * 600);
+    // Existing bridge references belong to the pre-restore timeline and
+    // must never commit movement into this restored ECS state.
+    timedMovement?.invalidate();
+    timedMovement = null;
   }
 
   return {
     room, roomInfo, character, fragileObject, connect, execute, step,
+    createTimedMovement: () => {
+      if (!timedMovement) {
+        timedMovement = new TimedWorldBridge(currentRoom,command=>{
+          timedArrivalActors.add(command.actor);
+          try{return execute(command);}
+          finally{timedArrivalActors.delete(command.actor);}
+        },seconds => worldClock.advanceTo(seconds));
+        timedMovement.advance(worldClock.nowSeconds());
+      }
+      return timedMovement;
+    },
+    worldSeconds: () => worldClock.nowSeconds(),
     configureToilet,toiletState,configurePatrol,patrolState,
     registerHouse, grantPointAuthority, houseOf, housePoints, pointHistory,
     knownPointNews, pointReactions,
