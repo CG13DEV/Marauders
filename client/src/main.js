@@ -108,7 +108,6 @@ function rebuildScene(){
 }
 
 // Room coordinates are world-data from the micro-space simulator.
-const ACTOR_POINTS=[];
 function actorDefinition(key){return LIVING_ACTORS.find(actor=>actor.key===key);}
 function positionForActor(key){
   const local=living.snapshot().activities.find(a=>a.actor===key);
@@ -187,7 +186,7 @@ function scheduleLivingMovement(move){
 }
 
 function updateLivingUi(snapshot){
-  $('living-clock').textContent='ДЕНЬ '+(Math.floor((snapshot.worldSeconds/60+480)/1440)+1)+
+  $('living-clock').textContent='ДЕНЬ '+(Math.floor(snapshot.worldSeconds/86400)+1)+
     ' · '+snapshot.clock;
   const locals=snapshot.locations.filter(([,room])=>room===roomKey).length;
   $('living-population').textContent=locals+' В КОМНАТЕ / 4 NPC';
