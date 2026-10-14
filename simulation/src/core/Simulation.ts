@@ -2029,6 +2029,11 @@ export function createSimulation() {
       ]);
   }
   function captureRuntime(): RuntimeSnapshot {
+    // RuntimeSnapshot v2 stores whole school ticks, not in-flight sub-tick
+    // journeys. Reject an incomplete checkpoint instead of silently losing
+    // actor progress or a partial-minute world clock on hydrate.
+    if(timedMovement?.hasInFlight() || worldClock.nowSeconds()!==tick*600)
+      throw Error('Timed world is not at a checkpoint boundary');
     const characters = Array.from(query(ecs, [Character]));
     const traitFlags = (actor: EntityId): StateFlags => ({
       vision: hasComponent(ecs, actor, Vision),
@@ -2323,6 +2328,10 @@ export function createSimulation() {
     for(const event of state.events)events.push(event);
     tick = state.tick;
     worldClock = new WorldClock(tick * 600);
+    // Existing bridge references belong to the pre-restore timeline and
+    // must never commit movement into this restored ECS state.
+    timedMovement?.invalidate();
+    timedMovement = null;
   }
 
   return {
