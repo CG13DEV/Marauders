@@ -12,6 +12,19 @@ export class TimedWorldBridge {
   private routes=new Map<number,{legs:TimedMove[];committed:number}>();
   private commits:CommittedMove[]=[];
   private processedEvents=0;
+  private disabled=false;
+  /** Checkpoint v2 has no sub-tick journeys. Never serialize a moving world. */
+  hasInFlight(){return this.routes.size>0;}
+  /**
+   * A restored ECS world has a new timeline epoch. Old bridge references
+   * must not be allowed to issue commands against that restored world.
+   */
+  invalidate(){
+    this.disabled=true;
+    for(const actor of this.routes.keys())this.clock.cancel(String(actor));
+    this.routes.clear();
+  }
+  private ensureLive(){if(this.disabled)throw Error('Timed movement bridge invalidated by restore');}
   private readonly currentRoom:(actor:number)=>number|null;
   private readonly execute:(command:Command)=>CommandResult;
   private readonly onAdvance?:(seconds:number)=>void;
@@ -23,6 +36,7 @@ export class TimedWorldBridge {
     this.onAdvance=onAdvance;
   }
   begin(actor:number,goal:number,legs:readonly TimedMove[]){
+    this.ensureLive();
     if(!legs.length||legs[0]!.from!==this.currentRoom(actor)||
       legs.at(-1)!.to!==goal||legs.some((l,i)=>i>0&&legs[i-1]!.to!==l.from))
       throw Error('Invalid physical route');
@@ -32,6 +46,7 @@ export class TimedWorldBridge {
     this.routes.set(actor,{legs:legs.map(l=>({...l})),committed:0});
   }
   advance(until:number){
+    this.ensureLive();
     if(!Number.isSafeInteger(until)||until<this.clock.now())throw Error('Invalid time');
     while(true){
       const next=this.clock.nextArrival();
@@ -68,8 +83,8 @@ export class TimedWorldBridge {
       }else if(route.committed===route.legs.length)this.routes.delete(actor);
     }
   }
-  interrupt(actor:number){this.clock.interrupt(String(actor));}
-  resume(actor:number){this.clock.resume(String(actor));}
-  observe(actor:number){return this.clock.observe(String(actor));}
+  interrupt(actor:number){this.ensureLive();this.clock.interrupt(String(actor));}
+  resume(actor:number){this.ensureLive();this.clock.resume(String(actor));}
+  observe(actor:number){this.ensureLive();return this.clock.observe(String(actor));}
   events(){return this.commits.map(e=>({...e}));}
 }
