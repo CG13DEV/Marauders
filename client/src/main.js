@@ -42,8 +42,7 @@ const standIns=[]; // presentation of actual ECS NPCs; never a decision source
 const keys=new Set();
 let lastView=-1,toastTimeout=null,interact=null,dialogWing=null;
 const clock=new THREE.Clock();
-let livingElapsed=0;
-const LIVING_STEP_SECONDS=3.6; // each step advances ten GAME minutes
+const LIVING_STEP_MS=3600; // timer-driven; not tied to rendered frame count
 const ray=new THREE.Raycaster();
 const plane=new THREE.Plane(new THREE.Vector3(0,1,0),-.10);
 
@@ -448,12 +447,7 @@ function tick(){
   }
   avatar.group.position.set(player.x,0,player.z);
   const frame=avatar.update(dt,moving,player.facing,yaw);
-  // ECS steps happen independently of camera frames, input and visibility.
-  livingElapsed+=dt;
-  if(livingElapsed>=LIVING_STEP_SECONDS){
-    livingElapsed-=LIVING_STEP_SECONDS;
-    stepLiving();
-  }
+  // The renderer ONLY paints validated observer data.
   animateLiving(dt);
   if(frame!==lastView){lastView=frame;
     $('sprite-facing').textContent='РАКУРС '+(frame+1)+' / 8';}
@@ -469,6 +463,8 @@ function tick(){
 rebuildScene();calculateCamera();
 updateLivingUi(living.snapshot());
 renderer.setAnimationLoop(tick);
+const livingTimer=setInterval(stepLiving,LIVING_STEP_MS);
+window.addEventListener('pagehide',()=>clearInterval(livingTimer));
 // Opt-in browser smoke diagnostics; no access to the simulation, network,
 // credentials or hidden NPC state. Production default exposes nothing.
 if(new URLSearchParams(window.location.search).has('testMode')){
