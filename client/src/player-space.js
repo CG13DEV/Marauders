@@ -6,9 +6,11 @@
  */
 import {STARTS} from './movement.js';
 import {LANDING_BOUNDS} from './layout-landing.js';
+import {GALLERY_BOUNDS,GALLERY_RETURN} from './layout-gallery.js';
 
 export const CUP_SPOT=Object.freeze({x:0,z:0});
 const ROOT_ROOM=Object.freeze({x:0,z:7.9});
+const STAIR_TO_GALLERY=Object.freeze({x:0,z:3.85});
 const STAIR_SPOTS=Object.freeze({
   boys:{x:-7.9,z:0},girls:{x:7.9,z:0}
 });
@@ -22,7 +24,8 @@ export function createPlayerSpace({graph,playerHome,walkableCommon}){
   const surveyedWings=new Set();
   const visited=new Set([room]);
 
-  const rooms=new Map([graph.common,graph.landing,...graph.research,...graph.legacy]
+  const rooms=new Map([graph.common,graph.landing,graph.gallery,
+    ...graph.research,...graph.legacy]
     .map(r=>[r.key,r]));
 
   function walkableAt(key,p){
@@ -30,6 +33,9 @@ export function createPlayerSpace({graph,playerHome,walkableCommon}){
     if(key===graph.landing.key)
       return p.x>=LANDING_BOUNDS.minX&&p.x<=LANDING_BOUNDS.maxX&&
         p.z>=LANDING_BOUNDS.minZ&&p.z<=LANDING_BOUNDS.maxZ;
+    if(key===graph.gallery.key)
+      return p.x>=GALLERY_BOUNDS.minX&&p.x<=GALLERY_BOUNDS.maxX&&
+        p.z>=GALLERY_BOUNDS.minZ&&p.z<=GALLERY_BOUNDS.maxZ;
     return Math.hypot(p.x,p.z)<=6.45;
   }
   function walk(dx,dz){
@@ -47,6 +53,10 @@ export function createPlayerSpace({graph,playerHome,walkableCommon}){
     return {ok:true,position:{...position}};
   }
   function portalFor(destination){
+    if(room===graph.landing.key&&destination===graph.gallery.key)
+      return STAIR_TO_GALLERY;
+    if(room===graph.gallery.key&&destination===graph.landing.key)
+      return GALLERY_RETURN;
     if(room===graph.common.key){
       if(destination===graph.landing.key)return ROOT_ROOM;
       const target=rooms.get(destination);
@@ -66,7 +76,8 @@ export function createPlayerSpace({graph,playerHome,walkableCommon}){
     if(!rooms.has(next))throw Error('Unknown physical room');
     room=next;visited.add(next);knownRooms.add(next);
     const start=room===graph.common.key?STARTS.common:
-      room===graph.landing.key?STARTS.landing:STARTS.bedroom;
+      room===graph.landing.key?STARTS.landing:
+      room===graph.gallery.key?STARTS.gallery:STARTS.bedroom;
     position={...start};
   }
   function survey(wing){
@@ -80,6 +91,14 @@ export function createPlayerSpace({graph,playerHome,walkableCommon}){
     for(const key of roomsSeen)knownRooms.add(key);
     return {ok:true,roomsSeen};
   }
+  function surveyGallery(){
+    if(room!==graph.landing.key||!within(position,STAIR_TO_GALLERY,2.35))
+      return {ok:false,reason:'not_in_reach'};
+    if(knownRooms.has(graph.gallery.key))
+      return {ok:false,reason:'already_explored'};
+    knownRooms.add(graph.gallery.key);
+    return {ok:true,room:graph.gallery.key};
+  }
   function view(exits){
     return {
       position:{...position},visited:[...visited].sort(),
@@ -90,7 +109,7 @@ export function createPlayerSpace({graph,playerHome,walkableCommon}){
     };
   }
   return Object.freeze({
-    walk,canCross,enter,survey,view,
+    walk,canCross,enter,survey,surveyGallery,view,
     canReachCup:()=>room===graph.common.key&&within(position,CUP_SPOT,1.85),
     knows:key=>knownRooms.has(key),
     current:()=>room
