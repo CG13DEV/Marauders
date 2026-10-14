@@ -53,6 +53,9 @@ export type SchedulerContext = {
     import('./weighted-navigation.ts').WeightedRoute|null;
   usesUnifiedTravel(actor:EntityId):boolean;
   execute(command: Command): CommandResult;
+  /** RB-5.1: opt-in actors commit passages only after timed arrival. */
+  isTimedActor?(actor:EntityId):boolean;
+  scheduleTimedMove?(actor:EntityId,from:EntityId,to:EntityId):CommandResult;
   currentRoom(actor: EntityId): EntityId | null;
   occupants(room: EntityId): EntityId[];
   canAnswerWitnessQuestion(actor:EntityId):boolean;
@@ -148,6 +151,20 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
         :((hops=>hops===null?null:hops*10)(shortestHops(from,to,exits)));
     const travelTo=(actor:number,from:number,to:number):StepDecision|null=>{
       if(from===to)return null;
+      if(ctx.isTimedActor?.(actor)){
+        // One adjacent edge, selected by the same actor-local navigation
+        // rules. A scheduled move is not a completed ECS room transition.
+        const next=usesUnifiedTravel(actor)
+          ?actorNextRoom(travelWorld,actor,from,to)
+          :nextRoomOnRoute(from,to,exits);
+        if(next===null)return null;
+        const action=passageAction(actor,from,next);
+        const result=action.type==='move'
+          ?ctx.scheduleTimedMove!(actor,from,next)
+          :execute(action);
+        recordDecision({actor,action,result});
+        return {actor,action,result};
+      }
       if(usesUnifiedTravel(actor)){
         const steps=traverseActorJourney(travelWorld,actor,from,to);
         for(const {action,result} of steps)recordDecision({actor,action,result});
@@ -203,6 +220,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
 
     function travelTowardLesson(actor: EntityId, room: EntityId, goal: EntityId): void {
       if (room === goal) return;
+      if(ctx.isTimedActor?.(actor)){travelTo(actor,room,goal);return;}
       if(usesUnifiedTravel(actor)){travelTo(actor,room,goal);return;}
       const travel=dailyPlans.get(actor)?.schoolTravel;
       if(travel==='micro-28'||travel==='weighted-29'){
