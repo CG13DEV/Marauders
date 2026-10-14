@@ -12,5 +12,5 @@ export default defineConfig({
     'process.env.MARAUDERS_TICK_PROFILE':JSON.stringify('0')
   },
   build:{target:'es2022',outDir:'dist',assetsDir:'assets'},
-  server:{host:'0.0.0.0'}
+  server:{host:'0.0.0.0',fs:{allow:['..']}}
 });
