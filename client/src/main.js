@@ -54,6 +54,7 @@ $('player-status').textContent='ТЫ ИГРАЕШЬ: '+playerDefinition.name;
 const inTestMode=params.has('testMode');
 const debugMode=inTestMode||params.has('debug');
 $('tower-debug').hidden=!debugMode;
+$('player-knowledge').hidden=debugMode;
 $('tower-debug').setAttribute('aria-label',
   'Режим разработчика: полная техническая топология');
 const standIns=[]; // presentation of actual ECS NPCs; never a decision source
