@@ -51,7 +51,12 @@ $('player-choice').addEventListener('change',event=>{
   window.location.assign(location.href);
 });
 $('player-status').textContent='ТЫ ИГРАЕШЬ: '+playerDefinition.name;
-const inTestMode=new URLSearchParams(window.location.search).has('testMode');
+const inTestMode=params.has('testMode');
+const debugMode=inTestMode||params.has('debug');
+$('tower-debug').hidden=!debugMode;
+$('player-knowledge').hidden=debugMode;
+$('tower-debug').setAttribute('aria-label',
+  'Режим разработчика: полная техническая топология');
 const standIns=[]; // presentation of actual ECS NPCs; never a decision source
 const keys=new Set();
 let lastView=-1,toastTimeout=null,interact=null,dialogWing=null;
@@ -82,19 +87,23 @@ function detailFor(room){
     return 'С лестницы замка — по каменной площадке к портрету Толстой дамы.';
   if(room.type==='legacy')
     return 'Узел старого графа. В исследовательской конфигурации здесь никто не живёт.';
-  return 'По текущему графу здесь живут '+room.students+
-    ' из пяти возможных учеников.';
+  return debugMode?'Граф: '+room.students+' жителей из '+room.capacity:
+    'Спальня Гриффиндора. Здесь может быть кто-то из учеников.';
 }
 function updateHeader(){
   const room=byKey.get(roomKey);
   $('room-title').textContent=labelFor(room);
   $('room-subtitle').textContent=detailFor(room);
-  $('room-meta').textContent=room.type==='research'
-    ?'[GAME] '+room.students+' / '+room.capacity+' УЧЕНИКОВ'
-    :room.type==='legacy'?'[GAME] ИСХОДНЫЙ УЗЕЛ'
-    :room.type==='landing'?'ГРАФ · west_landing_4'
-    :'ГРАФ · dorm_gryffindor';
-  $('room-counter').textContent=graph.totals.bedrooms+' СПАЛЕН В ГРАФЕ';
+  if(debugMode){
+    $('room-meta').textContent='DEV · '+roomKey;
+    $('room-counter').textContent=graph.totals.bedrooms+' УЗЛОВ ГРАФА';
+  }else{
+    const knowledge=living.snapshot().player;
+    $('room-meta').textContent='ИССЛЕДОВАНИЕ · '+knowledge.visited.length+
+      ' МЕСТ ПОСЕЩЕНО';
+    $('room-counter').textContent=knowledge.knownRooms.length+
+      ' ИЗВЕСТНЫХ МЕСТ';
+  }
   $('go-common').disabled=roomKey===graph.common.key;
   updateNavigator();
 }
@@ -113,8 +122,11 @@ function rebuildScene(){
   pendingPortal=null;target=null;
   const preference=roomKey===graph.common.key?STARTS.common:
     roomKey===graph.landing.key?STARTS.landing:STARTS.bedroom;
-  const spawn=safeSpawn(stage,preference);
-  player.x=spawn.x;player.z=spawn.z;
+  const authoritative=living.snapshot().player.position;
+  const spawn=safeSpawn(stage,authoritative);
+  if(Math.hypot(spawn.x-authoritative.x,spawn.z-authoritative.z)>.01)
+    throw Error('G2 world spawn disagrees with rendered physical room');
+  player.x=authoritative.x;player.z=authoritative.z;
   // A fresh room inherits the current camera orientation and cutaway.
   stage.setCameraYaw(yaw);
   avatar.group.position.set(player.x,0,player.z);
@@ -235,6 +247,15 @@ function updateLivingUi(snapshot){
   $('living-population').textContent=locals+' В КОМНАТЕ / '+
     snapshot.locations.length+' NPC';
   $('player-status').textContent='ТЫ ИГРАЕШЬ: '+snapshot.player.name;
+  const journal=$('player-journal');journal.replaceChildren();
+  for(const note of snapshot.player.journal){
+    const item=document.createElement('p');item.textContent=note;journal.append(item);
+  }
+  const empty=$('player-journal-empty');
+  empty.hidden=snapshot.player.journal.length>0;
+  $('player-map').textContent='Исследовано: '+
+    snapshot.player.visited.length+' · Известно мест: '+
+    snapshot.player.knownRooms.length;
   updateCupVisual(snapshot.player);
   const log=$('living-events');log.replaceChildren();
   for(const line of snapshot.recent){
@@ -327,6 +348,7 @@ function enter(next){
 }
 function updateNavigator(){
   const panel=$('room-navigator');panel.replaceChildren();
+  if(!debugMode)return;
   if(roomKey!==graph.common.key){
     const p=document.createElement('p');p.className='panel-explain';
     p.textContent='Прямой проход отсюда ведёт только в гостиную. Вернись, чтобы выбрать другую спальню.';
@@ -359,7 +381,8 @@ function makeDormRow(room){
   const sub=document.createElement('div');sub.className='detail';
   sub.textContent=room.type==='legacy'
     ?'Исходный узел графа · без жильцов'
-    :'Занято '+room.students+' / '+room.capacity+' мест · '+room.key;
+    :debugMode?'Занято '+room.students+' / '+room.capacity+' · '+room.key
+      :'Надпись на двери · '+(room.year??'?')+'-й курс';
   info.append(title,sub);
   const b=document.createElement('button');b.textContent='Войти →';
   b.addEventListener('click',()=>{
@@ -371,22 +394,34 @@ function openDorms(wing){
   if(roomKey!==graph.common.key){
     toast('Сначала нужно вернуться в гостиную.');return;
   }
+  const reveal=living.submit({type:'survey_wing',wing});
+  if(!reveal.ok&&reveal.reason!=='already_explored'){
+    toast('Подойди к проходу у лестницы, чтобы рассмотреть двери.');
+    return;
+  }
+  updateLivingUi(living.snapshot());
+  updateHeader();
   dialogWing=wing;
   const isBoy=wing==='boys';
   $('dialog-title').textContent=isBoy?'Лестница мальчиков':'Лестница девочек';
-  $('dialog-note').textContent='Все двери — реальные узлы из графа 600 учеников. '+
-    'В нашей реконструкции у одного курса может быть несколько спален (до пяти мест в каждой).';
+  $('dialog-note').textContent=debugMode?
+    'Технический граф: все комнаты. Переход всё равно проверяет ECS и позицию.':
+    'Ты рассматриваешь таблички на дверях рядом с лестницей. '+
+    'Доступны только известные тебе комнаты.';
   const container=$('dialog-rooms');container.replaceChildren();
   for(let year=1;year<=7;year++){
     const t=document.createElement('div');t.className='year-heading';
     t.textContent='КУРС '+year;container.append(t);
-    for(const r of graph.research.filter(r=>r.wing===wing&&r.year===year))
+    for(const r of graph.research.filter(r=>r.wing===wing&&r.year===year &&
+      (debugMode||living.snapshot().player.knownRooms.includes(r.key))))
       container.append(makeDormRow(r));
   }
-  const t=document.createElement('div');t.className='year-heading';
-  t.textContent='УЗЕЛ СТАРОЙ МОДЕЛИ · [GAME]';container.append(t);
-  for(const r of graph.legacy.filter(r=>r.wing===wing))
-    container.append(makeDormRow(r));
+  if(debugMode){
+    const t=document.createElement('div');t.className='year-heading';
+    t.textContent='УЗЕЛ СТАРОЙ МОДЕЛИ · [GAME]';container.append(t);
+    for(const r of graph.legacy.filter(r=>r.wing===wing))
+      container.append(makeDormRow(r));
+  }
   $('dialog-backdrop').hidden=false;
 }
 function closeDialog(){dialogWing=null;$('dialog-backdrop').hidden=true;}
@@ -421,13 +456,12 @@ function nearestPortal(max=2.25){
   return winner;
 }
 function refreshHint(){
-  const nearCup=roomKey===graph.common.key&&
-    Math.hypot(player.x-CUP_POINT.x,player.z-CUP_POINT.z)<1.85;
+  const nearCup=living.snapshot().player.nearbyCup;
   $('cup-actions').hidden=!nearCup;
   const state=living.snapshot().player;
   $('cup-inspection').textContent=state.cup?.broken?
     'Старинная чашка разбита':state.cup?.inspected?
-    'Ты осмотрел старинную чашку':'Старинная чашка · неизвестный предмет';
+    'Ты осмотрел старинную чашку':'Старинная чашка · присмотрись';
   $('cup-break').disabled=state.cup?.broken===true;
   const portal=nearCup?{kind:'inspect_cup',desc:'Осмотреть старую чашку'}:
     nearestPortal();
@@ -438,8 +472,7 @@ function refreshHint(){
 }
 $('interact-button').addEventListener('click',()=>usePortal(interact));
 $('cup-break').addEventListener('click',()=>{
-  const near=roomKey===graph.common.key &&
-    Math.hypot(player.x-CUP_POINT.x,player.z-CUP_POINT.z)<1.85;
+  const near=living.snapshot().player.nearbyCup;
   if(!near)return;
   const result=living.submit({type:'break_cup'});
   toast(result.ok?'Чашка разбилась. Это событие осталось в истории мира.':
@@ -458,7 +491,12 @@ function clipMovement(x,z){
 }
 function move(dx,dz){
   const next=moveWithCollision(stage,player,dx,dz);
-  player.x=next.x;player.z=next.z;
+  const travelled={dx:next.x-player.x,dz:next.z-player.z};
+  if(Math.hypot(travelled.dx,travelled.dz)<.00001)return;
+  const result=living.submit({type:'walk',...travelled});
+  if(!result.ok)return;
+  player.x=result.player.position.x;
+  player.z=result.player.position.z;
 }
 function calculateCamera(){
   const ratio=area.clientWidth/Math.max(1,area.clientHeight);
@@ -633,6 +671,25 @@ if(inTestMode){
       canvasWidth:renderer.domElement.width
     }),
     submitPlayer:intent=>living.submit(intent),
+    // Real, incremental game-space walking; test convenience only.
+    driveTo:(points)=>{
+      for(const point of points){
+        for(let i=0;i<140;i++){
+          const dx=point.x-player.x,dz=point.z-player.z;
+          const distance=Math.hypot(dx,dz);
+          if(distance<.08)break;
+          const step=Math.min(.12,distance);
+          const before={x:player.x,z:player.z};
+          move(dx/distance*step,dz/distance*step);
+          if(Math.hypot(player.x-before.x,player.z-before.z)<1e-4)
+            throw Error('G2 test route blocked near '+JSON.stringify(before));
+        }
+        if(Math.hypot(point.x-player.x,point.z-player.z)>.08)
+          throw Error('G2 test route did not reach '+JSON.stringify(point));
+      }
+      avatar.group.position.set(player.x,0,player.z);
+      return living.snapshot().player;
+    },
     advanceLiving:()=>stepLiving(),
     advanceLivingSeconds:seconds=>advanceLivingSeconds(seconds)
   });
