@@ -88,7 +88,7 @@ function updateHeader(){
 function rebuildScene(){
   for(const actor of standIns){
     scene.remove(actor.sprite.group);
-    actor.sprite.dispose();
+    actor.dispose();
   }
   standIns.length=0;
   if(stage){scene.remove(stage.group);stage.dispose();}
@@ -107,14 +107,14 @@ function rebuildScene(){
   updateHeader();
 }
 
-const ACTOR_POINTS=[
-  {x:-4.7,z:3.9},{x:4.5,z:4.1},{x:.4,z:-4.8},{x:-2.5,z:-1.8}
-];
+// Room coordinates are world-data from the micro-space simulator.
+const ACTOR_POINTS=[];
 function actorDefinition(key){return LIVING_ACTORS.find(actor=>actor.key===key);}
 function positionForActor(key){
-  const index=LIVING_ACTORS.findIndex(actor=>actor.key===key);
-  const pref=roomKey===graph.common.key?ACTOR_POINTS[index]??STARTS.common:
-    roomKey===graph.landing.key?STARTS.landing:STARTS.bedroom;
+  const local=living.snapshot().activities.find(a=>a.actor===key);
+  const pref=roomKey===graph.common.key&&local
+    ?{x:local.x,z:local.z}
+    :roomKey===graph.landing.key?STARTS.landing:STARTS.bedroom;
   return safeSpawn(stage,pref);
 }
 function addLivingSprite(key,point){
@@ -124,7 +124,29 @@ function addLivingSprite(key,point){
   sprite.group.position.set(point.x,0,point.z);
   scene.add(sprite.group);
   const actor={key,sprite,x:point.x,z:point.z,facing:0,walking:false,
-    journeyKey:null,journeyStart:null};
+    journeyKey:null,journeyStart:null,mode:'idle'};
+  const tagCanvas=document.createElement('canvas');
+  tagCanvas.width=192;tagCanvas.height=40;
+  const tagTexture=new THREE.CanvasTexture(tagCanvas);
+  const tagMaterial=new THREE.SpriteMaterial({
+    map:tagTexture,transparent:true,depthWrite:false});
+  const tag=new THREE.Sprite(tagMaterial);
+  tag.position.set(0,3.4,0);tag.scale.set(2.6,.54,1);
+  sprite.group.add(tag);
+  actor.setLabel=label=>{
+    if(actor.label===label)return;
+    actor.label=label;
+    const ctx=tagCanvas.getContext('2d');
+    ctx.clearRect(0,0,192,40);
+    ctx.fillStyle='rgba(24,20,30,.76)';
+    ctx.fillRect(0,0,192,40);
+    ctx.font='bold 17px sans-serif';ctx.textAlign='center';
+    ctx.fillStyle='#f8e1b1';ctx.fillText(label,96,26);
+    tagTexture.needsUpdate=true;
+  };
+  actor.dispose=()=>{
+    sprite.dispose();tagTexture.dispose();tagMaterial.dispose();
+  };
   standIns.push(actor);return actor;
 }
 function rebuildLivingSprites(){
@@ -156,7 +178,7 @@ function scheduleLivingMovement(move){
     // Arrival at the next ECS room is authoritative; never delay it just
     // to finish a local decorative animation.
     const actor=standIns.find(x=>x.key===actorKey);
-    if(actor){scene.remove(actor.sprite.group);actor.sprite.dispose();
+    if(actor){scene.remove(actor.sprite.group);actor.dispose();
       standIns.splice(standIns.indexOf(actor),1);}
   }else if(to===roomKey && from!==roomKey){
     if(standIns.some(x=>x.key===actorKey))return;
@@ -175,7 +197,16 @@ function updateLivingUi(snapshot){
   }
   if(!snapshot.recent.length){
     const p=document.createElement('p');p.textContent=
-      'Жители следуют расписанию; ожидаем наблюдаемого события…';log.append(p);
+      'Жители самостоятельно выбирают занятия…';log.append(p);
+  }
+  const activityList=$('living-people');activityList.replaceChildren();
+  const modes={walking:'идёт',read:'читает',observe:'наблюдает',
+    rest:'отдыхает',idle:'осматривается'};
+  for(const a of snapshot.activities){
+    const row=document.createElement('div');
+    const person=actorDefinition(a.actor);
+    row.textContent=(person?.name??a.actor)+' · '+(modes[a.mode]??a.mode);
+    activityList.append(row);
   }
 }
 function paintLivingChange(result){
@@ -191,26 +222,41 @@ function advanceLivingSeconds(seconds){
   return paintLivingChange(living.advanceSeconds(seconds));
 }
 function animateLiving(dt){
-  const journeys=new Map(living.snapshot().journeys.map(j=>[j.actor,j]));
+  const state=living.snapshot();
+  const journeys=new Map(state.journeys.map(j=>[j.actor,j]));
+  const activities=new Map(state.activities.map(a=>[a.actor,a]));
+  const modes={walking:'идёт',read:'читает',observe:'смотрит в окно',
+    rest:'отдыхает',idle:'ожидает'};
   for(const actor of standIns){
     const leg=journeys.get(actor.key);
-    if(leg && leg.from===roomKey){
+    if(leg&&leg.from===roomKey){
       const key=leg.from+'→'+leg.to;
       if(actor.journeyKey!==key){
         actor.journeyKey=key;
         actor.journeyStart={x:actor.x,z:actor.z};
       }
-      // RB-5.2: the progress value comes solely from RB-3/WorldClock.
-      // Render sampling cannot advance a character's authoritative position.
       const target=entryPoint(leg.from,leg.to,actor.key);
-      const x=actor.journeyStart.x+(target.x-actor.journeyStart.x)*leg.progress;
-      const z=actor.journeyStart.z+(target.z-actor.journeyStart.z)*leg.progress;
-      const dx=target.x-actor.journeyStart.x,dz=target.z-actor.journeyStart.z;
-      actor.x=x;actor.z=z;
+      actor.x=actor.journeyStart.x+
+        (target.x-actor.journeyStart.x)*leg.progress;
+      actor.z=actor.journeyStart.z+
+        (target.z-actor.journeyStart.z)*leg.progress;
+      const dx=target.x-actor.journeyStart.x;
+      const dz=target.z-actor.journeyStart.z;
       if(Math.hypot(dx,dz)>.001)actor.facing=Math.atan2(dx,dz);
       actor.walking=!leg.paused&&leg.progress<1;
+      actor.setLabel(actorDefinition(actor.key).name+' · идёт');
     }else{
-      actor.walking=false;actor.journeyKey=null;actor.journeyStart=null;
+      actor.journeyKey=null;actor.journeyStart=null;
+      const local=roomKey===graph.common.key?activities.get(actor.key):null;
+      if(local){
+        // Coordinates are a published simulation state, not client steering.
+        actor.x=local.x;actor.z=local.z;actor.facing=local.facing;
+        actor.walking=local.mode==='walking';
+        actor.mode=local.mode;
+      }else actor.walking=false;
+      const label=actorDefinition(actor.key).name+' · '+
+        (modes[local?.mode]??'здесь');
+      actor.setLabel(label);
     }
     actor.sprite.group.position.set(actor.x,0,actor.z);
     actor.sprite.update(dt,actor.walking,actor.facing,yaw);
@@ -496,7 +542,8 @@ if(inTestMode){
       player:Object.freeze({x:player.x,z:player.z}),
       roomKey,extras:standIns.length,
       live:living.snapshot(),
-      visibleActors:standIns.map(actor=>({key:actor.key,x:actor.x,z:actor.z})),
+      visibleActors:standIns.map(actor=>({key:actor.key,x:actor.x,z:actor.z,
+        mode:actor.mode})),
       openings:stage?.group.children
         .filter(o=>o.name.startsWith('wall-slot:')).map(o=>o.name),
       cameraYaw:yaw,
