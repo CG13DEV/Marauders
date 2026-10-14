@@ -125,3 +125,13 @@ test('RB-5.3: local physical decisions do not depend on the polling rate',()=>{
   assert.deepEqual(a.activities,b.activities);
   assert.deepEqual(a.journeys,b.journeys);
 });
+
+test('RB-5.3: recorded school-time occupancy audit',()=>{
+  const times=[67,110,113,114,115,116,117,118,119,120,121,122];
+  const counts=times.map(t=>{
+    const state=createLivingRoom(graph,{warmupTicks:t}).snapshot();
+    return {clock:state.clock,tick:t,common:state.activities.length,
+      locations:state.locations};
+  });
+  console.log('[RB-5.3 occupied at]',JSON.stringify(counts));
+});
