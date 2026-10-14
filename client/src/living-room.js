@@ -76,20 +76,50 @@ export function createLivingRoom(graph,{warmupTicks=67}={}){
   world.setTrust(ids.get('james'),ids.get('sirius'),'trusted');
   world.setTrust(ids.get('sirius'),ids.get('james'),'trusted');
   for(let i=0;i<warmupTicks;i++)world.step();
+  // RB-5.2: decisions remain the normal NPC scheduler's responsibility;
+  // only accepted passage movements use the shared authoritative timeline.
+  for(const id of ids.values())world.setAutonomousTimedTravel(id,true);
+  const timedBridge=world.createTimedMovement();
+  const roomKeyForId=new Map(roomKeys.map(key=>[world.id(key),key]));
   const actorKeys=LIVING_ACTORS.map(x=>x.key);
   const observer=new PassiveRoomObserver(roomSnapshot(world,actorKeys,roomKeys));
   let sequence=0;
   let cursor=world.events().length;
   let recent=[];
   function snapshot(){
+    const worldSeconds=world.worldSeconds();
+    const totalMinutes=480+Math.floor(worldSeconds/60);
+    const minute=totalMinutes%1440;
+    const clock=String(Math.floor(minute/60)).padStart(2,'0')+':'+
+      String(minute%60).padStart(2,'0');
+    const journeys=LIVING_ACTORS.flatMap(character=>{
+      const leg=world.timedTravelOf(ids.get(character.key));
+      if(!leg)return [];
+      return [{
+        actor:character.key,
+        from:roomKeyForId.get(leg.from),to:roomKeyForId.get(leg.to),
+        progress:leg.progress,paused:leg.paused,remainingSeconds:leg.remainingSeconds
+      }];
+    });
     return {
-      tick:world.tick(),clock:world.clock().label,
+      tick:world.tick(),worldSeconds,clock,
       sequence,locations:observer.state().map(pair=>[...pair]),
-      recent:[...recent]
+      journeys,recent:[...recent]
     };
   }
-  function advance(){
-    world.step();
+  function advanceSeconds(seconds){
+    if(!Number.isSafeInteger(seconds)||seconds<0||seconds>3600)
+      throw Error('Invalid living-room advance duration');
+    let remaining=seconds;
+    while(remaining>0){
+      const now=world.worldSeconds();
+      const nextTick=(world.tick()+1)*600;
+      if(now>=nextTick)throw Error('Living clock missed school boundary');
+      const slice=Math.min(remaining,nextTick-now);
+      timedBridge.advance(now+slice);
+      remaining-=slice;
+      if(world.worldSeconds()===nextTick)world.step();
+    }
     const events=world.events();
     const fresh=events.slice(cursor);cursor=events.length;
     const delta=roomDelta(world,fresh,actorKeys,roomKeys,++sequence);
@@ -102,8 +132,12 @@ export function createLivingRoom(graph,{warmupTicks=67}={}){
     const authoritative=roomSnapshot(world,actorKeys,roomKeys,sequence).locations
       .slice().sort(([a],[b])=>a.localeCompare(b));
     if(JSON.stringify(observer.state())!==JSON.stringify(authoritative))
-      throw Error('RB-4 observer diverged from ECS world');
+      throw Error('RB-5 observer diverged from ECS world');
     return {delta,activity,snapshot:snapshot()};
   }
-  return Object.freeze({snapshot,advance});
+  function advance(){
+    // Retain the old one-tick diagnostic API. Presentation uses seconds.
+    return advanceSeconds((world.tick()+1)*600-world.worldSeconds());
+  }
+  return Object.freeze({snapshot,advance,advanceSeconds});
 }
