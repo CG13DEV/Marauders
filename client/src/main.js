@@ -474,7 +474,14 @@ function nearestPortal(max=2.25){
   return winner;
 }
 function refreshHint(){
-  const nearCup=living.snapshot().player.nearbyCup;
+  const liveView=living.snapshot();
+  const inRange=liveView.nearbyPeople.find(n=>n.canTalk);
+  if((inRange?.key??null)!==talkTargetKey)$('talk-reply').textContent=
+    'Ответ зависит от того, что помнит собеседник.';
+  talkTargetKey=inRange?.key??null;
+  $('talk-panel').hidden=!inRange;
+  if(inRange)$('talk-target').textContent='Рядом: '+inRange.name;
+  const nearCup=liveView.player.nearbyCup;
   $('cup-actions').hidden=!nearCup;
   const state=living.snapshot().player;
   $('cup-inspection').textContent=state.cup?.broken?
