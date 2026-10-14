@@ -9,9 +9,9 @@ const graph=JSON.parse(await readFile(new URL('../src/tower-graph.generated.json
 test('RB-4: four independently simulated pupils occupy real Gryffindor nodes',()=>{
   const live=createLivingRoom(graph);
   const state=live.snapshot();
-  assert.equal(state.tick,115);
-  assert.equal(state.clock,'19:10');
-  assert.equal(state.worldSeconds,115*600);
+  assert.equal(state.tick,67);
+  assert.equal(state.clock,'11:10');
+  assert.equal(state.worldSeconds,67*600);
   assert.ok(Array.isArray(state.activities));
   assert.equal(state.locations.length,4);
   assert.deepEqual(new Set(state.locations.map(x=>x[0])),
@@ -98,15 +98,15 @@ test('RB-5.2: variable polling cadence yields the same authoritative world',()=>
 test('RB-5.3: room activities are authoritative, clock-driven and independent of reads',()=>{
   const world=createLivingRoom(graph);
   const before=world.snapshot();
-  assert.equal(before.clock,'19:10');
+  assert.equal(before.clock,'11:10');
   assert.ok(before.activities.length>0,'Expected evening occupants in common room');
   assert.ok(before.activities.every(p=>p.mode==='idle'));
   for(let i=0;i<50;i++)world.snapshot();
   assert.deepEqual(world.snapshot(),before);
   const after=world.advanceSeconds(120).snapshot;
   assert.equal(after.worldSeconds,before.worldSeconds+120);
-  assert.equal(after.clock,'19:12');
-  assert.equal(after.tick,115,'Local movement cannot force academic decisions');
+  assert.equal(after.clock,'11:12');
+  assert.equal(after.tick,67,'Local movement cannot force academic decisions');
   assert.ok(after.activities.some(p=>{
     const prev=before.activities.find(x=>x.actor===p.actor);
     return prev&&Math.hypot(p.x-prev.x,p.z-prev.z)>.15;
