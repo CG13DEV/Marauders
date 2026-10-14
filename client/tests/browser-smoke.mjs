@@ -160,7 +160,7 @@ try{
   const gamePage=await browser.newPage({viewport:{width:1280,height:720}});
   await gamePage.goto(origin,{waitUntil:'networkidle'});
   assert.equal(await gamePage.locator('#tower-debug').isVisible(),false);
-  assert.equal(await gamePage.locator('#player-journal').isVisible(),true);
+  assert.equal(await gamePage.locator('#player-knowledge').isVisible(),true);
   await gamePage.close();
   // Choosing a different Marauder must give the player that actual ECS
   // identity and remove their autonomous duplicate from the observer.
