@@ -7,6 +7,8 @@
 import {createSimulation} from '../../simulation/src/core/Simulation.ts';
 import {PassiveRoomObserver,roomSnapshot,roomDelta}
   from '../../simulation/src/core/passive-observer.ts';
+import {createRoomActivities} from '../../simulation/src/core/room-activities.js';
+import {commonPlan} from './layout-common.js';
 
 export const LIVING_ACTORS=Object.freeze([
   {key:'lily',name:'Лили',variant:'ginger',wing:'girls',interest:'lessons'},
@@ -89,9 +91,16 @@ export function createLivingRoom(graph,{warmupTicks=67}={}){
   let sequence=0;
   let cursor=world.events().length;
   let recent=[];
+  const localActivities=createRoomActivities({
+    plan:commonPlan(),actors:LIVING_ACTORS,
+    commonKey:graph.common.key,
+    nowSeconds:world.worldSeconds(),
+    initialLocations:observer.state()
+  });
   function snapshot(){
     const worldSeconds=world.worldSeconds();
-    const totalMinutes=480+Math.floor(worldSeconds/60);
+    // ECS starts at 00:00; never add a second visual-only UTC offset.
+    const totalMinutes=Math.floor(worldSeconds/60);
     const minute=totalMinutes%1440;
     const clock=String(Math.floor(minute/60)).padStart(2,'0')+':'+
       String(minute%60).padStart(2,'0');
@@ -107,7 +116,7 @@ export function createLivingRoom(graph,{warmupTicks=67}={}){
     return {
       tick:world.tick(),worldSeconds,clock,
       sequence,locations:observer.state().map(pair=>[...pair]),
-      journeys,recent:[...recent]
+      journeys,activities:localActivities.snapshot(),recent:[...recent]
     };
   }
   function advanceSeconds(seconds){
@@ -122,10 +131,20 @@ export function createLivingRoom(graph,{warmupTicks=67}={}){
       const now=world.worldSeconds();
       const nextTick=(world.tick()+1)*600;
       if(now>=nextTick)throw Error('Living clock missed school boundary');
-      const slice=Math.min(remaining,nextTick-now);
-      timedBridge.advance(now+slice);
-      remaining-=slice;
+      const arrival=timedBridge.nextArrival();
+      const until=Math.min(now+remaining,nextTick,arrival??Infinity);
+      if(until<=now)throw Error('Stalled living world time segment');
+      timedBridge.advance(until);
+      remaining-=until-now;
       if(world.worldSeconds()===nextTick)world.step();
+      // Spatial decisions are part of the simulated world, not frame updates.
+      // Every pass ends at an authoritative decision/arrival boundary.
+      const currentLocations=roomSnapshot(world,actorKeys,roomKeys).locations;
+      const travellers=LIVING_ACTORS.flatMap(person=>{
+        const leg=world.timedTravelOf(ids.get(person.key));
+        return leg?[{actor:person.key}]:[];
+      });
+      localActivities.advanceTo(until,currentLocations,travellers);
     }
     const events=world.events();
     const fresh=events.slice(cursor);cursor=events.length;

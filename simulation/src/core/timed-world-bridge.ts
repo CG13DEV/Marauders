@@ -11,6 +11,9 @@ export class TimedWorldBridge {
   private readonly timeline=new ActionTimeline();
   /** Read-only diagnostics; callers cannot advance the authoritative timeline. */
   actionEvents(){return this.timeline.events();}
+  /** Next public arrival boundary, to advance other spatial systems in order. */
+  nextArrival(){this.ensureLive();return this.timeline.nextArrival();}
+
   private routes=new Map<number,{legs:TimedMove[];committed:number}>();
   private commits:CommittedMove[]=[];
   private processedEvents=0;

@@ -53,3 +53,10 @@ kbd{font-family:inherit;border:1px solid #756a59;border-bottom:2px solid #6e5c43
   .living-events{max-height:53px}.living-panel small{display:none}}
 @media(max-width:440px){.living-panel{bottom:130px;width:194px}
   .living-events{max-height:39px}}
+
+/* RB-5.3: character-local activities originate in the simulated micro-space. */
+.living-people{border-top:1px solid rgba(223,193,143,.18);
+  margin-top:7px;padding-top:7px;display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.living-people div{font-size:10px;color:#e6d0aa;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media(max-width:850px){.living-people{grid-template-columns:1fr;max-height:35px;overflow:auto}}
