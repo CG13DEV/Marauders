@@ -185,10 +185,14 @@ try{
   const galleryPage=await browser.newPage({viewport:{width:1380,height:900}});
   await galleryPage.goto(origin+'?testMode=1',{waitUntil:'networkidle'});
   await galleryPage.evaluate(()=>window.__towerTest.driveTo([{x:0,z:7.9}]));
+  await galleryPage.waitForFunction(()=>
+    window.__towerTest.snapshot().activeInteraction==='outside');
   await galleryPage.keyboard.press('f');
   await galleryPage.waitForFunction(()=>
     window.__towerTest.snapshot().roomKey==='west_landing_4');
   await galleryPage.evaluate(()=>window.__towerTest.driveTo([{x:0,z:3.85}]));
+  await galleryPage.waitForFunction(()=>
+    window.__towerTest.snapshot().activeInteraction==='stair_gallery');
   await galleryPage.keyboard.press('f'); // discover physical stair
   assert.ok((await galleryPage.evaluate(()=>
     window.__towerTest.snapshot().live.player.knownRooms)).includes('gallery_4'));
@@ -199,6 +203,8 @@ try{
     window.__towerTest.snapshot().layout.kind)),'gallery');
   assert.ok((await galleryPage.evaluate(()=>
     window.__towerTest.snapshot().activePortals)).includes('return_landing'));
+  await galleryPage.waitForFunction(()=>
+    window.__towerTest.snapshot().activeInteraction==='return_landing');
   await galleryPage.keyboard.press('f');
   await galleryPage.waitForFunction(()=>
     window.__towerTest.snapshot().roomKey==='west_landing_4');
