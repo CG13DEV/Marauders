@@ -77,3 +77,22 @@ kbd{font-family:inherit;border:1px solid #756a59;border-bottom:2px solid #6e5c43
 .cup-actions button:disabled{opacity:.45;cursor:not-allowed}
 @media(max-width:850px){.player-panel{top:76px;right:9px;min-width:155px;
   max-width:41vw;padding:8px}.cup-actions{bottom:185px;max-width:50vw}}
+
+/* G2: world information belongs to the character, not the debug map. */
+.right-panel[hidden],.player-knowledge[hidden]{display:none!important}
+.player-knowledge{position:absolute;z-index:3;right:18px;top:185px;
+  width:min(250px,28vw);border-radius:10px;padding:12px 14px}
+.player-knowledge #player-map{color:#e5c68c;font-size:11px;margin:9px 0}
+.player-journal{max-height:116px;overflow-y:auto}
+.player-journal p,.player-knowledge>p{font-size:11px;
+  line-height:1.35;color:#d0c3aa;margin:7px 0}
+.player-knowledge small{display:block;font-size:9px;
+  color:#ad9b82;margin-top:10px;border-top:1px solid #594a3a;padding-top:7px}
+.player-knowledge #player-journal-empty[hidden]{display:none}
+@media(max-width:850px){
+  .player-knowledge{right:9px;top:182px;width:min(175px,41vw);
+    padding:8px 10px}
+  .player-knowledge small{display:none}
+  .player-journal{max-height:60px}
+}
+@media(max-width:440px){.player-knowledge{top:170px}}
