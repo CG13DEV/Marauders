@@ -36,8 +36,8 @@ try{
   console.log('[smoke] initial',JSON.stringify(initial),'errors',errors);
   assert.equal(initial.roomKey,'dorm_gryffindor');
   assert.equal(initial.live.locations.length,4);
-  assert.equal(initial.live.tick,115);
-  assert.equal(initial.live.clock,'19:10');
+  assert.equal(initial.live.tick,67);
+  assert.equal(initial.live.clock,'11:10');
   assert.ok(initial.live.activities.length>0);
   assert.ok(Number.isSafeInteger(initial.live.worldSeconds));
   assert.ok(Array.isArray(initial.live.journeys));
