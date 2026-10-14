@@ -145,3 +145,21 @@ test('RB-3 checkpoint: incomplete sub-tick travel is never silently serialized',
   fresh.advance(30);
   assert.equal(world.currentRoom(james),hall);
 });
+
+test('RB-3 arbitration: no second room move while a timed route owns the actor',()=>{
+  const world=createSimulation();
+  const a=world.room('arbitration-a','A');
+  const b=world.room('arbitration-b','B');
+  const c=world.room('arbitration-c','C');
+  world.connect(a,b);
+  world.connect(a,c);
+  const james=world.character('arbitration-james','James',a);
+  const bridge=world.createTimedMovement();
+  bridge.begin(james,b,[{from:a,to:b,seconds:60}]);
+  const premature=world.execute({type:'move',actor:james,destination:c});
+  assert.deepEqual(premature,{ok:false,reason:'timed_action_in_progress',events:[]});
+  assert.equal(world.currentRoom(james),a);
+  bridge.advance(60);
+  assert.equal(world.currentRoom(james),b);
+  assert.deepEqual(bridge.events().map(e=>[e.at,e.result.ok]),[[60,true]]);
+});
