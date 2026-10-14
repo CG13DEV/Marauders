@@ -61,7 +61,7 @@ test('RB-3.1: rejected first leg cancels all future arrivals',()=>{
   assert.equal(attempts,1);
   assert.equal(bridge.observe(7),null);
   assert.deepEqual(bridge.events().map(e=>e.at),[10]);
-  assert.equal(bridge.clock.events().filter(e=>e.kind==='arrive').length,1);
+  assert.equal(bridge.actionEvents().filter(e=>e.kind==='arrive').length,1);
 });
 
 test('RB-3.2: real simulation commits timed movement to ECS and world journal',()=>{
