@@ -9,7 +9,7 @@ A player-controlled Marauder can approach **a physically present NPC** in the Gr
 
 **Physical prerequisite**: player and NPC share the ECS room, NPC is not currently traversing an inter-room leg, their client micro-space position is reported locally and within a radius of 2.25 world units. `PlayerIntent` does not contain a transferable actor ID. This extends the existing G2 local reach adapter; the core ECS is the final authority for acceptance.
 
-Character answers are deterministic **consequence descriptions**, not generated free-form dialogue. There is no LLM conversation or arbitrary question input. Response copy is authored from command result events, not from the omniscient world log. We must distinguish knowledge, silence and distance failures. An answer about the broken cup may be asked only after player inspection of **the broken state**; inspecting it before damage is insufficient grounding.
+Character answers are deterministic **consequence descriptions**, not generated free-form dialogue. There is no LLM conversation or arbitrary question input. Response copy is authored from command result events, not from the omniscient world log. We must distinguish knowledge, silence and distance failures. An answer about the broken cup may be requested after **the player personally witnesses breakage** or **inspects the damaged object**. Both establish grounds in the existing ECS; asking before either observation is refused. Never require a redundant inspection from an eyewitness.
 
 **Current time caveat**: the discrete `chat` command logs a world event but has not yet been generalized into time-occupied player activity. Do not claim realistic five-minute spoken conversations. Deliberate time cost/interruptibility belongs to G3.3.
 
