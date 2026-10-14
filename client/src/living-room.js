@@ -9,6 +9,7 @@ import {PassiveRoomObserver,roomSnapshot,roomDelta}
   from '../../simulation/src/core/passive-observer.ts';
 import {createRoomActivities} from '../../simulation/src/core/room-activities.js';
 import {commonPlan} from './layout-common.js';
+import {createPlayerSpace,within,CUP_SPOT} from './player-space.js';
 
 export const PLAYER_CAST=Object.freeze([
   {key:'james',name:'Джеймс',variant:'dark'},
@@ -116,17 +117,31 @@ export function createLivingRoom(graph,{warmupTicks=67,playerKey='peter'}={}){
     nowSeconds:world.worldSeconds(),
     initialLocations:observer.state()
   });
+  const playerSpace=createPlayerSpace({
+    graph,playerHome:boys.key,walkableCommon:localActivities.walkable
+  });
   function playerView(){
     const room=world.currentRoom(playerId);
     const personal=world.observations(playerId);
     const inspected=personal.some(o=>o.kind==='inspected_object'&&o.target===artifactId);
+    const knownExits=world.knownExits(playerId,room)
+      .map(id=>roomKeyForId.get(id)).filter(Boolean);
+    const space=playerSpace.view(knownExits);
+    const sawCup=room===common&&within(space.position,CUP_SPOT,5.8);
+    const journal=personal.flatMap(o=>{
+      if(o.kind==='inspected_object'&&o.target===artifactId)
+        return [o.broken?'Ты осмотрел разбитую чашку.':'Ты изучил старинную чашку.'];
+      if(o.kind==='witnessed_breakage'&&o.target===artifactId)
+        return ['Ты видел, как разбилась старинная чашка.'];
+      if(o.kind==='heard_crash')return ['Ты слышал звук разбитого предмета.'];
+      return [];
+    });
     return {
       key:playerKey,name:playerDefinition.name,
       room:roomKeyForId.get(room)??null,
-      knownExits:world.knownExits(playerId,room)
-        .map(id=>roomKeyForId.get(id)).filter(Boolean),
-      ...(room===common?{cup:{broken:world.isBroken(artifactId),
-        inspected}}:{})
+      ...space,
+      journal:journal.slice(-8),
+      ...(sawCup?{cup:{broken:world.isBroken(artifactId),inspected}}:{})
     };
   }
   function submit(intent){
@@ -137,17 +152,33 @@ export function createLivingRoom(graph,{warmupTicks=67,playerKey='peter'}={}){
        Object.hasOwn(intent,'entityId'))
       return {ok:false,reason:'invalid_intent'};
     let result;
-    if(intent.type==='move'){
-      const destination=typeof intent.destination==='string'?
-        world.id(intent.destination):undefined;
+    if(intent.type==='walk'){
+      const moved=playerSpace.walk(intent.dx,intent.dz);
+      return {...moved,player:playerView()};
+    }
+    if(intent.type==='survey_wing'){
+      const seen=playerSpace.survey(intent.wing);
+      return {...seen,player:playerView()};
+    }
+    if(intent.type==='search_passages'){
+      if(intent.room!==undefined)return {ok:false,reason:'invalid_intent'};
+      result=world.execute({type:'search_passages',actor:playerId});
+    }else if(intent.type==='move'){
+      if(typeof intent.destination!=='string')
+        return {ok:false,reason:'invalid_intent'};
+      const destination=world.id(intent.destination);
+      if(destination===undefined||!playerSpace.knows(intent.destination))
+        return {ok:false,reason:'unknown_destination',player:playerView()};
+      if(!playerSpace.canCross(intent.destination))
+        return {ok:false,reason:'not_in_reach',player:playerView()};
       result=world.execute({type:'move',actor:playerId,
-        destination:destination??-1});
-    }else if(intent.type==='inspect_cup'){
-      result=world.execute({type:'inspect_object',actor:playerId,
-        target:artifactId});
-    }else if(intent.type==='break_cup'){
-      result=world.execute({type:'break_object',actor:playerId,
-        target:artifactId});
+        destination});
+      if(result.ok)playerSpace.enter(intent.destination);
+    }else if(intent.type==='inspect_cup'||intent.type==='break_cup'){
+      if(!playerSpace.canReachCup())
+        return {ok:false,reason:'not_in_reach',player:playerView()};
+      result=world.execute({type:intent.type==='inspect_cup'?
+        'inspect_object':'break_object',actor:playerId,target:artifactId});
     }else return {ok:false,reason:'invalid_intent'};
     return {
       ok:result.ok,
@@ -174,7 +205,11 @@ export function createLivingRoom(graph,{warmupTicks=67,playerKey='peter'}={}){
     return {
       tick:world.tick(),worldSeconds,clock,
       sequence,locations:observer.state().map(pair=>[...pair]),
-      journeys,activities:localActivities.snapshot(),recent:[...recent],
+      journeys:npcs.flatMap(character=>journeys.filter(j=>j.actor===character.key)
+        .filter(j=>j.from===roomKeyForId.get(world.currentRoom(playerId))||
+          j.to===roomKeyForId.get(world.currentRoom(playerId)))),
+      activities:world.currentRoom(playerId)===common?localActivities.snapshot():[],
+      recent:world.currentRoom(playerId)===common?[...recent]:[],
       player:playerView()
     };
   }
@@ -221,7 +256,8 @@ export function createLivingRoom(graph,{warmupTicks=67,playerKey='peter'}={}){
     }
     const delta=roomDelta(world,fresh,actorKeys,roomKeys,++sequence);
     observer.apply(delta);
-    recent=[...activity,...recent].slice(0,6);
+    recent=world.currentRoom(playerId)===common
+      ?[...activity,...recent].slice(0,6):[];
     // Catch any adapter desynchronization, never silently render a false world.
     const authoritative=roomSnapshot(world,actorKeys,roomKeys,sequence).locations
       .slice().sort(([a],[b])=>a.localeCompare(b));
