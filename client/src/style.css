@@ -96,3 +96,19 @@ kbd{font-family:inherit;border:1px solid #756a59;border-bottom:2px solid #6e5c43
   .player-journal{max-height:60px}
 }
 @media(max-width:440px){.player-knowledge{top:170px}}
+
+/* G3: conversations appear only when a physical NPC is in speaking range. */
+.talk-panel{position:absolute;z-index:4;right:18px;top:365px;
+  padding:12px 14px;width:min(264px,28vw);border-radius:10px}
+.talk-panel[hidden]{display:none}
+.talk-panel strong{display:block;color:#eed0a4;font-size:12px;margin:8px 0}
+.talk-buttons{display:flex;flex-wrap:wrap;gap:6px}
+.talk-buttons button{background:#514035;color:#f4d6a5;border:1px solid #997a51;
+  border-radius:5px;padding:6px 8px;font-size:10px;cursor:pointer}
+.talk-buttons button:hover{background:#6b5037}
+.talk-panel p{font-size:11px;line-height:1.45;color:#e2d5bc;margin:9px 0 0}
+@media(max-width:850px){.talk-panel{right:9px;top:330px;
+  width:min(190px,41vw);padding:8px 10px}
+  .talk-buttons{max-height:72px;overflow:auto}
+}
+@media(max-width:440px){.talk-panel{top:auto;bottom:180px}}

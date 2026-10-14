@@ -57,7 +57,7 @@ export function createLivingRoom(graph,{warmupTicks=67,playerKey='peter'}={}){
   if(!playerDefinition)throw Error('Choose a playable Marauder');
   if(!Number.isSafeInteger(warmupTicks)||warmupTicks<0)throw Error('Invalid warmup');
   const world=createSimulation();
-  const rooms=[graph.common,graph.landing,...graph.research,...graph.legacy];
+  const rooms=[graph.common,graph.landing,graph.gallery,...graph.research,...graph.legacy];
   const roomKeys=rooms.map(room=>room.key);
   for(const room of rooms)world.room(room.key,room.key);
   for(const [a,b] of graph.links){
@@ -111,6 +111,7 @@ export function createLivingRoom(graph,{warmupTicks=67,playerKey='peter'}={}){
   let sequence=0;
   let cursor=world.events().length;
   let recent=[];
+  const personalConversations=[];
   const localActivities=createRoomActivities({
     plan:commonPlan(),actors:npcs,
     commonKey:graph.common.key,
@@ -141,13 +142,37 @@ export function createLivingRoom(graph,{warmupTicks=67,playerKey='peter'}={}){
       room:roomKeyForId.get(room)??null,
       ...space,
       journal:[
+        ...(space.knownRooms.includes(graph.gallery.key)
+          ?['Ты обнаружил проход к галерее четвёртого этажа.']:[]),
         ...space.surveyedWings.map(wing=>wing==='boys'
           ?'Ты изучил таблички на лестнице мальчиков.'
           :'Ты изучил таблички на лестнице девочек.'),
-        ...journal
+        ...journal,...personalConversations.map(x=>x.journal).filter(Boolean)
       ].slice(-8),
       ...(sawCup?{cup:{broken:world.isBroken(artifactId),inspected}}:{})
     };
+  }
+  function nearbyPeople(){
+    const playerRoom=world.currentRoom(playerId);
+    if(playerRoom!==common)return [];
+    const here=localActivities.snapshot();
+    const origin=playerSpace.view([]).position;
+    return here.flatMap(npc=>{
+      const id=ids.get(npc.actor);
+      if(id===undefined||world.currentRoom(id)!==playerRoom||
+         world.timedTravelOf(id)!==null)return [];
+      const range=Math.hypot(npc.x-origin.x,npc.z-origin.z);
+      if(range>5.6)return [];
+      return [{key:npc.actor,name:names.get(id),x:npc.x,z:npc.z,
+        distance:Math.round(range*100)/100,canTalk:range<=2.25}];
+    }).sort((a,b)=>a.distance-b.distance||a.key.localeCompare(b.key));
+  }
+  function npcContact(key){
+    if(typeof key!=='string')return {ok:false,reason:'unknown_listener'};
+    const npc=nearbyPeople().find(x=>x.key===key);
+    if(!npc)return {ok:false,reason:'not_visible'};
+    if(!npc.canTalk)return {ok:false,reason:'not_in_reach'};
+    return {ok:true,npc,id:ids.get(key)};
   }
   function submit(intent){
     // This is the only browser-facing action boundary. Actor IDs cannot be
@@ -164,6 +189,46 @@ export function createLivingRoom(graph,{warmupTicks=67,playerKey='peter'}={}){
     if(intent.type==='survey_wing'){
       const seen=playerSpace.survey(intent.wing);
       return {...seen,player:playerView()};
+    }
+    if(intent.type==='talk'||intent.type==='ask_cup'){
+      const contact=npcContact(intent.listener);
+      if(!contact.ok)return {ok:false,reason:contact.reason,player:playerView()};
+      let command;
+      if(intent.type==='talk'){
+        if(!['lessons','castle','hobbies'].includes(intent.topic))
+          return {ok:false,reason:'wrong_topic'};
+        command={type:'chat',actor:playerId,listener:contact.id,topic:intent.topic};
+      }else{
+        command={type:'ask_about',actor:playerId,listener:contact.id,
+          object:artifactId};
+      }
+      const interaction=world.execute(command);
+      if(!interaction.ok)
+        return {ok:false,reason:interaction.reason,player:playerView()};
+      const statement=interaction.events.find(e=>e.type==='testimony_delivered');
+      const answer=interaction.events.find(e=>e.type==='question_asked');
+      const text=intent.type==='talk'
+        ?'Вы поговорили о '+({lessons:'занятиях',castle:'Хогвартсе',
+          hobbies:'увлечениях'}[intent.topic])+'.'
+        :statement
+          ?(statement.claim.culprit===playerId
+              ?'Насколько мне известно, чашку разбил ты.'
+              :statement.claim.culprit!==undefined
+                ?'Насколько мне известно, чашку разбил '+(names.get(statement.claim.culprit)??'кто-то')+'.'
+                :'Я знаю, что чашка была разбита.')
+          :answer?.answered===false
+            ?'Я не могу достоверно сказать, кто разбил чашку.'
+            :'У меня нет сведений об этом.';
+      const dialogue={speaker:contact.npc.name,listener:contact.npc.key,
+        answer:text,answered:intent.type==='talk'||Boolean(statement),
+        source:intent.type==='talk'?'conversation':'question_asked'};
+      personalConversations.push({journal:intent.type==='ask_cup'&&statement
+        ?'Со слов '+contact.npc.name+': '+text:null});
+      return {ok:true,dialogue,player:playerView()};
+    }
+    if(intent.type==='survey_gallery'){
+      const found=playerSpace.surveyGallery();
+      return {...found,player:playerView()};
     }
     if(intent.type==='search_passages'){
       if(intent.room!==undefined)return {ok:false,reason:'invalid_intent'};
@@ -218,7 +283,7 @@ export function createLivingRoom(graph,{warmupTicks=67,playerKey='peter'}={}){
           j.to===roomKeyForId.get(world.currentRoom(playerId)))),
       activities:world.currentRoom(playerId)===common?localActivities.snapshot():[],
       recent:world.currentRoom(playerId)===common?[...recent]:[],
-      player:playerView()
+      player:playerView(),nearbyPeople:nearbyPeople()
     };
   }
   function advanceSeconds(seconds){

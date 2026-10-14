@@ -17,7 +17,9 @@ const scene=createSchoolWeek(world,'adaptive','autonomous',
 const keyById=new Map(world.captureRuntime().entityKeys.map(([key,id])=>[id,key]));
 const common=world.id('dorm_gryffindor');
 const landing=world.id('west_landing_4');
-if(common===undefined||landing===undefined)throw Error('Gryffindor graph anchor missing');
+const gallery=world.id('gallery_4');
+if(common===undefined||landing===undefined||gallery===undefined)
+  throw Error('Gryffindor graph anchor missing');
 
 const room=(id,attributes={})=>{
   const key=keyById.get(id);
@@ -48,7 +50,8 @@ const legacy=['boys_gryffindor','girls_gryffindor']
     return room(id,{type:'legacy',capacity:RESEARCH_DORM_CAPACITY,
       students:0,wing:keyById.get(id).startsWith('boys_')?'boys':'girls'});
   });
-const ids=[common,landing,...research.map(x=>world.id(x.key)),...legacy.map(x=>world.id(x.key))];
+const ids=[common,landing,gallery,...research.map(x=>world.id(x.key)),
+  ...legacy.map(x=>world.id(x.key))];
 const known=new Set(ids);
 const links=[];
 for(const id of ids){
@@ -82,6 +85,7 @@ const payload={
   },
   common:room(common,{type:'common',floor:4}),
   landing:room(landing,{type:'landing',floor:4}),
+  gallery:room(gallery,{type:'gallery',floor:4,loreStatus:'GAME'}),
   research,legacy,links,
   totals:{bedrooms:bedroomKeys.length,researchBedrooms:research.length,
     legacyBedrooms:legacy.length,pupils:actual,

@@ -30,7 +30,8 @@ const chosen=params.get('playAs');
 const playerDefinition=PLAYER_CAST.find(a=>a.key===chosen)??PLAYER_CAST[3];
 const playerKey=playerDefinition.key;
 let roomKey=graph.common.key;
-const byKey=new Map([graph.common,graph.landing,...graph.research,...graph.legacy]
+const byKey=new Map([graph.common,graph.landing,graph.gallery,
+  ...graph.research,...graph.legacy]
   .map(x=>[x.key,x]));
 const adjacent=new Map();
 for(const [a,b] of graph.links){
@@ -60,6 +61,7 @@ $('tower-debug').setAttribute('aria-label',
 const standIns=[]; // presentation of actual ECS NPCs; never a decision source
 const keys=new Set();
 let lastView=-1,toastTimeout=null,interact=null,dialogWing=null;
+let talkTargetKey=null;
 const clock=new THREE.Clock();
 // A real-time timer advances authority independently of WebGL rendering.
 const GAME_SECONDS_PER_REAL_SECOND=30; // 10 min/game tick every 20 real seconds
@@ -75,6 +77,7 @@ function toast(text){
 function labelFor(room){
   if(room.key===graph.common.key)return 'Гостиная Гриффиндора';
   if(room.key===graph.landing.key)return 'Лестничная площадка у портрета';
+  if(room.key===graph.gallery.key)return 'Галерея четвёртого этажа';
   if(room.type==='legacy')return room.wing==='boys'
     ?'Старая спальня мальчиков':'Старая спальня девочек';
   return String(room.year)+'-й курс · '+(room.wing==='boys'?'мальчики':'девочки')+
@@ -85,6 +88,8 @@ function detailFor(room){
     return 'Четыре автономных ученика из отдельной ECS-микросимуляции. Решения принимает мир.';
   if(room.key===graph.landing.key)
     return 'С лестницы замка — по каменной площадке к портрету Толстой дамы.';
+  if(room.key===graph.gallery.key)
+    return 'Высокие окна, портреты и каменные своды. За арками продолжается замок.';
   if(room.type==='legacy')
     return 'Узел старого графа. В исследовательской конфигурации здесь никто не живёт.';
   return debugMode?'Граф: '+room.students+' жителей из '+room.capacity:
@@ -140,7 +145,8 @@ function positionForActor(key){
   const local=living.snapshot().activities.find(a=>a.actor===key);
   const pref=roomKey===graph.common.key&&local
     ?{x:local.x,z:local.z}
-    :roomKey===graph.landing.key?STARTS.landing:STARTS.bedroom;
+    :roomKey===graph.landing.key?STARTS.landing:
+      roomKey===graph.gallery.key?STARTS.gallery:STARTS.bedroom;
   return safeSpawn(stage,pref);
 }
 function addLivingSprite(key,point){
@@ -274,6 +280,10 @@ function updateLivingUi(snapshot){
     row.textContent=(person?.name??a.actor)+' · '+(modes[a.mode]??a.mode);
     activityList.append(row);
   }
+  const nearby=snapshot.nearbyPeople.find(n=>n.canTalk);
+  $('talk-panel').hidden=!nearby;
+  talkTargetKey=nearby?.key??null;
+  if(nearby)$('talk-target').textContent='Рядом: '+nearby.name;
 }
 function paintLivingChange(result){
   for(const movement of result.delta.movements)scheduleLivingMovement(movement);
@@ -442,6 +452,14 @@ function usePortal(portal){
     updateLivingUi(living.snapshot());return;
   }
   if(portal.kind==='wing'){openDorms(portal.wing);return;}
+  if(portal.kind==='stair_gallery'){
+    const result=living.submit({type:'survey_gallery'});
+    if(result.ok){toast('За лестницей открылась галерея. Нажми F ещё раз.');
+      updateLivingUi(living.snapshot());updateHeader();return;}
+    if(result.reason==='already_explored'){enter(graph.gallery.key);return;}
+    toast('Сначала подойди к лестнице.');return;
+  }
+  if(portal.kind==='return_landing'){enter(graph.landing.key);return;}
   if(portal.kind==='outside'){enter(graph.landing.key);return;}
   if(portal.kind==='return'){enter(graph.common.key);return;}
   if(portal.kind==='fire'){toast('Потрескивают поленья. Сейчас мы исследуем пространство, не симулируем время.');}
@@ -456,7 +474,14 @@ function nearestPortal(max=2.25){
   return winner;
 }
 function refreshHint(){
-  const nearCup=living.snapshot().player.nearbyCup;
+  const liveView=living.snapshot();
+  const inRange=liveView.nearbyPeople.find(n=>n.canTalk);
+  if((inRange?.key??null)!==talkTargetKey)$('talk-reply').textContent=
+    'Ответ зависит от того, что помнит собеседник.';
+  talkTargetKey=inRange?.key??null;
+  $('talk-panel').hidden=!inRange;
+  if(inRange)$('talk-target').textContent='Рядом: '+inRange.name;
+  const nearCup=liveView.player.nearbyCup;
   $('cup-actions').hidden=!nearCup;
   const state=living.snapshot().player;
   $('cup-inspection').textContent=state.cup?.broken?
@@ -471,6 +496,25 @@ function refreshHint(){
   interact=portal;
 }
 $('interact-button').addEventListener('click',()=>usePortal(interact));
+function interactWithNpc(type,topic){
+  if(!talkTargetKey)return;
+  const intent=type==='talk'
+    ?{type:'talk',listener:talkTargetKey,topic}
+    :{type:'ask_cup',listener:talkTargetKey};
+  const answer=living.submit(intent);
+  if(!answer.ok){
+    const reasons={not_known:'Сначала нужно осмотреть повреждённую чашку.',
+      already_chatted:'На сегодня разговор уже состоялся.',
+      not_in_reach:'Собеседник отошёл.',
+      not_visible:'Собеседник ушёл.'};
+    $('talk-reply').textContent=reasons[answer.reason]??'Разговор не состоялся: '+answer.reason;
+  }else{
+    $('talk-reply').textContent=answer.dialogue.speaker+': '+answer.dialogue.answer;
+    updateLivingUi(living.snapshot());
+  }
+}
+$('talk-chat').addEventListener('click',()=>interactWithNpc('talk','castle'));
+$('talk-question').addEventListener('click',()=>interactWithNpc('ask_cup'));
 $('cup-break').addEventListener('click',()=>{
   const near=living.snapshot().player.nearbyCup;
   if(!near)return;
@@ -569,7 +613,7 @@ window.addEventListener('keydown',e=>{
   const key=keyForControl(e);
   if(key===null)return;
   e.preventDefault();
-  if(key==='f'&&!e.repeat&&$('dialog-backdrop').hidden)usePortal(nearestPortal());
+  if(key==='f'&&!e.repeat&&$('dialog-backdrop').hidden)usePortal(interact);
   if(key==='q'&&!e.repeat)rotate(-Math.PI/8);
   if(key==='e'&&!e.repeat)rotate(Math.PI/8);
   keys.add(key);
@@ -667,6 +711,7 @@ if(inTestMode){
       cameraYaw:yaw,
       layout:stage?.layout,
       activePortals:stage?.portals.map(p=>p.kind),
+      activeInteraction:interact?.kind??null,
       frames:renderedFrames,
       canvasWidth:renderer.domElement.width
     }),

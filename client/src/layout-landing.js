@@ -90,7 +90,9 @@ export function buildLandingSpace(group,b){
   // outside walkable interval, path to portrait remains collision-free.
   return {
     bounds:plan.bounds,
-    portals:portrait.portals,
+    portals:[...portrait.portals,
+      {kind:'stair_gallery',x:0,z:3.85,
+       desc:'Подняться в галерею четвёртого этажа'}],
     setCameraYaw(yaw){
       portrait.setCameraYaw(yaw);
       windows.setCameraYaw(yaw);

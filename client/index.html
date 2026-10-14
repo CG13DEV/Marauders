@@ -60,7 +60,16 @@
       <div id="living-people" class="living-people" aria-label="Текущие занятия"></div>
       <small>Только люди и события поблизости · [GAME]</small>
     </section>
-    <section id="cup-actions" class="cup-actions glass" hidden aria-label="Старинная чашка">
+    <section id="talk-panel" class="talk-panel glass" hidden aria-label="Разговор рядом">
+      <div class="eyebrow">G3 · РАЗГОВОР</div>
+      <strong id="talk-target">Рядом персонаж</strong>
+      <div class="talk-buttons">
+        <button id="talk-chat">Поговорить о Хогвартсе</button>
+        <button id="talk-question">Спросить о разбитой чашке</button>
+      </div>
+      <p id="talk-reply" aria-live="polite">Ответ зависит от памяти собеседника.</p>
+    </section>
+        <section id="cup-actions" class="cup-actions glass" hidden aria-label="Старинная чашка">
       <div id="cup-inspection">Старинная чашка</div>
       <div class="cup-buttons">
         <button id="cup-break" title="Попробовать разбить предмет">Разбить чашку</button>

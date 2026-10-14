@@ -10,6 +10,7 @@ import {buildOpenings} from './openings.js';
 import {bedroomPlan,validateBedroomPlan} from './layout-bedroom.js';
 import {commonPlan,validateCommonPlan} from './layout-common.js';
 import {buildLandingSpace} from './layout-landing.js';
+import {buildGallerySpace} from './layout-gallery.js';
 const C={
   stone:0x868388,stoneDeep:0x55545c,grout:0x39383f,
   wood:0x684630,woodDark:0x39271f,gold:0xd1a35b,
@@ -256,9 +257,17 @@ export function buildStage(room,graph){
   const b=makeBuilder(group,obstacles);
   const isCommon=room.key===graph.common.key;
   const isLanding=room.key===graph.landing.key;
-  const radius=isCommon?10:isLanding?7.4:7.6;
+  const isGallery=room.key===graph.gallery.key;
+  const radius=isCommon?10:isLanding?7.4:isGallery?8:7.6;
   let slots,portals,fire=null,rotate,layout,bounds=null;
-  if(isLanding){
+  if(isGallery){
+    const corridor=buildGallerySpace(group,b);
+    portals=corridor.portals;
+    slots=corridor.architecture;
+    bounds=corridor.bounds;
+    rotate=corridor.setCameraYaw;
+    layout={kind:'gallery',bounds};
+  }else if(isLanding){
     // Rectangular portrait corridor: no fake circular second common room.
     const entrance=buildLandingSpace(group,b);
     portals=entrance.portals;
