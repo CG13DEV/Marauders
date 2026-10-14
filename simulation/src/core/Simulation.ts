@@ -190,7 +190,7 @@ export type IntentionRejection='no_intention_planner'|'invalid_intention'|
   'no_personal_knowledge_gap'|'no_local_evidence';
 
 export type CommandResult =
-  | { ok: true; events: readonly WorldEvent[] }
+  | { ok: true; events: readonly WorldEvent[]; scheduled?:true }
   | { ok: false; reason: MoveRejection | BreakRejection | SocialRejection | DoorRejection | InspectRejection | QuestionRejection | SpellRejection | HelpRejection | DailyRejection | MeetingRejection | IntentionRejection | PointRejection | 'no_toilet_need' | 'wrong_toilet' |
       'not_urgent' | 'no_animal_signal' | 'not_partner' | 'no_sighting' |
       'animal_cannot_speak' | 'animal_action_unavailable' | 'listener_cannot_speak' |
@@ -278,6 +278,8 @@ export function createSimulation() {
   let tick = 0;
   let worldClock = new WorldClock();
   let timedMovement: TimedWorldBridge | null = null;
+  // Explicitly opt-in. Existing 634-pupil worlds retain legacy travel.
+  const autonomousTimedTravel=new Set<EntityId>();
   // Only a timed arrival may commit its own active actor's room transition.
   const timedArrivalActors=new Set<number>();
 
@@ -1822,6 +1824,46 @@ export function createSimulation() {
   const tickCosts={ticks:0,schedulerMs:0,patrolMs:0,decisions:0,
     schedulerDecisions:0,patrolDecisions:0,maxSchedulerMs:0,maxPatrolMs:0};
   function tickProfile(){return {...tickCosts};}
+  function createTimedMovement(): TimedWorldBridge {
+    if (!timedMovement) {
+      timedMovement = new TimedWorldBridge(currentRoom,command=>{
+        timedArrivalActors.add(command.actor);
+        try{return execute(command);}
+        finally{timedArrivalActors.delete(command.actor);}
+      },seconds=>worldClock.advanceTo(seconds));
+      timedMovement.advance(worldClock.nowSeconds());
+    }
+    return timedMovement;
+  }
+  function setAutonomousTimedTravel(actor:EntityId,enabled:boolean):void{
+    if(!isCharacter(actor)||typeof enabled!=='boolean')
+      throw Error('Timed autonomous travel requires a character and boolean mode');
+    if(timedMovement?.hasActor(actor))
+      throw Error('Cannot change timed travel mode while moving');
+    if(enabled)autonomousTimedTravel.add(actor);
+    else autonomousTimedTravel.delete(actor);
+  }
+  function timedTravelOf(actor:EntityId){
+    const leg=timedMovement?.observe(actor);
+    return leg===undefined||leg===null?null:{
+      from:Number(leg.from),to:Number(leg.to),
+      goal:Number(leg.goal),progress:leg.progress,
+      remainingSeconds:leg.remaining,paused:leg.paused
+    };
+  }
+  function scheduleAutonomousMove(actor:EntityId,from:EntityId,to:EntityId):CommandResult{
+    if(!autonomousTimedTravel.has(actor)||timedMovement?.hasActor(actor))
+      return {ok:false,reason:'timed_action_in_progress',events:[]};
+    const minutes=passageMinutes(actor,from,to);
+    if(currentRoom(actor)!==from||minutes===null||
+       !knownExits(actor,from).includes(to))
+      return {ok:false,reason:'unknown_passage',events:[]};
+    if(!passageOpen(from,to))
+      return {ok:false,reason:'passage_closed',events:[]};
+    createTimedMovement().begin(actor,to,[{from,to,seconds:minutes*60}]);
+    // This is ACCEPTANCE, not arrival: no move event and no ECS location change.
+    return {ok:true,events:[],scheduled:true};
+  }
   function step(): StepDecision[] {
     const tickStart=tickDiagnostics?performance.now():0;
     const flags = {
@@ -1842,7 +1884,10 @@ export function createSimulation() {
         return worldClock.absoluteMinute();
       },
       actors: trait => Array.from(query(ecs, [Character, agentComponents[trait]])),
-      has: (actor, flag) => hasComponent(ecs, actor, flags[flag]),
+      has: (actor, flag) => hasComponent(ecs, actor, flags[flag]) ||
+        (flag==='manual' && (timedMovement?.hasActor(actor)??false)),
+      isTimedActor: actor => autonomousTimedTravel.has(actor),
+      scheduleTimedMove:scheduleAutonomousMove,
       visibleFragiles: room => Array.from(query(ecs, [Fragile, LocatedIn(room)])),
       intactFragiles: room => Array.from(query(ecs, [Fragile, LocatedIn(room)]))
         .filter(object=>Fragile.broken[object]===0),
@@ -2340,17 +2385,7 @@ export function createSimulation() {
 
   return {
     room, roomInfo, character, fragileObject, connect, execute, step,
-    createTimedMovement: () => {
-      if (!timedMovement) {
-        timedMovement = new TimedWorldBridge(currentRoom,command=>{
-          timedArrivalActors.add(command.actor);
-          try{return execute(command);}
-          finally{timedArrivalActors.delete(command.actor);}
-        },seconds => worldClock.advanceTo(seconds));
-        timedMovement.advance(worldClock.nowSeconds());
-      }
-      return timedMovement;
-    },
+    createTimedMovement, setAutonomousTimedTravel, timedTravelOf,
     worldSeconds: () => worldClock.nowSeconds(),
     configureToilet,toiletState,configurePatrol,patrolState,
     registerHouse, grantPointAuthority, houseOf, housePoints, pointHistory,
