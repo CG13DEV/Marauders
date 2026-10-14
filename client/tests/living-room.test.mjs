@@ -48,3 +48,46 @@ test('RB-4: separate simulations produce identical public events',()=>{
   assert.deepEqual(a.snapshot(),b.snapshot());
   for(let i=0;i<35;i++)assert.deepEqual(a.advance(),b.advance());
 });
+
+test('RB-5.2: autonomous travel progress comes from seconds, not browser frames',()=>{
+  const live=createLivingRoom(graph,{warmupTicks:0});
+  assert.equal(live.snapshot().worldSeconds,0);
+  const beginning=live.advance();
+  assert.equal(beginning.snapshot.tick,1);
+  assert.equal(beginning.snapshot.worldSeconds,600);
+  assert.ok(beginning.snapshot.journeys.length>0,
+    'Autonomous breakfast travel must create active ECS journeys');
+  for(const journey of beginning.snapshot.journeys){
+    assert.equal(journey.progress,0);
+    assert.equal(journey.remainingSeconds,120);
+  }
+  const still=live.snapshot();
+  for(let i=0;i<150;i++)live.snapshot();
+  assert.deepEqual(live.snapshot(),still);
+  const part=live.advanceSeconds(60);
+  assert.equal(part.snapshot.tick,1,'no scheduler step during sub-tick travel');
+  assert.equal(part.snapshot.worldSeconds,660);
+  assert.ok(part.snapshot.journeys.every(j=>j.progress===0.5));
+  assert.equal(part.delta.movements.length,0,'cannot move ECS occupancy before arrival');
+  const almost=live.advanceSeconds(59);
+  assert.equal(almost.delta.movements.length,0);
+  const arrive=live.advanceSeconds(1);
+  assert.equal(arrive.snapshot.worldSeconds,720);
+  assert.ok(arrive.delta.movements.length>0,
+    'validated arrival must publish observer deltas at authoritative second');
+  assert.equal(arrive.snapshot.journeys.length,0);
+  assert.equal(arrive.snapshot.tick,1);
+});
+
+test('RB-5.2: variable polling cadence yields the same authoritative world',()=>{
+  const a=createLivingRoom(graph,{warmupTicks:0});
+  const b=createLivingRoom(graph,{warmupTicks:0});
+  a.advanceSeconds(1200);
+  for(let i=0;i<120;i++)b.advanceSeconds(10);
+  const s1=a.snapshot(),s2=b.snapshot();
+  assert.equal(s1.worldSeconds,s2.worldSeconds);
+  assert.equal(s1.tick,s2.tick);
+  assert.deepEqual(s1.locations,s2.locations);
+  assert.deepEqual(s1.journeys,s2.journeys);
+  assert.deepEqual(s1.recent,s2.recent);
+});
