@@ -59,7 +59,7 @@ try{
   // A browser observer advances the SAME ECS world that draws the avatars.
   const liveStep=await page.evaluate(()=>window.__towerTest.advanceLiving());
   assert.equal(liveStep.snapshot.tick,initial.live.tick+1);
-  assert.equal(liveStep.delta.sequence,initial.live.sequence+1);
+  assert.equal(liveStep.delta.sequence,walked.snapshot.sequence+1);
   const beforePartial=await page.evaluate(()=>window.__towerTest.snapshot().live);
   const subTick=await page.evaluate(()=>window.__towerTest.advanceLivingSeconds(45));
   assert.equal(subTick.snapshot.tick,beforePartial.tick);
