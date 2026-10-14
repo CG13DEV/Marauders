@@ -35,7 +35,16 @@ try{
   const initial=await page.evaluate(()=>window.__towerTest.snapshot());
   console.log('[smoke] initial',JSON.stringify(initial),'errors',errors);
   assert.equal(initial.roomKey,'dorm_gryffindor');
-  assert.equal(initial.extras,3);
+  assert.equal(initial.live.locations.length,4);
+  assert.equal(initial.live.tick,67);
+  assert.equal(initial.extras,initial.live.locations
+    .filter(([,key])=>key===initial.roomKey).length);
+  assert.ok(initial.extras>0,'Expected living NPC occupants in common room');
+  assert.match(await page.locator('#living-clock').textContent(),/19:10/);
+  // A browser observer advances the SAME ECS world that draws the avatars.
+  const liveStep=await page.evaluate(()=>window.__towerTest.advanceLiving());
+  assert.equal(liveStep.snapshot.tick,initial.live.tick+1);
+  assert.equal(liveStep.delta.sequence,initial.live.sequence+1);
   assert.equal(initial.openings.length,6);
   assert.ok(initial.openings.includes('wall-slot:portrait'));
   assert.ok(initial.openings.includes('wall-slot:boys'));
@@ -97,7 +106,7 @@ try{
   assert.equal((await page.evaluate(()=>
     window.__towerTest.snapshot())).roomKey,'dorm_gryffindor');
   assert.deepEqual(errors,[],'Runtime errors in real Chromium page');
-  console.log('[browser smoke 0.4] common, arc beds, non-circular landing, W, camera, portrait connectivity and three screenshots PASS');
+  console.log('[browser smoke RB-4] WebGL rooms, graph-safe controls and autonomous ECS observer PASS');
 }finally{
   await browser?.close();
   server.kill('SIGTERM');
