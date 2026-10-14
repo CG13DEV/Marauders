@@ -15,6 +15,7 @@ export class TimedWorldBridge {
   private disabled=false;
   /** Checkpoint v2 has no sub-tick journeys. Never serialize a moving world. */
   hasInFlight(){return this.routes.size>0;}
+  hasActor(actor:number){return this.routes.has(actor);}
   /**
    * A restored ECS world has a new timeline epoch. Old bridge references
    * must not be allowed to issue commands against that restored world.
