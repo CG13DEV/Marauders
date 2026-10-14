@@ -33,7 +33,7 @@
       <p id="room-subtitle">Тёплый свет, потрескивание камина и сотни историй.</p>
       <div class="pillrow"><span id="room-meta">ГРАФ СИМУЛЯЦИИ</span><span id="room-counter">39 СПАЛЕН</span></div>
     </section>
-    <section class="right-panel glass" aria-label="Навигация по башне">
+    <section id="tower-debug" class="right-panel glass" hidden aria-label="Техническая навигация по башне">
       <div class="panel-head">
         <div><div class="eyebrow">ПЛАН РЕКОНСТРУКЦИИ</div><h2>Карта башни</h2></div>
         <span class="archive-icon" aria-hidden="true">✧</span>
@@ -44,13 +44,21 @@
       <div class="source-key"><span class="source-dot"></span>
         <span>39 узлов спален: 37 исследовательских + 2 исходных</span></div>
     </section>
-    <section class="living-panel glass" aria-label="Наблюдение за гостиной">
-      <div class="eyebrow">RB-4 · АВТОНОМНАЯ ЖИЗНЬ</div>
+    <section class="player-knowledge glass" aria-label="Личные наблюдения">
+      <div class="eyebrow">G2 · МОИ НАБЛЮДЕНИЯ</div>
+      <div id="player-map">Известные места: гостиная</div>
+      <div id="player-journal" class="player-journal"></div>
+      <p id="player-journal-empty">Пока ничего особенного. Присмотрись к вещам
+        или исследуй лестницу.</p>
+      <small>Здесь только то, что заметил твой персонаж.</small>
+    </section>
+    <section class="living-panel glass" aria-label="События рядом">
+      <div class="eyebrow">СЕЙЧАС РЯДОМ</div>
       <div class="living-status"><strong id="living-clock">ДЕНЬ 1 · 11:10</strong>
         <span id="living-population">0 В КОМНАТЕ / 4 NPC</span></div>
       <div id="living-events" class="living-events" aria-live="off"></div>
       <div id="living-people" class="living-people" aria-label="Текущие занятия"></div>
-      <small>Самостоятельные NPC + управляемый персонаж в той же ECS · [GAME]</small>
+      <small>Только люди и события поблизости · [GAME]</small>
     </section>
     <section id="cup-actions" class="cup-actions glass" hidden aria-label="Старинная чашка">
       <div id="cup-inspection">Старинная чашка</div>
