@@ -8,7 +8,9 @@ import type {Command,CommandResult} from './Simulation.ts';
 export type TimedMove={from:number;to:number;seconds:number};
 export type CommittedMove={at:number;actor:number;from:number;to:number;result:CommandResult};
 export class TimedWorldBridge {
-  readonly clock=new ActionTimeline();
+  private readonly timeline=new ActionTimeline();
+  /** Read-only diagnostics; callers cannot advance the authoritative timeline. */
+  actionEvents(){return this.timeline.events();}
   private routes=new Map<number,{legs:TimedMove[];committed:number}>();
   private commits:CommittedMove[]=[];
   private processedEvents=0;
@@ -22,7 +24,7 @@ export class TimedWorldBridge {
    */
   invalidate(){
     this.disabled=true;
-    for(const actor of this.routes.keys())this.clock.cancel(String(actor));
+    for(const actor of this.routes.keys())this.timeline.cancel(String(actor));
     this.routes.clear();
   }
   private ensureLive(){if(this.disabled)throw Error('Timed movement bridge invalidated by restore');}
@@ -41,29 +43,29 @@ export class TimedWorldBridge {
     if(!legs.length||legs[0]!.from!==this.currentRoom(actor)||
       legs.at(-1)!.to!==goal||legs.some((l,i)=>i>0&&legs[i-1]!.to!==l.from))
       throw Error('Invalid physical route');
-    this.clock.begin(String(actor),String(goal),legs.map(l=>({
+    this.timeline.begin(String(actor),String(goal),legs.map(l=>({
       from:String(l.from),to:String(l.to),seconds:l.seconds
     })));
     this.routes.set(actor,{legs:legs.map(l=>({...l})),committed:0});
   }
   advance(until:number){
     this.ensureLive();
-    if(!Number.isSafeInteger(until)||until<this.clock.now())throw Error('Invalid time');
+    if(!Number.isSafeInteger(until)||until<this.timeline.now())throw Error('Invalid time');
     while(true){
-      const next=this.clock.nextArrival();
+      const next=this.timeline.nextArrival();
       if(next===null||next>until)break;
-      this.clock.advance(next);
+      this.timeline.advance(next);
       this.onAdvance?.(next);
       this.commitArrivals();
     }
-    this.clock.advance(until);
+    this.timeline.advance(until);
     this.onAdvance?.(until);
     this.commitArrivals();
   }
   private commitArrivals(){
     // The RB-2 timeline emits arrival timestamps in deterministic order.
     // Each arrival is validated against the live world before committing.
-    const history=this.clock.events();
+    const history=this.timeline.events();
     const arrivals=history.slice(this.processedEvents).filter(e=>e.kind==='arrive')
       .sort((a,b)=>a.at-b.at||a.actor.localeCompare(b.actor));
     this.processedEvents=history.length;
@@ -79,13 +81,13 @@ export class TimedWorldBridge {
       this.commits.push({at:event.at,actor,from:leg.from,to:leg.to,result});
       route.committed++;
       if(!result.ok){
-        this.clock.cancel(String(actor));
+        this.timeline.cancel(String(actor));
         this.routes.delete(actor);
       }else if(route.committed===route.legs.length)this.routes.delete(actor);
     }
   }
-  interrupt(actor:number){this.ensureLive();this.clock.interrupt(String(actor));}
-  resume(actor:number){this.ensureLive();this.clock.resume(String(actor));}
-  observe(actor:number){this.ensureLive();return this.clock.observe(String(actor));}
+  interrupt(actor:number){this.ensureLive();this.timeline.interrupt(String(actor));}
+  resume(actor:number){this.ensureLive();this.timeline.resume(String(actor));}
+  observe(actor:number){this.ensureLive();return this.timeline.observe(String(actor));}
   events(){return this.commits.map(e=>({...e}));}
 }
