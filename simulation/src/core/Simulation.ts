@@ -1859,7 +1859,7 @@ export function createSimulation() {
        !knownExits(actor,from).includes(to))
       return {ok:false,reason:'unknown_passage',events:[]};
     if(!passageOpen(from,to))
-      return {ok:false,reason:'passage_closed',events:[]};
+      return {ok:false,reason:'door_closed',events:[]};
     createTimedMovement().begin(actor,to,[{from,to,seconds:minutes*60}]);
     // This is ACCEPTANCE, not arrival: no move event and no ECS location change.
     return {ok:true,events:[],scheduled:true};
