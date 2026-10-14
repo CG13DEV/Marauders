@@ -140,7 +140,12 @@ export function createLivingRoom(graph,{warmupTicks=67,playerKey='peter'}={}){
       key:playerKey,name:playerDefinition.name,
       room:roomKeyForId.get(room)??null,
       ...space,
-      journal:journal.slice(-8),
+      journal:[
+        ...space.surveyedWings.map(wing=>wing==='boys'
+          ?'Ты изучил таблички на лестнице мальчиков.'
+          :'Ты изучил таблички на лестнице девочек.'),
+        ...journal
+      ].slice(-8),
       ...(sawCup?{cup:{broken:world.isBroken(artifactId),inspected}}:{})
     };
   }
@@ -202,9 +207,12 @@ export function createLivingRoom(graph,{warmupTicks=67,playerKey='peter'}={}){
         progress:leg.progress,paused:leg.paused,remainingSeconds:leg.remainingSeconds
       }];
     });
+    const visibleRoom=roomKeyForId.get(world.currentRoom(playerId));
     return {
       tick:world.tick(),worldSeconds,clock,
-      sequence,locations:observer.state().map(pair=>[...pair]),
+      sequence,locations:observer.state()
+        .filter(([,location])=>location===visibleRoom)
+        .map(pair=>[...pair]),
       journeys:npcs.flatMap(character=>journeys.filter(j=>j.actor===character.key)
         .filter(j=>j.from===roomKeyForId.get(world.currentRoom(playerId))||
           j.to===roomKeyForId.get(world.currentRoom(playerId)))),
