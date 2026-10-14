@@ -112,7 +112,9 @@ under `docs/production/ip-and-asset-policy.md` before external announcement.
 
 ### Limits
 
-Not connected to runtime NPCs or persistence; no physical per-second world.
+The four-NPC micro-world now runs locally in the browser, but is **not connected
+to the 634-person school runtime** or durable persistence; no physical per-second
+NPC world.
 Simple local circular collision and direct walk-to-point are client-only
 prototyping physics and must not be mistaken for authoritative simulation
 or multi-room character pathfinding.
