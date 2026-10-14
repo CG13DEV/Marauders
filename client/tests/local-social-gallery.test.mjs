@@ -34,8 +34,8 @@ test('G3: cup questioning uses participant-owned evidence, not global event log'
  walkTo(game,{x:0,z:1.5});
  assert.equal(game.submit({type:'ask_cup',listener:'lily'}).reason,'not_known');
  assert.equal(game.submit({type:'break_cup'}).ok,true);
- assert.equal(game.submit({type:'ask_cup',listener:'lily'}).reason,'not_known');
- assert.equal(game.submit({type:'inspect_cup'}).ok,true);
+ // The player personally WITNESSED the breakage and already has grounded
+ // evidence: the model must not require a redundant inspection.
  const testimony=game.submit({type:'ask_cup',listener:'lily'});
  assert.equal(testimony.ok,true);
  assert.equal(testimony.dialogue.answered,true);
