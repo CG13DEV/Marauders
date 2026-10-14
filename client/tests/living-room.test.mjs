@@ -9,7 +9,10 @@ const graph=JSON.parse(await readFile(new URL('../src/tower-graph.generated.json
 test('RB-4: four independently simulated pupils occupy real Gryffindor nodes',()=>{
   const live=createLivingRoom(graph);
   const state=live.snapshot();
-  assert.equal(state.tick,67);
+  assert.equal(state.tick,115);
+  assert.equal(state.clock,'19:10');
+  assert.equal(state.worldSeconds,115*600);
+  assert.ok(Array.isArray(state.activities));
   assert.equal(state.locations.length,4);
   assert.deepEqual(new Set(state.locations.map(x=>x[0])),
     new Set(LIVING_ACTORS.map(x=>x.key)));
@@ -90,4 +93,35 @@ test('RB-5.2: variable polling cadence yields the same authoritative world',()=>
   assert.deepEqual(s1.locations,s2.locations);
   assert.deepEqual(s1.journeys,s2.journeys);
   assert.deepEqual(s1.recent,s2.recent);
+});
+
+test('RB-5.3: room activities are authoritative, clock-driven and independent of reads',()=>{
+  const world=createLivingRoom(graph);
+  const before=world.snapshot();
+  assert.equal(before.clock,'19:10');
+  assert.ok(before.activities.length>0,'Expected evening occupants in common room');
+  assert.ok(before.activities.every(p=>p.mode==='idle'));
+  for(let i=0;i<50;i++)world.snapshot();
+  assert.deepEqual(world.snapshot(),before);
+  const after=world.advanceSeconds(120).snapshot;
+  assert.equal(after.worldSeconds,before.worldSeconds+120);
+  assert.equal(after.clock,'19:12');
+  assert.equal(after.tick,115,'Local movement cannot force academic decisions');
+  assert.ok(after.activities.some(p=>{
+    const prev=before.activities.find(x=>x.actor===p.actor);
+    return prev&&Math.hypot(p.x-prev.x,p.z-prev.z)>.15;
+  }),'At least one autonomous actor must physically cross the common room');
+  assert.ok(after.activities.some(p=>p.activity==='read'||p.activity==='observe'||p.activity==='rest'));
+  assert.equal(after.locations.length,4);
+});
+
+test('RB-5.3: local physical decisions do not depend on the polling rate',()=>{
+  const batch=createLivingRoom(graph),fine=createLivingRoom(graph);
+  batch.advanceSeconds(420);
+  for(let i=0;i<42;i++)fine.advanceSeconds(10);
+  const a=batch.snapshot(),b=fine.snapshot();
+  assert.equal(a.clock,b.clock);
+  assert.deepEqual(a.locations,b.locations);
+  assert.deepEqual(a.activities,b.activities);
+  assert.deepEqual(a.journeys,b.journeys);
 });
