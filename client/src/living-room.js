@@ -132,7 +132,10 @@ export function createLivingRoom(graph,{warmupTicks=67,playerKey='peter'}={}){
   function submit(intent){
     // This is the only browser-facing action boundary. Actor IDs cannot be
     // supplied by the renderer: all commands have the controlled character.
-    if(!intent||typeof intent!=='object')return {ok:false,reason:'invalid_intent'};
+    if(!intent||typeof intent!=='object'||Array.isArray(intent)||
+       Object.hasOwn(intent,'actor')||Object.hasOwn(intent,'playerId')||
+       Object.hasOwn(intent,'entityId'))
+      return {ok:false,reason:'invalid_intent'};
     let result;
     if(intent.type==='move'){
       const destination=typeof intent.destination==='string'?
