@@ -88,7 +88,8 @@ function movingFlight(group){
 }
 export function buildLandingSpace(group,b){
   const plan=landingPlan();validateLandingPlan(plan);
-  const {stone,deep,slate,gold,wood,light,plaster}=COLORS;
+  const {stone,deep,slate,gold,light}=COLORS;
+  const facade={east:[],west:[],north:[],south:[]};
   // Actual ground-level floor, so approach to the portrait is unobstructed.
   b.box(0,-.35,0,17.8,.7,18.0,deep);
   b.box(0,.025,0,17.35,.07,17.35,0x655957);
@@ -100,14 +101,15 @@ export function buildLandingSpace(group,b){
   // Vertical stone shafts and arcade levels are real Three.js geometry,
   // not a backdrop image of stairs. Leave roof open for the cutaway view.
   for(const x of [-8.82,8.82]){
-    b.box(x,7.6,0,.46,15.2,17.65,stone);
+    facade[x>0?'east':'west'].push(
+      b.box(x,7.6,0,.46,15.2,17.65,stone));
     for(const y of [3.7,8.2,12.7])
       b.box(x-Math.sign(x)*.46,y,0,.74,.23,17.5,gold);
   }
   for(const x of [-5.1,5.1]){
     // Back wall retains a central framed opening at the gallery height.
-    b.box(x,7.6,8.8,7.45,15.2,.47,stone);
-    b.box(x,7.6,-8.8,7.45,15.2,.47,stone);
+    facade.north.push(b.box(x,7.6,8.8,7.45,15.2,.47,stone));
+    facade.south.push(b.box(x,7.6,-8.8,7.45,15.2,.47,stone));
   }
   for(const x of [-7.4,7.4]){
     for(const z of [-7.4,7.4]){
@@ -146,12 +148,20 @@ export function buildLandingSpace(group,b){
   let index=0;
   for(const y of [1.85,5.9,10.15,14.25]){
     for(const z of [-6.5,-4.1,-1.7,.7,3.1,5.5]){
+      let prev=group.children.length;
       picture(b,'side',-1,z,y,index++);
+      facade.west.push(...group.children.slice(prev));
+      prev=group.children.length;
       picture(b,'side',1,z,y,index++);
+      facade.east.push(...group.children.slice(prev));
     }
     for(const x of [-6.55,-4.2,4.2,6.55]){
+      let prev=group.children.length;
       picture(b,'end',-1,x,y,index++);
+      facade.south.push(...group.children.slice(prev));
+      prev=group.children.length;
       picture(b,'end',1,x,y,index++);
+      facade.north.push(...group.children.slice(prev));
     }
   }
   const portrait=buildOpenings(group,8.8,[LANDING_SLOTS[0]]);
@@ -173,7 +183,17 @@ export function buildLandingSpace(group,b){
       {kind:'stair_gallery',x:TOWER_STAIR_APPROACH.x,
         z:TOWER_STAIR_APPROACH.z,
         desc:'Поворотная лестница — исследовать путь к галерее'}],
-    setCameraYaw(yaw){portrait.setCameraYaw(yaw);},
+    setCameraYaw(yaw){
+      // Orbiting the cutaway must never put 15m-high front masonry over
+      // the playable floor. The far facades retain their portraits.
+      for(const [side,objects] of Object.entries(facade)){
+        const near=side==='east'?Math.sin(yaw)>.22:
+          side==='west'?Math.sin(yaw)<-.22:
+          side==='north'?Math.cos(yaw)>.22:Math.cos(yaw)<-.22;
+        for(const object of objects)object.visible=!near;
+      }
+      portrait.setCameraYaw(yaw);
+    },
     setWorldSeconds(seconds){
       moving.rotation.y=grandStairState(seconds).angle;
     },
