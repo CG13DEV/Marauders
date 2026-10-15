@@ -501,6 +501,7 @@ function nearestPortal(max=2.25){
   let winner=null,dist=max;
   for(const p of stage.portals){
     const d=Math.hypot(player.x-p.x,player.z-p.z);
+    if(p.kind==='gallery_bench'&&d>1.10)continue;
     if(d<dist){winner=p;dist=d;}
   }
   return winner;
@@ -630,7 +631,8 @@ function tapGround(e){
   const desired=clipMovement(hit.x,hit.z);
   const near=stage.portals.find(p=>
     Math.hypot(desired.x-p.x,desired.z-p.z)<2);
-  if(near&&Math.hypot(player.x-near.x,player.z-near.z)<2.6){
+  if(near&&Math.hypot(player.x-near.x,player.z-near.z)<
+      (near.kind==='gallery_bench'?1.10:2.6)){
     usePortal(near);return;
   }
   const goal=near?{x:near.x,z:near.z}:desired;
