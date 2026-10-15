@@ -11,6 +11,8 @@ import {bedroomPlan,validateBedroomPlan} from './layout-bedroom.js';
 import {commonPlan,validateCommonPlan} from './layout-common.js';
 import {buildLandingSpace} from './layout-landing.js';
 import {buildGallerySpace} from './layout-gallery.js';
+import {COMMON_PORTRAIT_APPROACH,isInVestibule,
+  VESTIBULE_BOUNDS} from './tower-entrance.js';
 const C={
   stone:0x868388,stoneDeep:0x55545c,grout:0x39383f,
   wood:0x684630,woodDark:0x39271f,gold:0xd1a35b,
@@ -252,6 +254,37 @@ function applyCommonLayout(group,b,radius){
   }
   return plan;
 }
+function buildGryffindorVestibule(group,b){
+  // [GAME] The small tunnel BETWEEN the common chamber and the Fat Lady
+  // remains physically inside the common ECS room: NO phantom graph node.
+  // The public Grand Staircase is on the other side of this portrait.
+  const floor=0x655857,stone=0x868087,gold=0xc49c62,
+    wood=0x47332e,velvet=0x733742;
+  b.box(0,-.23,11.32,3.55,.45,5.90,0x4d4650);
+  b.box(0,.02,11.32,3.10,.08,5.75,floor);
+  for(const side of [-1,1]){
+    b.box(side*1.57,1.66,11.45,.34,3.32,5.60,stone);
+    b.box(side*1.55,3.25,11.45,.57,.30,5.7,gold);
+    for(const z of [9.55,11.2,12.85]){
+      b.box(side*1.35,1.48,z,.17,1.8,.20,gold);
+      const torch=new THREE.PointLight(0xffba78,1.5,4.5);
+      torch.position.set(side*1.08,2.05,z);group.add(torch);
+    }
+  }
+  // The Fat Lady is embedded at the OUTSIDE end, not standing inside
+  // the round common room. The panel is the portal, not another room.
+  b.box(0,2.95,13.92,3.48,.55,.40,stone);
+  for(const side of [-1,1])b.box(side*1.55,1.45,13.91,.38,2.90,.43,stone);
+  b.box(0,1.5,13.90,2.72,2.87,.20,wood);
+  b.box(0,1.5,13.75,2.42,2.62,.11,gold);
+  b.box(0,1.51,13.68,2.19,2.38,.07,velvet);
+  // Painted silhouette reads as portrait, not an ordinary wooden door.
+  b.box(0,1.17,13.58,1.20,.98,.08,gold);
+  b.cylinder(0,2.03,13.57,.29,.30,.55,0xdfb58b,12);
+  b.box(0,2.41,13.58,.89,.20,.10,wood);
+  b.box(0,.035,12.65,2.15,.07,.38,gold);
+  return {...VESTIBULE_BOUNDS};
+}
 export function buildStage(room,graph){
   const group=new THREE.Group(),obstacles=[];
   const b=makeBuilder(group,obstacles);
@@ -260,6 +293,7 @@ export function buildStage(room,graph){
   const isGallery=room.key===graph.gallery.key;
   const radius=isCommon?10:isLanding?7.4:isGallery?8:7.6;
   let slots,portals,fire=null,rotate,layout,bounds=null;
+  let walkableExtras=null,setWorldSeconds=()=>{};
   if(isGallery){
     const corridor=buildGallerySpace(group,b);
     portals=corridor.portals;
@@ -274,7 +308,8 @@ export function buildStage(room,graph){
     slots=entrance.architecture;
     bounds=entrance.bounds;
     rotate=entrance.setCameraYaw;
-    layout={kind:'landing',bounds};
+    setWorldSeconds=entrance.setWorldSeconds;
+    layout={kind:'landing',bounds,grandStair:true};
   }else{
     slots=slotsFor(isCommon?'common':'bedroom');
     validateSlots(slots,radius);
@@ -285,7 +320,13 @@ export function buildStage(room,graph){
     rotate=yaw=>{rotateWalls(yaw);openings.setCameraYaw(yaw);};
     if(isCommon){
       const plan=applyCommonLayout(group,b,radius);
-      layout={kind:'common',plan};
+      const vestibule=buildGryffindorVestibule(group,b);
+      walkableExtras=isInVestibule;
+      const outside=portals.find(p=>p.kind==='outside');
+      if(outside){outside.x=COMMON_PORTRAIT_APPROACH.x;
+        outside.z=COMMON_PORTRAIT_APPROACH.z;
+        outside.desc='Пройти через портрет Полной Дамы';}
+      layout={kind:'common',plan,vestibule};
       portals.push({kind:'fire',x:0,z:-(radius-2.1),
         desc:'В камине потрескивают поленья'});
     }else{
@@ -312,7 +353,7 @@ export function buildStage(room,graph){
   });
   return {
     group,obstacles,portals,radius,bounds,fire,architecture:slots,layout,
-    setCameraYaw:rotate,
+    walkableExtras,setCameraYaw:rotate,setWorldSeconds,
     dispose(){for(const res of new Set(resources))res?.dispose?.();}
   };
 }

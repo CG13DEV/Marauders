@@ -6,6 +6,8 @@ import {bedroomPlan,validateBedroomPlan,bedOverlap}
 import {commonPlan,validateCommonPlan} from '../src/layout-common.js';
 import {landingPlan,validateLandingPlan,LANDING_BOUNDS}
   from '../src/layout-landing.js';
+import {grandStairState,isInVestibule,COMMON_PORTRAIT_APPROACH}
+  from '../src/tower-entrance.js';
 import {walkable,safeSpawn} from '../src/movement.js';
 import {slotsFor,roomAnchor,signedAngle}
   from '../src/architecture.js';
@@ -63,21 +65,21 @@ test('T4.4 the common room leaves central walking and three portals clear',()=>{
   // Sanity: actual graph has one portrait and two stairs; not four doors.
   assert.equal(slotsFor('common').filter(s=>s.portal).length,3);
 });
-test('T4.3 portrait landing is a RECTANGULAR corridor with real approach',()=>{
+test('T4.3 the Fat Lady occupies a portrait-covered staircase tower',()=>{
   const plan=landingPlan();
   assert.equal(validateLandingPlan(plan),true);
-  assert.ok(plan.length>plan.width);
+  assert.ok(plan.width>15&&plan.length>15);
+  assert.ok(plan.levels.length>=4);
   assert.deepEqual(plan.bounds,LANDING_BOUNDS);
   assert.equal(slotsFor('landing').filter(s=>s.type==='portrait').length,1);
   assert.equal(slotsFor('landing').filter(s=>s.type==='window').length,2);
-  for(const window of slotsFor('landing').filter(s=>s.type==='window')){
-    assert.ok(Math.abs(Math.abs(window.angle)-Math.PI/2)<1e-8);
-    assert.ok(Math.abs(roomAnchor(3.45,window.angle).x)>3.44);
-  }
+  assert.ok(plan.portrait.z<LANDING_BOUNDS.minZ);
+  assert.equal(plan.approach.z,-6.72);
   const stage={radius:7.4,bounds:plan.bounds,obstacles:[]};
-  assert.equal(walkable(stage,0,-3.1),true);
-  assert.equal(walkable(stage,0,3.8),true);
-  assert.equal(walkable(stage,4,0),false);
-  assert.equal(walkable(stage,0,6),false);
-  assert.deepEqual(safeSpawn(stage,{x:0,z:1}),{x:0,z:1});
+  assert.equal(walkable(stage,0,-6.72),true);
+  assert.equal(walkable(stage,0,3.85),true);
+  assert.equal(walkable(stage,4,0),true,'tower must not be a hallway');
+  assert.equal(walkable(stage,9,0),false);
+  assert.equal(walkable(stage,0,9),false);
+  assert.deepEqual(safeSpawn(stage,{x:0,z:-5.72}),{x:0,z:-5.72});
 });

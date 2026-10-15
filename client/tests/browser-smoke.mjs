@@ -123,22 +123,26 @@ try{
   assert.equal((await page.evaluate(()=>
     window.__towerTest.snapshot())).roomKey,'dorm_gryffindor');
   // The portrait passage requires actually approaching the far wall.
-  await page.evaluate(()=>window.__towerTest.driveTo([{x:0,z:7.9}]));
+  await page.evaluate(()=>window.__towerTest.driveTo([{x:0,z:12.65}]));
   await page.locator('.wing-card button').last().click();
   const landing=await page.evaluate(()=>window.__towerTest.snapshot());
   assert.equal(landing.roomKey,'west_landing_4');
   assert.equal(landing.layout.kind,'landing');
   assert.ok(landing.layout.bounds.maxZ>landing.layout.bounds.minZ);
-  assert.deepEqual(landing.openings.sort(),[
-    'wall-slot:return','wall-slot:west_window','wall-slot:east_window'
-  ].sort());
+  assert.deepEqual(landing.openings,['wall-slot:return']);
+  assert.equal(landing.layout.grandStair,true);
+  assert.equal(typeof landing.live.player.grandStair.aligned,'boolean',
+    'The visible staircase is driven by the already-advanced ECS clock');
   assert.deepEqual(landing.activePortals,['return','stair_gallery']);
   await page.screenshot({path:resolve('artifacts/landing.png'),
     animations:'disabled'});
-  await page.evaluate(()=>window.__towerTest.driveTo([{x:0,z:-3.14}]));
+  await page.evaluate(()=>window.__towerTest.driveTo([{x:0,z:-6.72}]));
   await page.locator('#go-common').click();
   assert.equal((await page.evaluate(()=>
     window.__towerTest.snapshot())).roomKey,'dorm_gryffindor');
+  assert.ok((await page.evaluate(()=>
+    window.__towerTest.snapshot().live.player.position.z))>10,
+    'The Fat Lady leads through a real vestibule within the common-room node');
   // Genuine localized action, not a room-wide click from the entrance.
   const farInspect=await page.evaluate(()=>
     window.__towerTest.submitPlayer({type:'inspect_cup'}));
@@ -194,7 +198,7 @@ try{
   // then physically enter and return — never hand-change the rendered room.
   const galleryPage=await browser.newPage({viewport:{width:1380,height:900}});
   await galleryPage.goto(origin+'?testMode=1',{waitUntil:'networkidle'});
-  await galleryPage.evaluate(()=>window.__towerTest.driveTo([{x:0,z:7.9}]));
+  await galleryPage.evaluate(()=>window.__towerTest.driveTo([{x:0,z:12.65}]));
   await galleryPage.waitForFunction(()=>
     window.__towerTest.snapshot().activeInteraction==='outside');
   await galleryPage.keyboard.press('f');
@@ -206,7 +210,14 @@ try{
   await galleryPage.keyboard.press('f'); // discover physical stair
   assert.ok((await galleryPage.evaluate(()=>
     window.__towerTest.snapshot().live.player.knownRooms)).includes('gallery_4'));
-  await galleryPage.keyboard.press('f'); // enter the actual graph room
+  const wrongStair=await galleryPage.evaluate(()=>
+    window.__towerTest.submitPlayer({type:'move',destination:'gallery_4'}));
+  assert.equal(wrongStair.reason,'stair_misaligned',
+    'A moving flight must physically block access before it aligns');
+  await galleryPage.evaluate(()=>window.__towerTest.advanceLivingSeconds(90));
+  assert.equal((await galleryPage.evaluate(()=>
+    window.__towerTest.snapshot().live.player.grandStair.aligned)),true);
+  await galleryPage.keyboard.press('f'); // now the real staircase route is open
   await galleryPage.waitForFunction(()=>
     window.__towerTest.snapshot().roomKey==='gallery_4');
   assert.equal((await galleryPage.evaluate(()=>
@@ -217,6 +228,8 @@ try{
   // and waiting there advances real ECS world seconds without a free teleport.
   assert.ok((await galleryPage.evaluate(()=>
     window.__towerTest.snapshot().activePortals)).includes('gallery_bench'));
+  assert.equal((await galleryPage.evaluate(()=>
+    window.__towerTest.snapshot().live.player.grandStair.aligned)),true);
   await galleryPage.evaluate(()=>window.__towerTest.driveTo([{x:1.45,z:1.1}]));
   await galleryPage.waitForFunction(()=>
     window.__towerTest.snapshot().activeInteraction==='gallery_bench');

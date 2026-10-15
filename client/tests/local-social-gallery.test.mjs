@@ -63,7 +63,7 @@ test('G3 world expansion: the actual gallery_4 graph node can be explored',()=>{
    [a,b].includes(graph.landing.key)));
  const game=createLivingRoom(graph,{warmupTicks:0});
  assert.ok(!game.snapshot().player.knownRooms.includes(graph.gallery.key));
- walkTo(game,{x:0,z:7.9});
+ walkTo(game,{x:0,z:12.65});
  assert.equal(game.submit({type:'move',destination:graph.landing.key}).ok,true);
  assert.equal(game.snapshot().nearbyPeople.length,0);
  assert.equal(game.submit({type:'survey_gallery'}).reason,'not_in_reach');
@@ -120,7 +120,7 @@ test('G3.3: splitting world advancement cannot change dialogue outcome',()=>{
 test('G3.3 castle increment: a reachable gallery bench consumes world time',()=>{
  const game=createLivingRoom(graph,{warmupTicks:0});
  assert.equal(game.submit({type:'wait_gallery'}).reason,'not_in_reach');
- walkTo(game,{x:0,z:7.9});
+ walkTo(game,{x:0,z:12.65});
  assert.equal(game.submit({type:'move',destination:graph.landing.key}).ok,true);
  walkTo(game,{x:0,z:3.85});
  assert.equal(game.submit({type:'survey_gallery'}).ok,true);

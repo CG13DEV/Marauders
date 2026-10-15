@@ -65,13 +65,15 @@ test('G2: physical approach AND personal discovery gate ECS passage commands',()
   walkTo(game,[{x:0,z:5.52}]);
   assert.equal(game.submit({type:'move',destination:graph.common.key}).ok,true);
   assert.equal(game.snapshot().player.room,graph.common.key);
-  walkTo(game,[{x:0,z:7.9}]);
+  walkTo(game,[{x:0,z:12.65}]);
   assert.equal(game.submit({type:'move',destination:graph.landing.key}).ok,true);
   assert.equal(game.snapshot().player.room,graph.landing.key);
   assert.equal(game.submit({type:'move',destination:girlRoom.key}).reason,
     'unknown_destination');
-  walkTo(game,[{x:0,z:-3.14}]);
+  walkTo(game,[{x:0,z:-6.72}]);
   assert.equal(game.submit({type:'move',destination:graph.common.key}).ok,true);
+  assert.ok(game.snapshot().player.position.z>10,
+    'Return through the portrait must arrive inside the real vestibule');
 });
 
 test('G2: viewing cup and inspecting it require real proximity',()=>{
@@ -90,7 +92,7 @@ test('G2: viewing cup and inspecting it require real proximity',()=>{
   assert.equal(game.submit({type:'break_cup'}).ok,true);
   assert.equal(game.snapshot().player.cup.broken,true);
   assert.equal(game.submit({type:'break_cup'}).ok,false);
-  walkTo(game,[{x:0,z:7.9}]);
+  walkTo(game,[{x:0,z:12.65}]);
   assert.equal(game.snapshot().player.cup,undefined,
     'distant object state is not known from remote observation');
   assert.equal(game.submit({type:'move',destination:graph.landing.key}).ok,true);
