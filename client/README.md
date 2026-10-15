@@ -93,7 +93,9 @@ layer without altering the existing school simulation.
   large multilevel Grand Staircase atrium, **not** the old narrow landing.
   The Fat Lady's portrait is one of many, and the player reaches it through
   physically validated collision bounds and a dedicated common-room vestibule.
-  A rotating Three.js staircase gates the existing gallery route.
+  A rotating Three.js staircase now supports physical walking and controls
+  the genuine floor-3 ↔ floor-4 ECS passage, with distinct galleries on each
+  level. The camera tracks the player’s vertical position.
 - **Common room:** a real small entrance vestibule now sits between the Fat
   Lady and the circular lounge, and remains part of `dorm_gryffindor`.
   Cozy reading/study islands, tangent-facing bookcases,
