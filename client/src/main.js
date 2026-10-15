@@ -252,7 +252,8 @@ function updateLivingUi(snapshot){
   const locals=snapshot.locations.filter(([,room])=>room===roomKey).length;
   $('living-population').textContent=locals+' В КОМНАТЕ / '+
     snapshot.locations.length+' NPC';
-  $('player-status').textContent='ТЫ ИГРАЕШЬ: '+snapshot.player.name;
+  $('player-status').textContent='ТЫ ИГРАЕШЬ: '+snapshot.player.name+
+    (snapshot.player.interaction?' · занят':'');
   const journal=$('player-journal');journal.replaceChildren();
   for(const note of snapshot.player.journal){
     const item=document.createElement('p');item.textContent=note;journal.append(item);
@@ -281,9 +282,25 @@ function updateLivingUi(snapshot){
     activityList.append(row);
   }
   const nearby=snapshot.nearbyPeople.find(n=>n.canTalk);
-  $('talk-panel').hidden=!nearby;
-  talkTargetKey=nearby?.key??null;
+  const running=snapshot.player.interaction;
+  $('talk-panel').hidden=!nearby||running?.type==='wait_gallery';
+  talkTargetKey=running?.listener??nearby?.key??null;
   if(nearby)$('talk-target').textContent='Рядом: '+nearby.name;
+  $('talk-chat').disabled=Boolean(running);
+  $('talk-question').disabled=Boolean(running);
+  $('talk-cancel').hidden=!running;
+  if(running&&running.type!=='wait_gallery'){
+    $('talk-reply').textContent='Разговор идёт · '+
+      running.remainingSeconds+' игровых секунд до ответа.';
+  }else if(!running){
+    const last=snapshot.player.lastInteraction;
+    if(last?.dialogue)$('talk-reply').textContent=last.dialogue.speaker+
+      ': '+last.dialogue.answer;
+    else if(last?.type==='talk'||last?.type==='ask_cup')
+      $('talk-reply').textContent=last.status==='interrupted'
+        ?'Разговор прервался: '+last.reason
+        :'Собеседник отказал: '+last.reason;
+  }
 }
 function paintLivingChange(result){
   for(const movement of result.delta.movements)scheduleLivingMovement(movement);
@@ -452,6 +469,12 @@ function usePortal(portal){
     updateLivingUi(living.snapshot());return;
   }
   if(portal.kind==='wing'){openDorms(portal.wing);return;}
+  if(portal.kind==='gallery_bench'){
+    const result=living.submit({type:'wait_gallery'});
+    toast(result.ok?'Ты присел на скамью. Время продолжает идти…':
+      'Невозможно посидеть: '+result.reason);
+    updateLivingUi(living.snapshot());return;
+  }
   if(portal.kind==='stair_gallery'){
     const result=living.submit({type:'survey_gallery'});
     if(result.ok){toast('За лестницей открылась галерея. Нажми F ещё раз.');
@@ -476,10 +499,13 @@ function nearestPortal(max=2.25){
 function refreshHint(){
   const liveView=living.snapshot();
   const inRange=liveView.nearbyPeople.find(n=>n.canTalk);
-  if((inRange?.key??null)!==talkTargetKey)$('talk-reply').textContent=
+  const busy=Boolean(liveView.player.interaction);
+  const talking=liveView.player.interaction?.listener??inRange?.key??null;
+  if(talking!==talkTargetKey&&!busy)$('talk-reply').textContent=
     'Ответ зависит от того, что помнит собеседник.';
-  talkTargetKey=inRange?.key??null;
-  $('talk-panel').hidden=!inRange;
+  talkTargetKey=talking;
+  $('talk-panel').hidden=!inRange||
+    liveView.player.interaction?.type==='wait_gallery';
   if(inRange)$('talk-target').textContent='Рядом: '+inRange.name;
   const nearCup=liveView.player.nearbyCup;
   $('cup-actions').hidden=!nearCup;
@@ -487,13 +513,13 @@ function refreshHint(){
   $('cup-inspection').textContent=state.cup?.broken?
     'Старинная чашка разбита':state.cup?.inspected?
     'Ты осмотрел старинную чашку':'Старинная чашка · присмотрись';
-  $('cup-break').disabled=state.cup?.broken===true;
+  $('cup-break').disabled=state.cup?.broken===true||busy;
   const portal=nearCup?{kind:'inspect_cup',desc:'Осмотреть старую чашку'}:
     nearestPortal();
   const hint=$('action-hint');
-  hint.hidden=!portal;
-  if(portal)$('action-hint-text').textContent=portal.desc;
-  interact=portal;
+  hint.hidden=!portal||busy;
+  if(portal&&!busy)$('action-hint-text').textContent=portal.desc;
+  interact=busy?null:portal;
 }
 $('interact-button').addEventListener('click',()=>usePortal(interact));
 function interactWithNpc(type,topic){
@@ -509,12 +535,15 @@ function interactWithNpc(type,topic){
       not_visible:'Собеседник ушёл.'};
     $('talk-reply').textContent=reasons[answer.reason]??'Разговор не состоялся: '+answer.reason;
   }else{
-    $('talk-reply').textContent=answer.dialogue.speaker+': '+answer.dialogue.answer;
     updateLivingUi(living.snapshot());
   }
 }
 $('talk-chat').addEventListener('click',()=>interactWithNpc('talk','castle'));
 $('talk-question').addEventListener('click',()=>interactWithNpc('ask_cup'));
+$('talk-cancel').addEventListener('click',()=>{
+  const outcome=living.submit({type:'cancel_interaction'});
+  if(outcome.ok)updateLivingUi(living.snapshot());
+});
 $('cup-break').addEventListener('click',()=>{
   const near=living.snapshot().player.nearbyCup;
   if(!near)return;
