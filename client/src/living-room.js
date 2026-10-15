@@ -403,6 +403,9 @@ export function createLivingRoom(graph,{warmupTicks=67,playerKey='peter'}={}){
     const events=world.events();
     const fresh=events.slice(cursor);cursor=events.length;
     const positions=new Map(observer.state());
+    // Player belongs to the same ECS room even though the NPC observer
+    // correctly excludes the manually controlled avatar from its roster.
+    positions.set(playerKey,roomKeyForId.get(world.currentRoom(playerId)));
     const activity=[];
     for(const event of fresh){
       if(event.type==='entity_moved'){
