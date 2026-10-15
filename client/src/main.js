@@ -31,6 +31,7 @@ const playerDefinition=PLAYER_CAST.find(a=>a.key===chosen)??PLAYER_CAST[3];
 const playerKey=playerDefinition.key;
 let roomKey=graph.common.key;
 const byKey=new Map([graph.common,graph.landing,graph.gallery,
+  graph.lowerLanding,graph.lowerGallery,
   ...graph.research,...graph.legacy]
   .map(x=>[x.key,x]));
 const adjacent=new Map();
@@ -40,7 +41,7 @@ for(const [a,b] of graph.links){
   adjacent.get(a).add(b);adjacent.get(b).add(a);
 }
 let stage=null,pendingPortal=null,target=null,artifactVisual=null;
-const player={x:STARTS.common.x,z:STARTS.common.z,facing:0,walking:false};
+const player={x:STARTS.common.x,z:STARTS.common.z,y:0,facing:0,walking:false};
 const avatar=createAvatar({variant:playerDefinition.variant});
 scene.add(avatar.group);
 const living=createLivingRoom(graph,{playerKey});
@@ -77,7 +78,9 @@ function toast(text){
 function labelFor(room){
   if(room.key===graph.common.key)return 'Гостиная Гриффиндора';
   if(room.key===graph.landing.key)return 'Башня Большой лестницы';
-  if(room.key===graph.gallery.key)return 'Галерея четвёртого этажа';
+  if(room.key===graph.gallery.key)return 'Галерея верхней площадки';
+  if(room.key===graph.lowerLanding.key)return 'Большая лестница · нижняя площадка';
+  if(room.key===graph.lowerGallery.key)return 'Галерея нижнего этажа';
   if(room.type==='legacy')return room.wing==='boys'
     ?'Старая спальня мальчиков':'Старая спальня девочек';
   return String(room.year)+'-й курс · '+(room.wing==='boys'?'мальчики':'девочки')+
@@ -89,7 +92,11 @@ function detailFor(room){
   if(room.key===graph.landing.key)
     return 'Башня, полная портретов и движущихся лестниц. Их маршруты меняются со временем.';
   if(room.key===graph.gallery.key)
-    return 'Галерея доступна с поворотной лестницы. Дождись, пока она соединит площадки.';
+    return 'Галерея на уровне входа Гриффиндора. Соединена с верхней площадкой.';
+  if(room.key===graph.lowerLanding.key)
+    return 'Нижняя площадка. По подвижной лестнице можно подняться к портрету.';
+  if(room.key===graph.lowerGallery.key)
+    return 'Нижняя галерея: настоящий узел школьного графа, соединённый с башней.';
   if(room.type==='legacy')
     return 'Узел старого графа. В исследовательской конфигурации здесь никто не живёт.';
   return debugMode?'Граф: '+room.students+' жителей из '+room.capacity:
@@ -128,15 +135,17 @@ function rebuildScene(){
   pendingPortal=null;target=null;
   const preference=roomKey===graph.common.key?STARTS.common:
     roomKey===graph.landing.key?STARTS.landing:
-      roomKey===graph.gallery.key?STARTS.gallery:STARTS.bedroom;
+      roomKey===graph.gallery.key||roomKey===graph.lowerGallery.key
+        ?STARTS.gallery:STARTS.bedroom;
   const authoritative=living.snapshot().player.position;
   const spawn=safeSpawn(stage,authoritative);
   if(Math.hypot(spawn.x-authoritative.x,spawn.z-authoritative.z)>.01)
     throw Error('G2 world spawn disagrees with rendered physical room');
   player.x=authoritative.x;player.z=authoritative.z;
+  player.y=living.snapshot().player.elevation;
   // A fresh room inherits the current camera orientation and cutaway.
   stage.setCameraYaw(yaw);
-  avatar.group.position.set(player.x,0,player.z);
+  avatar.group.position.set(player.x,player.y,player.z);
   rebuildLivingSprites();
   updateHeader();
 }
@@ -147,8 +156,10 @@ function positionForActor(key){
   const local=living.snapshot().activities.find(a=>a.actor===key);
   const pref=roomKey===graph.common.key&&local
     ?{x:local.x,z:local.z}
-    :roomKey===graph.landing.key?STARTS.landing:
-      roomKey===graph.gallery.key?STARTS.gallery:STARTS.bedroom;
+    :roomKey===graph.landing.key||roomKey===graph.lowerLanding.key
+      ?STARTS.landing:
+      roomKey===graph.gallery.key||roomKey===graph.lowerGallery.key
+        ?STARTS.gallery:STARTS.bedroom;
   return safeSpawn(stage,pref);
 }
 function addLivingSprite(key,point){
@@ -488,16 +499,27 @@ function usePortal(portal){
       'Невозможно посидеть: '+result.reason);
     updateLivingUi(living.snapshot());return;
   }
-  if(portal.kind==='stair_gallery'){
+  if(portal.kind==='stair_descent'||portal.kind==='stair_ascent'){
+    const result=living.submit({type:'mount_stair'});
+    if(!result.ok){toast('Лестница недоступна: '+result.reason);return;}
+    const p=result.player.position;
+    player.x=p.x;player.z=p.z;player.y=result.player.elevation;
+    toast('Ты на подвижной лестнице. Иди вдоль ступеней — она доставит тебя на другой этаж.');
+    return;
+  }
+  if(portal.kind==='stair_gallery'||portal.kind==='lower_gallery'){
     const result=living.submit({type:'survey_gallery'});
     if(result.ok){toast('За лестницей открылась галерея. Нажми F ещё раз.');
       updateLivingUi(living.snapshot());updateHeader();return;}
     if(result.reason==='already_explored'){
-      enter(graph.gallery.key);return;
+      enter(portal.kind==='lower_gallery'?graph.lowerGallery.key:graph.gallery.key);return;
     }
     toast('Сначала подойди к лестнице.');return;
   }
-  if(portal.kind==='return_landing'){enter(graph.landing.key);return;}
+  if(portal.kind==='return_landing'){
+    enter(roomKey===graph.lowerGallery.key
+      ?graph.lowerLanding.key:graph.landing.key);return;
+  }
   if(portal.kind==='outside'){enter(graph.landing.key);return;}
   if(portal.kind==='return'){enter(graph.common.key);return;}
   if(portal.kind==='fire'){toast('Потрескивают поленья. Сейчас мы исследуем пространство, не симулируем время.');}
@@ -530,14 +552,11 @@ function refreshHint(){
     'Ты осмотрел старинную чашку':'Старинная чашка · присмотрись';
   $('cup-break').disabled=state.cup?.broken===true||busy;
   const portal=nearCup?{kind:'inspect_cup',desc:'Осмотреть старую чашку'}:
-    nearestPortal();
-  if(portal?.kind==='stair_gallery'&&
+    (liveView.player.onStairs?null:nearestPortal());
+  if(portal?.kind==='stair_descent'&&
      liveView.player.grandStair?.aligned===false)
-    portal.desc='Лестница повернулась: подожди '+
+    portal.desc='Пролёт отвернулся. До соединения '+
       liveView.player.grandStair.secondsToAlign+' игровых секунд';
-  if(portal?.kind==='return_landing'&&
-     liveView.player.grandStair?.aligned===false)
-    portal.desc='Лестница ещё не соединилась. Подожди.';
   const hint=$('action-hint');
   hint.hidden=!portal||busy;
   if(portal&&!busy)$('action-hint-text').textContent=portal.desc;
@@ -586,13 +605,21 @@ function clipMovement(x,z){
   return {x,z};
 }
 function move(dx,dz){
-  const next=moveWithCollision(stage,player,dx,dz);
+  const mounted=living.snapshot().player.onStairs;
+  const next=mounted?{x:player.x+dx,z:player.z+dz}:
+    moveWithCollision(stage,player,dx,dz);
   const travelled={dx:next.x-player.x,dz:next.z-player.z};
   if(Math.hypot(travelled.dx,travelled.dz)<.00001)return;
   const result=living.submit({type:'walk',...travelled});
   if(!result.ok)return;
   player.x=result.player.position.x;
   player.z=result.player.position.z;
+  player.y=result.player.elevation;
+  if(result.transition){
+    roomKey=result.player.room;
+    rebuildScene();updateLivingUi(living.snapshot());
+    toast('Ты поднялся на другой этаж Большой лестницы.');
+  }
 }
 function calculateCamera(){
   const ratio=area.clientWidth/Math.max(1,area.clientHeight);
@@ -601,9 +628,9 @@ function calculateCamera(){
   renderer.setSize(area.clientWidth,area.clientHeight,false);
 }
 function redrawCamera(){
-  camera.position.set(player.x+Math.sin(yaw)*24,19.8,
+  camera.position.set(player.x+Math.sin(yaw)*24,player.y+19.8,
     player.z+Math.cos(yaw)*24);
-  camera.lookAt(player.x,0,player.z);
+  camera.lookAt(player.x,player.y,player.z);
   // The cutaway must follow the actual camera, including Q/E/drag.
   stage?.setCameraYaw(yaw);
 }
@@ -640,6 +667,7 @@ function tapGround(e){
     -((e.clientY-box.top)/box.height*2-1)
   );
   ray.setFromCamera(point,camera);
+  plane.constant=-player.y;
   const hit=new THREE.Vector3();
   if(!ray.ray.intersectPlane(plane,hit))return;
   const desired=clipMovement(hit.x,hit.z);
@@ -712,7 +740,12 @@ function tick(){
     moving=Math.hypot(player.x-previousX,player.z-previousZ)>.0001;
     if(target&&!moving){target=null;pendingPortal=null;}
   }
-  avatar.group.position.set(player.x,0,player.z);
+  // World-time rotation moves mounted players with the physical pivot
+  // even while the keys are released; polling alone changes nothing.
+  const actual=living.snapshot().player;
+  player.x=actual.position.x;player.z=actual.position.z;
+  player.y=actual.elevation;
+  avatar.group.position.set(player.x,player.y,player.z);
   const frame=avatar.update(dt,moving,player.facing,yaw);
   // The renderer ONLY paints validated observer data.
   animateLiving(dt);
@@ -754,7 +787,7 @@ window.addEventListener('pagehide',()=>{
 if(inTestMode){
   window.__towerTest=Object.freeze({
     snapshot:()=>Object.freeze({
-      player:Object.freeze({x:player.x,z:player.z}),
+      player:Object.freeze({x:player.x,y:player.y,z:player.z}),
       identity:playerKey,
       roomKey,extras:standIns.length,
       live:living.snapshot(),
@@ -786,7 +819,7 @@ if(inTestMode){
         if(Math.hypot(point.x-player.x,point.z-player.z)>.08)
           throw Error('G2 test route did not reach '+JSON.stringify(point));
       }
-      avatar.group.position.set(player.x,0,player.z);
+      avatar.group.position.set(player.x,player.y,player.z);
       return living.snapshot().player;
     },
     advanceLiving:()=>stepLiving(),
