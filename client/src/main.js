@@ -283,13 +283,22 @@ function updateLivingUi(snapshot){
   }
   const nearby=snapshot.nearbyPeople.find(n=>n.canTalk);
   const running=snapshot.player.interaction;
-  $('talk-panel').hidden=!nearby||running?.type==='wait_gallery';
+  $('talk-panel').hidden=!nearby&&!running;
   talkTargetKey=running?.listener??nearby?.key??null;
-  if(nearby)$('talk-target').textContent='Рядом: '+nearby.name;
+  if(running?.type==='wait_gallery')
+    $('talk-target').textContent='Каменная скамья в галерее';
+  else if(nearby)$('talk-target').textContent='Рядом: '+nearby.name;
+  $('talk-chat').hidden=running?.type==='wait_gallery';
+  $('talk-question').hidden=running?.type==='wait_gallery';
   $('talk-chat').disabled=Boolean(running);
   $('talk-question').disabled=Boolean(running);
   $('talk-cancel').hidden=!running;
-  if(running&&running.type!=='wait_gallery'){
+  $('talk-cancel').textContent=running?.type==='wait_gallery'
+    ?'Прервать отдых':'Прервать разговор';
+  if(running?.type==='wait_gallery')
+    $('talk-reply').textContent='Осталось '+running.remainingSeconds+
+      ' игровых секунд. Замок живёт дальше.';
+  else if(running){
     $('talk-reply').textContent='Разговор идёт · '+
       running.remainingSeconds+' игровых секунд до ответа.';
   }else if(!running){
@@ -504,8 +513,7 @@ function refreshHint(){
   if(talking!==talkTargetKey&&!busy)$('talk-reply').textContent=
     'Ответ зависит от того, что помнит собеседник.';
   talkTargetKey=talking;
-  $('talk-panel').hidden=!inRange||
-    liveView.player.interaction?.type==='wait_gallery';
+  $('talk-panel').hidden=!inRange&&!busy;
   if(inRange)$('talk-target').textContent='Рядом: '+inRange.name;
   const nearCup=liveView.player.nearbyCup;
   $('cup-actions').hidden=!nearCup;
