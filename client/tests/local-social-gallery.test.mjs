@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import {createLivingRoom} from '../src/living-room.js';
+import {createLivingRoom,TIMED_PLAYER_ACTION_SECONDS} from '../src/living-room.js';
 const graph=JSON.parse(await readFile(new URL('../src/tower-graph.generated.json',
  import.meta.url),'utf8'));
 function walkTo(game,target){
@@ -24,8 +24,19 @@ test('G3: speaking requires reach, a real target and valid topic',()=>{
  assert.equal(game.submit({type:'talk',listener:'lily',topic:'gossip'}).reason,'wrong_topic');
  const talk=game.submit({type:'talk',listener:'lily',topic:'castle'});
  assert.equal(talk.ok,true);
- assert.equal(talk.dialogue.source,'conversation');
- assert.match(talk.dialogue.answer,/Хогвартсе/);
+ assert.equal(talk.started,true);
+ assert.equal(game.snapshot().player.interaction.remainingSeconds,
+   TIMED_PLAYER_ACTION_SECONDS.talk);
+ assert.equal(game.snapshot().player.lastInteraction,null,
+   'Social truth is committed only after world-time completion');
+ assert.equal(game.submit({type:'talk',listener:'lily',topic:'castle'}).reason,'busy');
+ game.advanceSeconds(TIMED_PLAYER_ACTION_SECONDS.talk-1);
+ assert.equal(game.snapshot().player.lastInteraction,null);
+ game.advanceSeconds(1);
+ assert.equal(game.snapshot().player.interaction,null);
+ assert.equal(game.snapshot().player.lastInteraction.status,'completed');
+ assert.equal(game.snapshot().player.lastInteraction.dialogue.source,'conversation');
+ assert.match(game.snapshot().player.lastInteraction.dialogue.answer,/Хогвартсе/);
  assert.equal(game.submit({type:'talk',listener:'lily',topic:'castle'}).reason,'already_chatted');
  assert.equal(game.submit({type:'talk',listener:'james',topic:'castle',actor:99}).ok,false);
 });
@@ -38,12 +49,12 @@ test('G3: cup questioning uses participant-owned evidence, not global event log'
  // evidence: the model must not require a redundant inspection.
  const testimony=game.submit({type:'ask_cup',listener:'lily'});
  assert.equal(testimony.ok,true);
- assert.equal(testimony.dialogue.answered,true);
- assert.match(testimony.dialogue.answer,/ты/);
+ assert.equal(testimony.started,true);
+ game.advanceSeconds(TIMED_PLAYER_ACTION_SECONDS.ask_cup);
+ assert.equal(game.snapshot().player.lastInteraction.status,'completed');
+ assert.equal(game.snapshot().player.lastInteraction.dialogue.answered,true);
+ assert.match(game.snapshot().player.lastInteraction.dialogue.answer,/ты/);
  assert.ok(game.snapshot().player.journal.some(x=>x.includes('Со слов Лили')));
- const james=game.submit({type:'ask_cup',listener:'james'});
- assert.equal(james.ok,true);
- assert.equal(james.dialogue.answered,true);
  assert.equal(JSON.stringify(game.snapshot()).includes('beliefsByCharacter'),false);
 });
 test('G3 world expansion: the actual gallery_4 graph node can be explored',()=>{
@@ -67,4 +78,58 @@ test('G3 world expansion: the actual gallery_4 graph node can be explored',()=>{
  assert.equal(game.snapshot().nearbyPeople.length,0);
  assert.equal(game.submit({type:'talk',listener:'lily',topic:'castle'}).ok,false);
  assert.equal(game.submit({type:'move',destination:graph.landing.key}).ok,true);
+});
+test('G3.3: cancelling an occupied social action never invents an ECS conversation',()=>{
+ const game=createLivingRoom(graph,{warmupTicks:0});
+ walkTo(game,{x:0,z:1.5});
+ assert.equal(game.submit({type:'cancel_interaction'}).reason,'no_active_interaction');
+ const before=game.snapshot().worldSeconds;
+ const started=game.submit({type:'talk',listener:'lily',topic:'lessons'});
+ assert.equal(started.started,true);
+ assert.equal(game.submit({type:'walk',dx:.1,dz:0}).reason,'busy');
+ assert.equal(game.submit({type:'break_cup'}).reason,'busy');
+ game.advanceSeconds(20);
+ assert.equal(game.snapshot().player.interaction.remainingSeconds,
+   TIMED_PLAYER_ACTION_SECONDS.talk-20);
+ assert.equal(game.submit({type:'cancel_interaction'}).cancelled,true);
+ assert.equal(game.snapshot().player.lastInteraction.status,'interrupted');
+ assert.equal(game.snapshot().worldSeconds,before+20);
+ assert.equal(game.submit({type:'talk',listener:'lily',topic:'castle'}).started,true,
+   'Cancelled action must not consume once-per-day ECS chat');
+ game.advanceSeconds(TIMED_PLAYER_ACTION_SECONDS.talk);
+ assert.equal(game.snapshot().player.lastInteraction.status,'completed');
+});
+
+test('G3.3: splitting world advancement cannot change dialogue outcome',()=>{
+ const single=createLivingRoom(graph,{warmupTicks:0});
+ const split=createLivingRoom(graph,{warmupTicks:0});
+ for(const game of [single,split]){
+   walkTo(game,{x:0,z:1.5});
+   assert.equal(game.submit({type:'talk',listener:'lily',topic:'hobbies'}).started,true);
+ }
+ single.advanceSeconds(TIMED_PLAYER_ACTION_SECONDS.talk);
+ split.advanceSeconds(25);
+ split.advanceSeconds(TIMED_PLAYER_ACTION_SECONDS.talk-25);
+ assert.deepEqual(single.snapshot(),split.snapshot(),
+   'Conversation resolution must follow authoritative seconds, not render/poll cadence');
+});
+
+test('G3.3 castle increment: a reachable gallery bench consumes world time',()=>{
+ const game=createLivingRoom(graph,{warmupTicks:0});
+ assert.equal(game.submit({type:'wait_gallery'}).reason,'not_in_reach');
+ walkTo(game,{x:0,z:7.9});
+ assert.equal(game.submit({type:'move',destination:graph.landing.key}).ok,true);
+ walkTo(game,{x:0,z:3.85});
+ assert.equal(game.submit({type:'survey_gallery'}).ok,true);
+ assert.equal(game.submit({type:'move',destination:graph.gallery.key}).ok,true);
+ assert.equal(game.submit({type:'wait_gallery'}).reason,'not_in_reach');
+ walkTo(game,{x:1.45,z:1.1});
+ const clock=game.snapshot().worldSeconds;
+ assert.equal(game.submit({type:'wait_gallery'}).started,true);
+ assert.equal(game.submit({type:'move',destination:graph.landing.key}).reason,'busy');
+ game.advanceSeconds(TIMED_PLAYER_ACTION_SECONDS.wait_gallery);
+ assert.equal(game.snapshot().worldSeconds,clock+60);
+ assert.equal(game.snapshot().player.lastInteraction.status,'completed');
+ assert.ok(game.snapshot().player.journal.some(x=>x.includes('скамье')));
+ assert.equal(game.snapshot().player.interaction,null);
 });
