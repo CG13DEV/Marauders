@@ -6,19 +6,23 @@
  */
 import {STARTS} from './movement.js';
 import {LANDING_BOUNDS} from './layout-landing.js';
+import {COMMON_PORTRAIT_APPROACH,TOWER_PORTRAIT_APPROACH,
+  TOWER_STAIR_APPROACH,isInVestibule,grandStairState}
+  from './tower-entrance.js';
 import {GALLERY_BOUNDS,GALLERY_RETURN,GALLERY_BENCH,
   GALLERY_BENCH_APPROACH} from './layout-gallery.js';
 
 export const CUP_SPOT=Object.freeze({x:0,z:0});
-const ROOT_ROOM=Object.freeze({x:0,z:7.9});
-const STAIR_TO_GALLERY=Object.freeze({x:0,z:3.85});
+const ROOT_ROOM=COMMON_PORTRAIT_APPROACH;
+const STAIR_TO_GALLERY=TOWER_STAIR_APPROACH;
 const STAIR_SPOTS=Object.freeze({
   boys:{x:-7.9,z:0},girls:{x:7.9,z:0}
 });
 const squared=(a,b)=>(a.x-b.x)**2+(a.z-b.z)**2;
 export const within=(a,b,radius)=>squared(a,b)<=radius*radius+1e-8;
 
-export function createPlayerSpace({graph,playerHome,walkableCommon}){
+export function createPlayerSpace({graph,playerHome,walkableCommon,
+  nowSeconds=()=>0}){
   let room=graph.common.key;
   let position={...STARTS.common};
   const knownRooms=new Set([graph.common.key,graph.landing.key,playerHome]);
@@ -30,10 +34,12 @@ export function createPlayerSpace({graph,playerHome,walkableCommon}){
     .map(r=>[r.key,r]));
 
   function walkableAt(key,p){
-    if(key===graph.common.key)return walkableCommon(p);
+    if(key===graph.common.key)return walkableCommon(p)||isInVestibule(p);
     if(key===graph.landing.key)
       return p.x>=LANDING_BOUNDS.minX&&p.x<=LANDING_BOUNDS.maxX&&
-        p.z>=LANDING_BOUNDS.minZ&&p.z<=LANDING_BOUNDS.maxZ;
+        p.z>=LANDING_BOUNDS.minZ&&p.z<=LANDING_BOUNDS.maxZ&&
+        [-7.4,7.4].every(x=>[-7.4,7.4].every(z=>
+          !within(p,{x,z},.74)));
     if(key===graph.gallery.key)
       return p.x>=GALLERY_BOUNDS.minX&&p.x<=GALLERY_BOUNDS.maxX&&
         p.z>=GALLERY_BOUNDS.minZ&&p.z<=GALLERY_BOUNDS.maxZ&&
@@ -68,17 +74,23 @@ export function createPlayerSpace({graph,playerHome,walkableCommon}){
       return null;
     }
     if(destination===graph.common.key)return room===graph.landing.key
-      ?{x:0,z:-3.14}:{x:0,z:5.52};
+      ?TOWER_PORTRAIT_APPROACH:{x:0,z:5.52};
     return null;
   }
   function canCross(destination){
     const portal=portalFor(destination);
-    return portal!==null&&within(position,portal,2.45);
+    return portal!==null&&within(position,portal,2.45)&&
+      (!(room===graph.landing.key&&destination===graph.gallery.key||
+         room===graph.gallery.key&&destination===graph.landing.key)||
+       grandStairState(nowSeconds()).aligned);
   }
   function enter(next){
     if(!rooms.has(next))throw Error('Unknown physical room');
+    const previous=room;
     room=next;visited.add(next);knownRooms.add(next);
-    const start=room===graph.common.key?STARTS.common:
+    const start=room===graph.common.key?
+      (next===graph.common.key&&previous===graph.landing.key
+        ?{x:0,z:12.10}:STARTS.common):
       room===graph.landing.key?STARTS.landing:
       room===graph.gallery.key?STARTS.gallery:STARTS.bedroom;
     position={...start};
@@ -108,7 +120,9 @@ export function createPlayerSpace({graph,playerHome,walkableCommon}){
       knownRooms:[...knownRooms].sort(),
       knownExits:exits.filter(key=>knownRooms.has(key)).sort(),
       surveyedWings:[...surveyedWings].sort(),
-      nearbyCup:room===graph.common.key&&within(position,CUP_SPOT,1.85)
+      nearbyCup:room===graph.common.key&&within(position,CUP_SPOT,1.85),
+      ...(room===graph.landing.key||room===graph.gallery.key
+        ?{grandStair:grandStairState(nowSeconds())}:{})
     };
   }
   return Object.freeze({
