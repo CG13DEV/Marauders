@@ -111,7 +111,8 @@ a topology convenience while book references say seventh-floor entrance.
 
 ### G3 geography and world-time interactions
 
-Beyond the portrait landing, the authentic `gallery_4` graph room is
+Beyond the portrait landing inside the Grand Staircase, the authentic
+`gallery_4` graph room is
 explorable via the discovered north stair. Its new stone bench is a small
 collider-matched niche where an actual 60-world-second player waiting action
 can occur. Nearby conversations also occupy world seconds (90 chat / 45
