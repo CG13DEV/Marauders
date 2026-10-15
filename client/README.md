@@ -49,7 +49,9 @@ runtime, nor does it connect to a remote server.
 
 ### Controls
 
-- **Desktop:** WASD / arrow keys move relative to camera; Q/E or dragging rotates;
+- **Desktop:** WASD / arrow keys move relative to camera; **F** at a staircase
+  endpoint mounts its rotating physical flight, then WASD walks its risers;
+  Q/E or dragging rotates;
   scroll / +/- UI zooms; F interacts near a visible staircase or door.
 - **Mobile / Telegram Mini App:** tap on floor to walk, drag to rotate, camera
   controls bottom right; click stairs in common room to select a real bedroom.
