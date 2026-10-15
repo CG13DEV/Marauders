@@ -99,6 +99,15 @@ interface over the current star-shaped graph: it must not silently introduce
 corridor nodes. The source simulation labels Gryffindor common room floor=4 as
 a topology convenience while book references say seventh-floor entrance.
 
+### G3 geography and world-time interactions
+
+Beyond the portrait landing, the authentic `gallery_4` graph room is
+explorable via the discovered north stair. Its new stone bench is a small
+collider-matched niche where an actual 60-world-second player waiting action
+can occur. Nearby conversations also occupy world seconds (90 chat / 45
+cup question), can be cancelled and do not report an answer before the world
+accepts the final command. No temporary action is durable across reload.
+
 ### Publishing
 
 `.github/workflows/gryffindor-pages.yml` checks the graph, builds the client
