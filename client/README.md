@@ -1,8 +1,11 @@
 # Marauders · Gryffindor Tower prototype [GAME]
 
-Static, serverless 2.5D Three.js cutaway prototype. **No live NPC simulation yet**:
-it visualizes a graph-derived set of rooms and tests camera, room geometry,
-eight camera-relative sprite orientations, pointer/WASD movement and transitions.
+Static, serverless 2.5D Three.js cutaway prototype. **Since RB-4/5.3 a
+separate four-person ECS micro-world runs live in the browser**. NPCs choose
+daily actions, make validated timed room transitions and perform deterministic
+local furniture activities on world time. The player avatar is STILL local
+Three.js presentation, not a controlled ECS actor; see
+[Player in the World](../docs/game-design/architecture-to-playable-slice.md).
 
 ### Run locally
 
@@ -21,9 +24,10 @@ Open the local Vite URL. Build/test:
 IMPORTANT: `npm run graph` starts the real, independent
 `createSchoolWeek(..., 'research-600', 'foundations-27', 'unified-30')`
 at **build time** and emits `src/tower-graph.generated.json`.
-It is gitignored, never hand-edited. The browser bundles only the resulting
-plain JSON, Three.js and our home-grown scene/sprites. It does not bundle the
-authoritative ECS simulation or create a remote server.
+It is gitignored and never hand-edited. The browser bundles the graph JSON,
+Three.js, and an **independent local instance of the same ECS core** for only
+four experimental NPCs. The build-time 634-resident school does NOT run in the
+browser. No remote authoritative server exists yet.
 
 ### Controls
 
@@ -50,9 +54,9 @@ Room shells declare `slotsFor('common'|'bedroom'|'landing')`:
 
 `sprites.js` now draws **8 camera-relative directions × 4 real walking
 poses = 32 frames per character style**, rather than eight fixed images with
-vertical bobbing. Three additional distinctly coloured students are **local
-decorative sprite stand-ins**, explicitly *not NPC simulation*. For now they
-exist to check scale, silhouette legibility, camera angles and visual variety.
+vertical bobbing. This was originally a decorative sprite test, but the four currently visible
+characters now have ECS identity and a separate local spatial activity model
+(RB-5.3). They are **not** the final first-year or four-playable-Marauder cast.
 
 Neither stair alcoves nor window openings create ECS rooms; graph
 `39` bedrooms, connections, occupancy and authoritative room IDs do not
@@ -102,8 +106,7 @@ For the private organization repository, GitHub Pages availability **depends
 on the organization's plan and Pages settings**. An admin must select
 **Settings → Pages → Build and deployment → GitHub Actions**. The workflow
 cannot override the owner's subscription or Pages configuration. A private
-repository can still produce a publicly visible Pages website. The public
-artifact only contains scene code + graph-derived room metadata.
+repository can still produce a publicly visible Pages website. The public artifact contains client code, the bundled four-actor ECS micro-world and graph-derived room metadata; it contains no school checkpoint or private resident history.
 
 Do not publish any proprietary source files, third-party images or private
 credentials through Pages. The tiny 3D geometry and all 8 sprites are original
@@ -112,9 +115,10 @@ under `docs/production/ip-and-asset-policy.md` before external announcement.
 
 ### Limits
 
-The four-NPC micro-world now runs locally in the browser, but is **not connected
-to the 634-person school runtime** or durable persistence; no physical per-second
-NPC world.
+The four-NPC micro-world runs locally in the browser and is **not connected
+to the 634-person school runtime** or durable persistence. RB-5.3 provides
+seconds-based movement around static furniture but not complete authoritative
+ECS floor-coordinate physics, mutual collision or player interaction.
 Simple local circular collision and direct walk-to-point are client-only
 prototyping physics and must not be mistaken for authoritative simulation
 or multi-room character pathfinding.
@@ -122,3 +126,7 @@ or multi-room character pathfinding.
 ## RB-5.2 · Authoritative seconds
 
 The four experimental NPCs now use the opt-in RB-5.1 world-clock travel path. Their walking sprite samples ECS/bridge progress rather than replaying arrival events after a fixed delay. See [RB-5.2](../docs/technical/experiment-rb-5-2-visual-observer.md). The browser micro-world still does not simulate collision-safe continuous floor position or in-progress persistent saves.
+
+## From viewer to game
+
+See the [architecture-to-first-playable-slice proposal](../docs/game-design/architecture-to-playable-slice.md). Immediate priority is a real player-controlled Marauder ECS identity, validated player actions and perception-scoped UI; scaling the viewer to 634 drawn NPCs is not a substitute for playable interaction.
