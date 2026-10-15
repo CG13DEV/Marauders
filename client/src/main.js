@@ -793,8 +793,13 @@ if(inTestMode){
       live:living.snapshot(),
       visibleActors:standIns.map(actor=>({key:actor.key,x:actor.x,z:actor.z,
         mode:actor.mode})),
-      openings:stage?.group.children
-        .filter(o=>o.name.startsWith('wall-slot:')).map(o=>o.name),
+      openings:(()=>{
+        const names=[];
+        stage?.group.traverse(o=>{
+          if(o.name.startsWith('wall-slot:'))names.push(o.name);
+        });
+        return names;
+      })(),
       cameraYaw:yaw,
       layout:stage?.layout,
       activePortals:stage?.portals.map(p=>p.kind),
