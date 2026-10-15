@@ -213,6 +213,24 @@ try{
     window.__towerTest.snapshot().layout.kind)),'gallery');
   assert.ok((await galleryPage.evaluate(()=>
     window.__towerTest.snapshot().activePortals)).includes('return_landing'));
+  // G3.3: the new bench exists in the rendered gallery, requires approach,
+  // and waiting there advances real ECS world seconds without a free teleport.
+  assert.ok((await galleryPage.evaluate(()=>
+    window.__towerTest.snapshot().activePortals)).includes('gallery_bench'));
+  await galleryPage.evaluate(()=>window.__towerTest.driveTo([{x:1.45,z:1.1}]));
+  await galleryPage.waitForFunction(()=>
+    window.__towerTest.snapshot().activeInteraction==='gallery_bench');
+  const galleryBefore=await galleryPage.evaluate(()=>
+    window.__towerTest.snapshot().live.worldSeconds);
+  await galleryPage.keyboard.press('f');
+  assert.equal((await galleryPage.evaluate(()=>
+    window.__towerTest.snapshot().live.player.interaction?.type)),'wait_gallery');
+  await galleryPage.evaluate(()=>window.__towerTest.advanceLivingSeconds(60));
+  assert.equal((await galleryPage.evaluate(()=>
+    window.__towerTest.snapshot().live.worldSeconds)),galleryBefore+60);
+  assert.equal((await galleryPage.evaluate(()=>
+    window.__towerTest.snapshot().live.player.lastInteraction?.status)),'completed');
+  await galleryPage.evaluate(()=>window.__towerTest.driveTo([{x:0,z:-4.65}]));
   await galleryPage.waitForFunction(()=>
     window.__towerTest.snapshot().activeInteraction==='return_landing');
   await galleryPage.keyboard.press('f');
