@@ -38,9 +38,10 @@ runtime, nor does it connect to a remote server.
   scroll / +/- UI zooms; F interacts near a visible staircase or door.
 - **Mobile / Telegram Mini App:** tap on floor to walk, drag to rotate, camera
   controls bottom right; click stairs in common room to select a real bedroom.
-- **Navigation panel:** shows all 7 years, separated into boys/girls groups,
-  and two historical placeholder rooms. From a bedroom only the **common room**
-  is adjacent. Other-room teleport through the UI is disallowed.
+- **Personal knowledge:** normal play shows only personally discovered rooms
+  and observations, not a full map. The old navigation panel is available in
+  `?debug=1` / `?testMode=1` but still cannot teleport through walls.
+  Only real adjacent room transitions are accepted by ECS.
 - **Render:** 8 independent pixel-art canvas frames are selected from facing
   direction relative to camera, NOT a single sprite rotated 8 ways.
 
