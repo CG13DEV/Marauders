@@ -319,7 +319,7 @@ function animateLiving(dt){
   const journeys=new Map(state.journeys.map(j=>[j.actor,j]));
   const activities=new Map(state.activities.map(a=>[a.actor,a]));
   const modes={walking:'идёт',read:'читает',observe:'смотрит в окно',
-    rest:'отдыхает',idle:'ожидает'};
+    rest:'отдыхает',talking:'разговаривает',idle:'ожидает'};
   for(const actor of standIns){
     const leg=journeys.get(actor.key);
     if(leg&&leg.from===roomKey){
