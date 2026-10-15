@@ -4,12 +4,14 @@
  */
 export const STARTS=Object.freeze({
   common:Object.freeze({x:0,z:4.4}),
-  landing:Object.freeze({x:0,z:1}),
+  landing:Object.freeze({x:0,z:-5.72}),
   bedroom:Object.freeze({x:0,z:2.5}),
   gallery:Object.freeze({x:0,z:-4.0})
 });
 export const PLAYER_RADIUS=.30;
 export function walkable(stage,x,z){
+  if(stage.walkableExtras?.({x,z}))return !stage.obstacles.some(o=>
+    Math.hypot(x-o.x,z-o.z)<o.r+PLAYER_RADIUS);
   if(stage.bounds){
     if(x<stage.bounds.minX||x>stage.bounds.maxX||
        z<stage.bounds.minZ||z>stage.bounds.maxZ)return false;
