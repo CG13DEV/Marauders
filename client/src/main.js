@@ -822,6 +822,16 @@ if(inTestMode){
       avatar.group.position.set(player.x,player.y,player.z);
       return living.snapshot().player;
     },
+    walkFlight:direction=>{
+      if(direction!==1&&direction!==-1)throw Error('Bad flight direction');
+      for(let i=0;i<42;i++){
+        const p=living.snapshot().player;
+        if(!p.onStairs)break;
+        const a=p.grandStair.angle;
+        move(Math.sin(a)*.14*direction,Math.cos(a)*.14*direction);
+      }
+      return living.snapshot().player;
+    },
     advanceLiving:()=>stepLiving(),
     advanceLivingSeconds:seconds=>advanceLivingSeconds(seconds)
   });
