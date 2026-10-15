@@ -273,6 +273,10 @@ try{
   await galleryPage.waitForFunction(()=>
     window.__towerTest.snapshot().roomKey==='gallery_3');
   await galleryPage.evaluate(()=>window.__towerTest.driveTo([{x:0,z:-4.65}]));
+  // WebGL frames can be slow in SwiftShader. F must be pressed only after
+  // the real interaction prompt has observed the updated ECS position.
+  await galleryPage.waitForFunction(()=>
+    window.__towerTest.snapshot().activeInteraction==='return_landing');
   await galleryPage.keyboard.press('f');
   await galleryPage.waitForFunction(()=>
     window.__towerTest.snapshot().roomKey==='west_landing_3');
