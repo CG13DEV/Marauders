@@ -289,9 +289,11 @@ export function buildStage(room,graph){
   const group=new THREE.Group(),obstacles=[];
   const b=makeBuilder(group,obstacles);
   const isCommon=room.key===graph.common.key;
-  const isLanding=room.key===graph.landing.key;
-  const isGallery=room.key===graph.gallery.key;
-  const radius=isCommon?10:isLanding?7.4:isGallery?8:7.6;
+  const isLanding=room.key===graph.landing.key||
+    room.key===graph.lowerLanding?.key;
+  const isGallery=room.key===graph.gallery.key||
+    room.key===graph.lowerGallery?.key;
+  const radius=isCommon?10:isLanding?8.4:isGallery?8:7.6;
   let slots,portals,fire=null,rotate,layout,bounds=null;
   let walkableExtras=null,setWorldSeconds=()=>{};
   if(isGallery){
@@ -300,16 +302,18 @@ export function buildStage(room,graph){
     slots=corridor.architecture;
     bounds=corridor.bounds;
     rotate=corridor.setCameraYaw;
-    layout={kind:'gallery',bounds};
+    layout={kind:'gallery',bounds,floor:room.floor};
   }else if(isLanding){
     // Rectangular portrait corridor: no fake circular second common room.
-    const entrance=buildLandingSpace(group,b);
+    const entrance=buildLandingSpace(group,b,{floor:room.floor});
     portals=entrance.portals;
     slots=entrance.architecture;
     bounds=entrance.bounds;
     rotate=entrance.setCameraYaw;
     setWorldSeconds=entrance.setWorldSeconds;
-    layout={kind:'landing',bounds,grandStair:true};
+    layout={kind:'landing',bounds,grandStair:true,
+      floor:room.floor,levels:entrance.levels,
+      portraitHeight:entrance.portraitHeight};
   }else{
     slots=slotsFor(isCommon?'common':'bedroom');
     validateSlots(slots,radius);
