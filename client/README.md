@@ -27,9 +27,10 @@ Open the local Vite URL. Build/test:
 IMPORTANT: `npm run graph` starts the real, independent
 `createSchoolWeek(..., 'research-600', 'foundations-27', 'unified-30')`
 at **build time** and emits `src/tower-graph.generated.json`.
-It is gitignored, never hand-edited. The browser bundles only the resulting
-plain JSON, Three.js and our home-grown scene/sprites. It does not bundle the
-authoritative ECS simulation or create a remote server.
+It is gitignored and never hand-edited. The browser bundles the generated
+room-graph JSON, Three.js and a **separate, four-NPC local instance of the
+same ECS core**. It does **not** start the authoritative 634-resident school
+runtime, nor does it connect to a remote server.
 
 ### Controls
 
