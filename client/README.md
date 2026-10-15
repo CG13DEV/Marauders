@@ -1,8 +1,14 @@
 # Marauders · Gryffindor Tower prototype [GAME]
 
-Static, serverless 2.5D Three.js cutaway prototype. **No live NPC simulation yet**:
-it visualizes a graph-derived set of rooms and tests camera, room geometry,
-eight camera-relative sprite orientations, pointer/WASD movement and transitions.
+Static, serverless 2.5D Three.js cutaway prototype with a four-NPC
+browser ECS micro-world. The player controls a real ECS Marauder, sees
+personally earned knowledge and can perform validated local interactions.
+**This is not the full 634-character school simulation or durable save system.**
+
+G3.3: `talk` (90 world seconds) and `ask_cup` (45 seconds) complete only
+while participants remain present and can be cancelled; the newly accessible
+gallery bench provides a 60-second wait. See
+[time-occupied player actions](../docs/technical/g3-3-timed-actions-and-gallery-bench.md).
 
 ### Run locally
 
@@ -21,9 +27,10 @@ Open the local Vite URL. Build/test:
 IMPORTANT: `npm run graph` starts the real, independent
 `createSchoolWeek(..., 'research-600', 'foundations-27', 'unified-30')`
 at **build time** and emits `src/tower-graph.generated.json`.
-It is gitignored, never hand-edited. The browser bundles only the resulting
-plain JSON, Three.js and our home-grown scene/sprites. It does not bundle the
-authoritative ECS simulation or create a remote server.
+It is gitignored and never hand-edited. The browser bundles the generated
+room-graph JSON, Three.js and a **separate, four-NPC local instance of the
+same ECS core**. It does **not** start the authoritative 634-resident school
+runtime, nor does it connect to a remote server.
 
 ### Controls
 
@@ -31,9 +38,10 @@ authoritative ECS simulation or create a remote server.
   scroll / +/- UI zooms; F interacts near a visible staircase or door.
 - **Mobile / Telegram Mini App:** tap on floor to walk, drag to rotate, camera
   controls bottom right; click stairs in common room to select a real bedroom.
-- **Navigation panel:** shows all 7 years, separated into boys/girls groups,
-  and two historical placeholder rooms. From a bedroom only the **common room**
-  is adjacent. Other-room teleport through the UI is disallowed.
+- **Personal knowledge:** normal play shows only personally discovered rooms
+  and observations, not a full map. The old navigation panel is available in
+  `?debug=1` / `?testMode=1` but still cannot teleport through walls.
+  Only real adjacent room transitions are accepted by ECS.
 - **Render:** 8 independent pixel-art canvas frames are selected from facing
   direction relative to camera, NOT a single sprite rotated 8 ways.
 
@@ -90,6 +98,15 @@ multiple bedrooms is **[GAME]**, not canon. Visual stair selection is a grouping
 interface over the current star-shaped graph: it must not silently introduce
 corridor nodes. The source simulation labels Gryffindor common room floor=4 as
 a topology convenience while book references say seventh-floor entrance.
+
+### G3 geography and world-time interactions
+
+Beyond the portrait landing, the authentic `gallery_4` graph room is
+explorable via the discovered north stair. Its new stone bench is a small
+collider-matched niche where an actual 60-world-second player waiting action
+can occur. Nearby conversations also occupy world seconds (90 chat / 45
+cup question), can be cancelled and do not report an answer before the world
+accepts the final command. No temporary action is durable across reload.
 
 ### Publishing
 

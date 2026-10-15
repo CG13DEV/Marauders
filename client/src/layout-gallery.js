@@ -8,6 +8,9 @@ export const GALLERY_BOUNDS=Object.freeze({
   minX:-2.88,maxX:2.88,minZ:-5.25,maxZ:5.25
 });
 export const GALLERY_RETURN=Object.freeze({x:0,z:-4.65});
+// A reachable seating affordance, not a newly fabricated ECS room.
+export const GALLERY_BENCH=Object.freeze({x:2.42,z:1.1,r:.45});
+export const GALLERY_BENCH_APPROACH=Object.freeze({x:1.45,z:1.1});
 export function buildGallerySpace(group,b){
   const stone=0x85838a,edge=0x50505d,floor=0x625c5d,wood=0x564338,
     gold=0xb99c70,glass=0x6b8290;
@@ -43,12 +46,20 @@ export function buildGallerySpace(group,b){
     b.box(-3.04,1.85,z,.25,1.35,.92,wood);
     b.box(-2.89,1.85,z,.12,1.02,.65,gold);
   }
+  // Recessed gallery bench: grounded in the walkable surface and collision
+  // model, leaving the full corridor and existing stair clear.
+  b.box(2.7,.18,1.1,1.0,.36,1.65,wood);
+  b.box(2.65,.55,1.1,.18,.55,1.65,stone);
+  b.box(2.38,.23,1.1,.70,.12,1.50,gold);
+  b.block(GALLERY_BENCH.x,GALLERY_BENCH.z,GALLERY_BENCH.r);
   // Right wing opens toward the rest of Hogwarts beyond this prototype.
   // Do not fabricate a simulated door until its world topology is connected.
   return {
     bounds:{...GALLERY_BOUNDS},
     portals:[{kind:'return_landing',x:GALLERY_RETURN.x,z:GALLERY_RETURN.z,
-      desc:'Вернуться к портрету Полной Дамы'}],
+      desc:'Вернуться к портрету Полной Дамы'},
+      {kind:'gallery_bench',x:GALLERY_BENCH_APPROACH.x,
+        z:GALLERY_BENCH_APPROACH.z,desc:'Посидеть минуту на каменной скамье'}],
     architecture:[{kind:'gallery',description:'Четвёртый этаж · галерея'}],
     setCameraYaw(){},
     type:'gallery'

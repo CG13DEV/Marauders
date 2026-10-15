@@ -175,7 +175,17 @@ try{
     window.__towerTest.submitPlayer({type:'inspect_cup'}));
   assert.equal(inspectedSocial.ok,true);
   await socialPage.locator('#talk-question').click();
+  assert.match(await socialPage.locator('#talk-reply').textContent(),/Разговор идёт/);
+  assert.equal(await socialPage.locator('#talk-cancel').isVisible(),true);
+  assert.equal(await socialPage.locator('#talk-chat').isDisabled(),true);
+  assert.equal((await socialPage.evaluate(()=>
+    window.__towerTest.snapshot().live.player)).lastInteraction,null);
+  await socialPage.evaluate(()=>window.__towerTest.advanceLivingSeconds(44));
+  assert.equal((await socialPage.evaluate(()=>
+    window.__towerTest.snapshot().live.player.interaction.remainingSeconds)),1);
+  await socialPage.evaluate(()=>window.__towerTest.advanceLivingSeconds(1));
   assert.match(await socialPage.locator('#talk-reply').textContent(),/чашку разбил ты/);
+  assert.equal(await socialPage.locator('#talk-cancel').isVisible(),false);
   assert.ok((await socialPage.evaluate(()=>
     window.__towerTest.snapshot().live.player.journal)).some(s=>s.includes('Со слов')));
   await socialPage.close();
@@ -203,6 +213,24 @@ try{
     window.__towerTest.snapshot().layout.kind)),'gallery');
   assert.ok((await galleryPage.evaluate(()=>
     window.__towerTest.snapshot().activePortals)).includes('return_landing'));
+  // G3.3: the new bench exists in the rendered gallery, requires approach,
+  // and waiting there advances real ECS world seconds without a free teleport.
+  assert.ok((await galleryPage.evaluate(()=>
+    window.__towerTest.snapshot().activePortals)).includes('gallery_bench'));
+  await galleryPage.evaluate(()=>window.__towerTest.driveTo([{x:1.45,z:1.1}]));
+  await galleryPage.waitForFunction(()=>
+    window.__towerTest.snapshot().activeInteraction==='gallery_bench');
+  const galleryBefore=await galleryPage.evaluate(()=>
+    window.__towerTest.snapshot().live.worldSeconds);
+  await galleryPage.keyboard.press('f');
+  assert.equal((await galleryPage.evaluate(()=>
+    window.__towerTest.snapshot().live.player.interaction?.type)),'wait_gallery');
+  await galleryPage.evaluate(()=>window.__towerTest.advanceLivingSeconds(60));
+  assert.equal((await galleryPage.evaluate(()=>
+    window.__towerTest.snapshot().live.worldSeconds)),galleryBefore+60);
+  assert.equal((await galleryPage.evaluate(()=>
+    window.__towerTest.snapshot().live.player.lastInteraction?.status)),'completed');
+  await galleryPage.evaluate(()=>window.__towerTest.driveTo([{x:0,z:-4.65}]));
   await galleryPage.waitForFunction(()=>
     window.__towerTest.snapshot().activeInteraction==='return_landing');
   await galleryPage.keyboard.press('f');

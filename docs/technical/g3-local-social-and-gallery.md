@@ -11,7 +11,12 @@ A player-controlled Marauder can approach **a physically present NPC** in the Gr
 
 Character answers are deterministic **consequence descriptions**, not generated free-form dialogue. There is no LLM conversation or arbitrary question input. Response copy is authored from command result events, not from the omniscient world log. We must distinguish knowledge, silence and distance failures. An answer about the broken cup may be requested after **the player personally witnesses breakage** or **inspects the damaged object**. Both establish grounds in the existing ECS; asking before either observation is refused. Never require a redundant inspection from an eyewitness.
 
-**Current time caveat**: the discrete `chat` command logs a world event but has not yet been generalized into time-occupied player activity. Do not claim realistic five-minute spoken conversations. Deliberate time cost/interruptibility belongs to G3.3.
+**G3.3 implemented:** the browser GameSession now occupies 90 world seconds for
+`talk` or 45 seconds for `ask_cup`, defers the ECS command until completion,
+and can cancel or lose its listener. See
+[G3.3 timed actions](g3-3-timed-actions-and-gallery-bench.md).
+The core social event minute is still school-tick-quantized; this does not
+magically make dialogue speech or full-school schedules continuous.
 
 ## Spatial increment: gallery_4
 

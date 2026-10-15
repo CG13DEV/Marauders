@@ -6,7 +6,8 @@
  */
 import {STARTS} from './movement.js';
 import {LANDING_BOUNDS} from './layout-landing.js';
-import {GALLERY_BOUNDS,GALLERY_RETURN} from './layout-gallery.js';
+import {GALLERY_BOUNDS,GALLERY_RETURN,GALLERY_BENCH,
+  GALLERY_BENCH_APPROACH} from './layout-gallery.js';
 
 export const CUP_SPOT=Object.freeze({x:0,z:0});
 const ROOT_ROOM=Object.freeze({x:0,z:7.9});
@@ -35,7 +36,9 @@ export function createPlayerSpace({graph,playerHome,walkableCommon}){
         p.z>=LANDING_BOUNDS.minZ&&p.z<=LANDING_BOUNDS.maxZ;
     if(key===graph.gallery.key)
       return p.x>=GALLERY_BOUNDS.minX&&p.x<=GALLERY_BOUNDS.maxX&&
-        p.z>=GALLERY_BOUNDS.minZ&&p.z<=GALLERY_BOUNDS.maxZ;
+        p.z>=GALLERY_BOUNDS.minZ&&p.z<=GALLERY_BOUNDS.maxZ&&
+        // Match the renderer's bench collider including player radius.
+        !within(p,GALLERY_BENCH,GALLERY_BENCH.r+.30);
     return Math.hypot(p.x,p.z)<=6.45;
   }
   function walk(dx,dz){
@@ -111,6 +114,8 @@ export function createPlayerSpace({graph,playerHome,walkableCommon}){
   return Object.freeze({
     walk,canCross,enter,survey,surveyGallery,view,
     canReachCup:()=>room===graph.common.key&&within(position,CUP_SPOT,1.85),
+    canUseGalleryBench:()=>room===graph.gallery.key&&
+      within(position,GALLERY_BENCH_APPROACH,1.10),
     knows:key=>knownRooms.has(key),
     current:()=>room
   });
