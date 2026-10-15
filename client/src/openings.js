@@ -145,7 +145,13 @@ export function buildOpenings(group,radius,slots){
     mount.rotation.y=slot.angle+Math.PI/2;
     group.add(mount);
     const high=new THREE.Group();mount.add(high);
-    if(slot.type==='portrait')portraitPanel(high,slot.width);
+    if(slot.type==='portrait'){
+      // The COMMON-room opening is an arch into the internal vestibule.
+      // The Fat Lady herself is OUTSIDE at the Grand Staircase facade,
+      // never duplicated inside the circular lounge.
+      if(slot.portal==='outside')passage(high,slot.width,'В ТАМБУР');
+      else portraitPanel(high,slot.width);
+    }
     else if(slot.type==='door')passage(high,slot.width,'В ГОСТИНУЮ');
     else if(slot.type==='stair')stairTower(high,slot.width,slot.wing);
     else if(slot.type==='window')leadedWindow(high,slot.width);
