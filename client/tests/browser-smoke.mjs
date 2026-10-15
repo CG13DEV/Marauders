@@ -175,7 +175,17 @@ try{
     window.__towerTest.submitPlayer({type:'inspect_cup'}));
   assert.equal(inspectedSocial.ok,true);
   await socialPage.locator('#talk-question').click();
+  assert.match(await socialPage.locator('#talk-reply').textContent(),/Разговор идёт/);
+  assert.equal(await socialPage.locator('#talk-cancel').isVisible(),true);
+  assert.equal(await socialPage.locator('#talk-chat').isDisabled(),true);
+  assert.equal((await socialPage.evaluate(()=>
+    window.__towerTest.snapshot().live.player)).lastInteraction,null);
+  await socialPage.evaluate(()=>window.__towerTest.advanceLivingSeconds(44));
+  assert.equal((await socialPage.evaluate(()=>
+    window.__towerTest.snapshot().live.player.interaction.remainingSeconds)),1);
+  await socialPage.evaluate(()=>window.__towerTest.advanceLivingSeconds(1));
   assert.match(await socialPage.locator('#talk-reply').textContent(),/чашку разбил ты/);
+  assert.equal(await socialPage.locator('#talk-cancel').isVisible(),false);
   assert.ok((await socialPage.evaluate(()=>
     window.__towerTest.snapshot().live.player.journal)).some(s=>s.includes('Со слов')));
   await socialPage.close();
