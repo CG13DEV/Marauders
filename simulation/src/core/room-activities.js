@@ -155,16 +155,29 @@ export function createRoomActivities({plan,actors,commonKey,nowSeconds,initialLo
     actor.activityCount++;
   }
   let time=nowSeconds;
-  function advanceTo(until,locations,travelling=[]){
+  function advanceTo(until,locations,travelling=[],engaged=[]){
     if(!Number.isSafeInteger(until)||until<time)throw Error('Room clock cannot reverse');
     const occupants=new Set(locations.filter(([,room])=>room===commonKey)
       .map(([name])=>name));
     const journeys=new Set(travelling.map(x=>x.actor));
+    const conversations=new Set(engaged);
     for(const name of [...actorsState.keys()])if(!occupants.has(name))actorsState.delete(name);
     for(const name of occupants)if(actorData.has(name))enter(name);
     for(let second=time+1;second<=until;second++){
       for(const actor of actorsState.values()){
         if(journeys.has(actor.actor))continue;
+        // A voluntary local conversation reserves its participant's position.
+        // An ECS timed departure still takes priority and interrupts the talk.
+        if(conversations.has(actor.actor)){
+          if(actor.mode!=='talking'){
+            actor.mode='talking';actor.activity='talking';
+            actor.destination=null;actor.waypoints=[];
+          }
+          continue;
+        }
+        if(actor.mode==='talking'){
+          actor.mode='idle';actor.activity='idle';actor.nextThinkAt=second;
+        }
         if(actor.mode==='idle'||(actor.mode!=='walking'&&second>=actor.nextThinkAt))
           choose(actor,second);
         if(actor.mode==='walking'){
