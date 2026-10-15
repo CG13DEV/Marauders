@@ -16,7 +16,8 @@ longer occlude the active route. All limits are recorded in the contract.
 Film-style Grand Staircase is now the public 3D entrance: portrait-covered
 multi-storey atrium, an actually rotating stair flight, and a small traversable
 vestibule BEFORE the round common room **without another ECS graph node**.
-The moving flight gates the real gallery edge in both directions. See
+The moving flight gates the real vertical ECS stair edge between floors
+three and four; same-floor gallery entrances remain separately accessible. See
 [architectural contract and canon-vs-film sources](../docs/technical/grand-staircase-entrance.md).
 
 G3.3: `talk` (90 world seconds) and `ask_cup` (45 seconds) complete only
