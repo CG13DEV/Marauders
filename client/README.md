@@ -78,9 +78,11 @@ layer without altering the existing school simulation.
 - **Dormitories:** five stable radial bed positions; only currently occupied
   positions render canopy beds, with foot-of-bed trunks, two genuinely embedded
   windows, window seats and a study nook. Central corridor is open.
-- **Portrait landing:** `west_landing_4` is now a narrow, **rectangular**
-  stair-connected corridor with the portrait in the far end wall, not a
-  second circular room. Client movement respects rectangular bounds.
+- **Portrait tower (reworked after Tower 0.4):** `west_landing_4` is a
+  large multilevel Grand Staircase atrium, **not** the old narrow landing.
+  The Fat Lady's portrait is one of many, and the player reaches it through
+  physically validated collision bounds and a dedicated common-room vestibule.
+  A rotating Three.js staircase gates the existing gallery route.
 - **Common room:** cozy reading/study islands, tangent-facing bookcases,
   window seats, warm candles and clear approach routes to each real portal.
 - **Verification:** pure spatial invariants for **all 39 bedroom nodes** and
