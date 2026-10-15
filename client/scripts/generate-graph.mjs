@@ -18,7 +18,10 @@ const keyById=new Map(world.captureRuntime().entityKeys.map(([key,id])=>[id,key]
 const common=world.id('dorm_gryffindor');
 const landing=world.id('west_landing_4');
 const gallery=world.id('gallery_4');
-if(common===undefined||landing===undefined||gallery===undefined)
+const lowerLanding=world.id('west_landing_3');
+const lowerGallery=world.id('gallery_3');
+if(common===undefined||landing===undefined||gallery===undefined||
+   lowerLanding===undefined||lowerGallery===undefined)
   throw Error('Gryffindor graph anchor missing');
 
 const room=(id,attributes={})=>{
@@ -50,7 +53,8 @@ const legacy=['boys_gryffindor','girls_gryffindor']
     return room(id,{type:'legacy',capacity:RESEARCH_DORM_CAPACITY,
       students:0,wing:keyById.get(id).startsWith('boys_')?'boys':'girls'});
   });
-const ids=[common,landing,gallery,...research.map(x=>world.id(x.key)),
+const ids=[common,landing,gallery,lowerLanding,lowerGallery,
+  ...research.map(x=>world.id(x.key)),
   ...legacy.map(x=>world.id(x.key))];
 const known=new Set(ids);
 const links=[];
@@ -86,6 +90,9 @@ const payload={
   common:room(common,{type:'common',floor:4}),
   landing:room(landing,{type:'landing',floor:4}),
   gallery:room(gallery,{type:'gallery',floor:4,loreStatus:'GAME'}),
+  // These are REAL existing ECS rooms and edges, not decorative destinations.
+  lowerLanding:room(lowerLanding,{type:'landing',floor:3}),
+  lowerGallery:room(lowerGallery,{type:'gallery',floor:3,loreStatus:'GAME'}),
   research,legacy,links,
   totals:{bedrooms:bedroomKeys.length,researchBedrooms:research.length,
     legacyBedrooms:legacy.length,pupils:actual,
