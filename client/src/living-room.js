@@ -123,7 +123,8 @@ export function createLivingRoom(graph,{warmupTicks=67,playerKey='peter'}={}){
     initialLocations:observer.state()
   });
   const playerSpace=createPlayerSpace({
-    graph,playerHome:boys.key,walkableCommon:localActivities.walkable
+    graph,playerHome:boys.key,walkableCommon:localActivities.walkable,
+    nowSeconds:()=>world.worldSeconds()
   });
   function playerView(){
     const room=world.currentRoom(playerId);
@@ -319,8 +320,10 @@ export function createLivingRoom(graph,{warmupTicks=67,playerKey='peter'}={}){
       const destination=world.id(intent.destination);
       if(destination===undefined||!playerSpace.knows(intent.destination))
         return {ok:false,reason:'unknown_destination',player:playerView()};
-      if(!playerSpace.canCross(intent.destination))
+      if(!playerSpace.atPortal(intent.destination))
         return {ok:false,reason:'not_in_reach',player:playerView()};
+      if(!playerSpace.canCross(intent.destination))
+        return {ok:false,reason:'stair_misaligned',player:playerView()};
       result=world.execute({type:'move',actor:playerId,
         destination});
       if(result.ok)playerSpace.enter(intent.destination);
