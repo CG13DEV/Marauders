@@ -39,6 +39,8 @@ function moveOnFlight(game,sign){
   for(let i=0;i<45;i++){
     const state=game.snapshot().player;
     if(!state.onStairs)return;
+    if(!state.grandStair.aligned&&((sign>0&&state.stairProgress>=1-1e-8)||
+       (sign<0&&state.stairProgress<=1e-8)))return;
     const a=state.grandStair.angle;
     const delta={dx:Math.sin(a)*.14*sign,dz:Math.cos(a)*.14*sign};
     const outcome=game.submit({type:'walk',...delta});
