@@ -75,9 +75,17 @@ export function createPlayerSpace({graph,playerHome,walkableCommon,
         ((next===0&&longitudinal<0)||(next===1&&longitudinal>0))))
         return {ok:false,reason:'stair_endpoint'};
       flightProgress=next;
-      const atEnd=next<=1e-8||next>=1-1e-8;
+      const atBottom=next<=1e-8,atTop=next>=1-1e-8;
+      // The lower base never detaches; the upper end needs real alignment.
+      // Returning to one's current ECS floor is a local dismount, not a
+      // nonsensical world.execute(move-to-the-same-room) command.
+      if((atBottom&&lowerRoom())||(atTop&&upperRoom()&&state.aligned)){
+        flightProgress=null;
+        position=atBottom?{...STAIR_BASE}:{...STAIR_TOP};
+        return {ok:true,dismounted:true,position:currentPoint()};
+      }
       return {ok:true,position:currentPoint(),
-        ...(atEnd&&state.aligned?{transition:next===0
+        ...((atBottom||(atTop&&state.aligned))?{transition:atBottom
           ?graph.lowerLanding.key:graph.landing.key}:{})};
     }
     const next={x:position.x+dx,z:position.z+dz};
