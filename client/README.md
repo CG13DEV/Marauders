@@ -1,8 +1,14 @@
 # Marauders · Gryffindor Tower prototype [GAME]
 
-Static, serverless 2.5D Three.js cutaway prototype. **No live NPC simulation yet**:
-it visualizes a graph-derived set of rooms and tests camera, room geometry,
-eight camera-relative sprite orientations, pointer/WASD movement and transitions.
+Static, serverless 2.5D Three.js cutaway prototype with a four-NPC
+browser ECS micro-world. The player controls a real ECS Marauder, sees
+personally earned knowledge and can perform validated local interactions.
+**This is not the full 634-character school simulation or durable save system.**
+
+G3.3: `talk` (90 world seconds) and `ask_cup` (45 seconds) complete only
+while participants remain present and can be cancelled; the newly accessible
+gallery bench provides a 60-second wait. See
+[time-occupied player actions](../docs/technical/g3-3-timed-actions-and-gallery-bench.md).
 
 ### Run locally
 
