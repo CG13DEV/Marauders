@@ -105,7 +105,9 @@ kbd{font-family:inherit;border:1px solid #756a59;border-bottom:2px solid #6e5c43
 .talk-buttons{display:flex;flex-wrap:wrap;gap:6px}
 .talk-buttons button{background:#514035;color:#f4d6a5;border:1px solid #997a51;
   border-radius:5px;padding:6px 8px;font-size:10px;cursor:pointer}
-.talk-buttons button:hover{background:#6b5037}
+.talk-buttons button:hover:not(:disabled){background:#6b5037}
+.talk-buttons button:disabled{opacity:.48;cursor:default}
+.talk-buttons button[hidden]{display:none}
 .talk-panel p{font-size:11px;line-height:1.45;color:#e2d5bc;margin:9px 0 0}
 @media(max-width:850px){.talk-panel{right:9px;top:330px;
   width:min(190px,41vw);padding:8px 10px}
