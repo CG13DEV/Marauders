@@ -5,6 +5,12 @@ browser ECS micro-world. The player controls a real ECS Marauder, sees
 personally earned knowledge and can perform validated local interactions.
 **This is not the full 634-character school simulation or durable save system.**
 
+Film-style Grand Staircase is now the public 3D entrance: portrait-covered
+multi-storey atrium, an actually rotating stair flight, and a small traversable
+vestibule BEFORE the round common room **without another ECS graph node**.
+The moving flight gates the real gallery edge in both directions. See
+[architectural contract and canon-vs-film sources](../docs/technical/grand-staircase-entrance.md).
+
 G3.3: `talk` (90 world seconds) and `ask_cup` (45 seconds) complete only
 while participants remain present and can be cancelled; the newly accessible
 gallery bench provides a 60-second wait. See
