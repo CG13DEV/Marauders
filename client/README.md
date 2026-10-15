@@ -5,6 +5,14 @@ browser ECS micro-world. The player controls a real ECS Marauder, sees
 personally earned knowledge and can perform validated local interactions.
 **This is not the full 634-character school simulation or durable save system.**
 
+The latest [physical-staircase upgrade](../docs/technical/traversable-grand-staircase.md)
+replaces the decorative route switch with real walkable treads: **F** mounts
+a flight, WASD walks upward/downward in 3D, and the player can be carried
+by a turn. The genuine ECS floors `west_landing_3` and `west_landing_4`
+have separate reachable `gallery_3` / `gallery_4` nodes; portrait entrance
+is above the lowest floor. Near-side walls and bulky decorative stairs no
+longer occlude the active route. All limits are recorded in the contract.
+
 Film-style Grand Staircase is now the public 3D entrance: portrait-covered
 multi-storey atrium, an actually rotating stair flight, and a small traversable
 vestibule BEFORE the round common room **without another ECS graph node**.
