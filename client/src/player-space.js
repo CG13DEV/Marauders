@@ -77,9 +77,12 @@ export function createPlayerSpace({graph,playerHome,walkableCommon,
       ?TOWER_PORTRAIT_APPROACH:{x:0,z:5.52};
     return null;
   }
-  function canCross(destination){
+  function atPortal(destination){
     const portal=portalFor(destination);
-    return portal!==null&&within(position,portal,2.45)&&
+    return portal!==null&&within(position,portal,2.45);
+  }
+  function canCross(destination){
+    return atPortal(destination)&&
       (!(room===graph.landing.key&&destination===graph.gallery.key||
          room===graph.gallery.key&&destination===graph.landing.key)||
        grandStairState(nowSeconds()).aligned);
@@ -91,7 +94,8 @@ export function createPlayerSpace({graph,playerHome,walkableCommon,
     const start=room===graph.common.key?
       (next===graph.common.key&&previous===graph.landing.key
         ?{x:0,z:12.10}:STARTS.common):
-      room===graph.landing.key?STARTS.landing:
+      room===graph.landing.key?
+        (previous===graph.gallery.key?{x:0,z:4.30}:STARTS.landing):
       room===graph.gallery.key?STARTS.gallery:STARTS.bedroom;
     position={...start};
   }
@@ -126,7 +130,7 @@ export function createPlayerSpace({graph,playerHome,walkableCommon,
     };
   }
   return Object.freeze({
-    walk,canCross,enter,survey,surveyGallery,view,
+    walk,canCross,atPortal,enter,survey,surveyGallery,view,
     canReachCup:()=>room===graph.common.key&&within(position,CUP_SPOT,1.85),
     canUseGalleryBench:()=>room===graph.gallery.key&&
       within(position,GALLERY_BENCH_APPROACH,1.10),
