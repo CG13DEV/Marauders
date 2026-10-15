@@ -71,7 +71,8 @@ export function createPlayerSpace({graph,playerHome,walkableCommon,
         return {ok:false,reason:'stair_rail'};
       const next=Math.max(0,Math.min(1,
         flightProgress+longitudinal/STAIR_LENGTH));
-      if(Math.abs(next-flightProgress)<1e-8)
+      if(Math.abs(next-flightProgress)<1e-8&&!(state.aligned&&
+        ((next===0&&longitudinal<0)||(next===1&&longitudinal>0))))
         return {ok:false,reason:'stair_endpoint'};
       flightProgress=next;
       const atEnd=next<=1e-8||next>=1-1e-8;
