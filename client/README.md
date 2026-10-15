@@ -83,7 +83,9 @@ layer without altering the existing school simulation.
   The Fat Lady's portrait is one of many, and the player reaches it through
   physically validated collision bounds and a dedicated common-room vestibule.
   A rotating Three.js staircase gates the existing gallery route.
-- **Common room:** cozy reading/study islands, tangent-facing bookcases,
+- **Common room:** a real small entrance vestibule now sits between the Fat
+  Lady and the circular lounge, and remains part of `dorm_gryffindor`.
+  Cozy reading/study islands, tangent-facing bookcases,
   window seats, warm candles and clear approach routes to each real portal.
 - **Verification:** pure spatial invariants for **all 39 bedroom nodes** and
   real Chromium/SwiftShader screenshots of three room types in
