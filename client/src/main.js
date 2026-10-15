@@ -274,7 +274,7 @@ function updateLivingUi(snapshot){
   }
   const activityList=$('living-people');activityList.replaceChildren();
   const modes={walking:'идёт',read:'читает',observe:'наблюдает',
-    rest:'отдыхает',idle:'осматривается'};
+    rest:'отдыхает',talking:'разговаривает',idle:'осматривается'};
   for(const a of snapshot.activities){
     const row=document.createElement('div');
     const person=actorDefinition(a.actor);
