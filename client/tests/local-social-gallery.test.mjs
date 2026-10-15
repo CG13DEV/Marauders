@@ -110,8 +110,11 @@ test('G3.3: splitting world advancement cannot change dialogue outcome',()=>{
  single.advanceSeconds(TIMED_PLAYER_ACTION_SECONDS.talk);
  split.advanceSeconds(25);
  split.advanceSeconds(TIMED_PLAYER_ACTION_SECONDS.talk-25);
- assert.deepEqual(single.snapshot(),split.snapshot(),
-   'Conversation resolution must follow authoritative seconds, not render/poll cadence');
+ const {sequence:singlePoll,...one}=single.snapshot();
+ const {sequence:splitPoll,...two}=split.snapshot();
+ assert.notEqual(singlePoll,splitPoll,'Observer packet counter is poll-dependent');
+ assert.deepEqual(one,two,
+   'Social outcome and world state must not depend on observer poll cadence');
 });
 
 test('G3.3 castle increment: a reachable gallery bench consumes world time',()=>{
