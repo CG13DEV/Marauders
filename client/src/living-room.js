@@ -59,7 +59,8 @@ export function createLivingRoom(graph,{warmupTicks=67,playerKey='peter'}={}){
   if(!playerDefinition)throw Error('Choose a playable Marauder');
   if(!Number.isSafeInteger(warmupTicks)||warmupTicks<0)throw Error('Invalid warmup');
   const world=createSimulation();
-  const rooms=[graph.common,graph.landing,graph.gallery,...graph.research,...graph.legacy];
+  const rooms=[graph.common,graph.landing,graph.gallery,
+    graph.lowerLanding,graph.lowerGallery,...graph.research,...graph.legacy];
   const roomKeys=rooms.map(room=>room.key);
   for(const room of rooms)world.room(room.key,room.key);
   for(const [a,b] of graph.links){
@@ -147,6 +148,8 @@ export function createLivingRoom(graph,{warmupTicks=67,playerKey='peter'}={}){
       room:roomKeyForId.get(room)??null,
       ...space,
       journal:[
+        ...(space.knownRooms.includes(graph.lowerGallery.key)
+          ?['Ты нашёл нижнюю галерею лестничной башни.']:[]),
         ...(space.knownRooms.includes(graph.gallery.key)
           ?['Ты обнаружил проход к галерее четвёртого этажа.']:[]),
         ...space.surveyedWings.map(wing=>wing==='boys'
@@ -265,7 +268,21 @@ export function createLivingRoom(graph,{warmupTicks=67,playerKey='peter'}={}){
     let result;
     if(intent.type==='walk'){
       const moved=playerSpace.walk(intent.dx,intent.dz);
+      if(moved.ok&&moved.transition){
+        // Only crossing the actual 3↔4 moving-flight endpoint changes ECS
+        // authority. Never invent a remote room ID during a stair ride.
+        const destination=world.id(moved.transition);
+        if(destination===undefined)return {ok:false,reason:'unknown_destination',player:playerView()};
+        const edge=world.execute({type:'move',actor:playerId,destination});
+        if(!edge.ok)return {ok:false,reason:edge.reason,player:playerView()};
+        playerSpace.enter(moved.transition);
+        return {ok:true,transition:moved.transition,player:playerView()};
+      }
       return {...moved,player:playerView()};
+    }
+    if(intent.type==='mount_stair'){
+      const mounted=playerSpace.mountStair();
+      return {...mounted,player:playerView()};
     }
     if(intent.type==='survey_wing'){
       const seen=playerSpace.survey(intent.wing);
@@ -323,7 +340,7 @@ export function createLivingRoom(graph,{warmupTicks=67,playerKey='peter'}={}){
       if(!playerSpace.atPortal(intent.destination))
         return {ok:false,reason:'not_in_reach',player:playerView()};
       if(!playerSpace.canCross(intent.destination))
-        return {ok:false,reason:'stair_misaligned',player:playerView()};
+        return {ok:false,reason:'not_in_reach',player:playerView()};
       result=world.execute({type:'move',actor:playerId,
         destination});
       if(result.ok)playerSpace.enter(intent.destination);

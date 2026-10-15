@@ -5,10 +5,19 @@ browser ECS micro-world. The player controls a real ECS Marauder, sees
 personally earned knowledge and can perform validated local interactions.
 **This is not the full 634-character school simulation or durable save system.**
 
+The latest [physical-staircase upgrade](../docs/technical/traversable-grand-staircase.md)
+replaces the decorative route switch with real walkable treads: **F** mounts
+a flight, WASD walks upward/downward in 3D, and the player can be carried
+by a turn. The genuine ECS floors `west_landing_3` and `west_landing_4`
+have separate reachable `gallery_3` / `gallery_4` nodes; portrait entrance
+is above the lowest floor. Near-side walls and bulky decorative stairs no
+longer occlude the active route. All limits are recorded in the contract.
+
 Film-style Grand Staircase is now the public 3D entrance: portrait-covered
 multi-storey atrium, an actually rotating stair flight, and a small traversable
 vestibule BEFORE the round common room **without another ECS graph node**.
-The moving flight gates the real gallery edge in both directions. See
+The moving flight gates the real vertical ECS stair edge between floors
+three and four; same-floor gallery entrances remain separately accessible. See
 [architectural contract and canon-vs-film sources](../docs/technical/grand-staircase-entrance.md).
 
 G3.3: `talk` (90 world seconds) and `ask_cup` (45 seconds) complete only
@@ -40,7 +49,9 @@ runtime, nor does it connect to a remote server.
 
 ### Controls
 
-- **Desktop:** WASD / arrow keys move relative to camera; Q/E or dragging rotates;
+- **Desktop:** WASD / arrow keys move relative to camera; **F** at a staircase
+  endpoint mounts its rotating physical flight, then WASD walks its risers;
+  Q/E or dragging rotates;
   scroll / +/- UI zooms; F interacts near a visible staircase or door.
 - **Mobile / Telegram Mini App:** tap on floor to walk, drag to rotate, camera
   controls bottom right; click stairs in common room to select a real bedroom.
@@ -82,7 +93,9 @@ layer without altering the existing school simulation.
   large multilevel Grand Staircase atrium, **not** the old narrow landing.
   The Fat Lady's portrait is one of many, and the player reaches it through
   physically validated collision bounds and a dedicated common-room vestibule.
-  A rotating Three.js staircase gates the existing gallery route.
+  A rotating Three.js staircase now supports physical walking and controls
+  the genuine floor-3 ↔ floor-4 ECS passage, with distinct galleries on each
+  level. The camera tracks the player’s vertical position.
 - **Common room:** a real small entrance vestibule now sits between the Fat
   Lady and the circular lounge, and remains part of `dorm_gryffindor`.
   Cozy reading/study islands, tangent-facing bookcases,

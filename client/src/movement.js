@@ -4,7 +4,7 @@
  */
 export const STARTS=Object.freeze({
   common:Object.freeze({x:0,z:4.4}),
-  landing:Object.freeze({x:0,z:-5.72}),
+  landing:Object.freeze({x:0,z:-6.72}),
   bedroom:Object.freeze({x:0,z:2.5}),
   gallery:Object.freeze({x:0,z:-4.0})
 });

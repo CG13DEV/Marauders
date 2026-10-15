@@ -133,7 +133,10 @@ try{
   assert.equal(landing.layout.grandStair,true);
   assert.equal(typeof landing.live.player.grandStair.aligned,'boolean',
     'The visible staircase is driven by the already-advanced ECS clock');
-  assert.deepEqual(landing.activePortals,['return','stair_gallery']);
+  assert.deepEqual(landing.activePortals,
+    ['return','stair_gallery','stair_descent']);
+  assert.equal(landing.live.player.elevation,4.5,
+    'Fat Lady must be above the ground floor, not at the foot of the tower');
   await page.screenshot({path:resolve('artifacts/landing.png'),
     animations:'disabled'});
   await page.evaluate(()=>window.__towerTest.driveTo([{x:0,z:-6.72}]));
@@ -204,20 +207,13 @@ try{
   await galleryPage.keyboard.press('f');
   await galleryPage.waitForFunction(()=>
     window.__towerTest.snapshot().roomKey==='west_landing_4');
-  await galleryPage.evaluate(()=>window.__towerTest.driveTo([{x:0,z:3.85}]));
+  await galleryPage.evaluate(()=>window.__towerTest.driveTo([{x:0,z:-4.4}]));
   await galleryPage.waitForFunction(()=>
     window.__towerTest.snapshot().activeInteraction==='stair_gallery');
   await galleryPage.keyboard.press('f'); // discover physical stair
   assert.ok((await galleryPage.evaluate(()=>
     window.__towerTest.snapshot().live.player.knownRooms)).includes('gallery_4'));
-  const wrongStair=await galleryPage.evaluate(()=>
-    window.__towerTest.submitPlayer({type:'move',destination:'gallery_4'}));
-  assert.equal(wrongStair.reason,'stair_misaligned',
-    'A moving flight must physically block access before it aligns');
-  await galleryPage.evaluate(()=>window.__towerTest.advanceLivingSeconds(90));
-  assert.equal((await galleryPage.evaluate(()=>
-    window.__towerTest.snapshot().live.player.grandStair.aligned)),true);
-  await galleryPage.keyboard.press('f'); // now the real staircase route is open
+  await galleryPage.keyboard.press('f'); // adjacent fourth-floor gallery
   await galleryPage.waitForFunction(()=>
     window.__towerTest.snapshot().roomKey==='gallery_4');
   assert.equal((await galleryPage.evaluate(()=>
@@ -228,8 +224,8 @@ try{
   // and waiting there advances real ECS world seconds without a free teleport.
   assert.ok((await galleryPage.evaluate(()=>
     window.__towerTest.snapshot().activePortals)).includes('gallery_bench'));
-  assert.equal((await galleryPage.evaluate(()=>
-    window.__towerTest.snapshot().live.player.grandStair.aligned)),true);
+  assert.ok((await galleryPage.evaluate(()=>
+    window.__towerTest.snapshot().live.player.elevation))>=0);
   await galleryPage.evaluate(()=>window.__towerTest.driveTo([{x:1.45,z:1.1}]));
   await galleryPage.waitForFunction(()=>
     window.__towerTest.snapshot().activeInteraction==='gallery_bench');
@@ -249,6 +245,41 @@ try{
   await galleryPage.keyboard.press('f');
   await galleryPage.waitForFunction(()=>
     window.__towerTest.snapshot().roomKey==='west_landing_4');
+  // REAL lower floor and gallery: walk the upper balcony, mount the stair,
+  // descend on physical 3D risers, and cross a genuine ECS room edge.
+  await galleryPage.evaluate(()=>window.__towerTest.driveTo([
+    {x:0,z:-6.5},{x:-5.65,z:-6.5},{x:-5.65,z:3.7}]));
+  await galleryPage.waitForFunction(()=>
+    window.__towerTest.snapshot().activeInteraction==='stair_descent');
+  await galleryPage.evaluate(()=>{
+    const s=window.__towerTest.snapshot().live.player.grandStair;
+    if(!s.aligned)window.__towerTest.advanceLivingSeconds(s.secondsToAlign);
+  });
+  await galleryPage.keyboard.press('f');
+  assert.equal((await galleryPage.evaluate(()=>
+    window.__towerTest.snapshot().live.player.onStairs)),true);
+  await galleryPage.evaluate(()=>window.__towerTest.walkFlight(-1));
+  await galleryPage.waitForFunction(()=>
+    window.__towerTest.snapshot().roomKey==='west_landing_3');
+  assert.equal((await galleryPage.evaluate(()=>
+    window.__towerTest.snapshot().player.y)),0);
+  await galleryPage.evaluate(()=>window.__towerTest.driveTo([{x:4.75,z:1.5}]));
+  await galleryPage.waitForFunction(()=>
+    window.__towerTest.snapshot().activeInteraction==='lower_gallery');
+  await galleryPage.keyboard.press('f'); // discover real gallery_3
+  assert.ok((await galleryPage.evaluate(()=>
+    window.__towerTest.snapshot().live.player.knownRooms)).includes('gallery_3'));
+  await galleryPage.keyboard.press('f');
+  await galleryPage.waitForFunction(()=>
+    window.__towerTest.snapshot().roomKey==='gallery_3');
+  await galleryPage.evaluate(()=>window.__towerTest.driveTo([{x:0,z:-4.65}]));
+  // WebGL frames can be slow in SwiftShader. F must be pressed only after
+  // the real interaction prompt has observed the updated ECS position.
+  await galleryPage.waitForFunction(()=>
+    window.__towerTest.snapshot().activeInteraction==='return_landing');
+  await galleryPage.keyboard.press('f');
+  await galleryPage.waitForFunction(()=>
+    window.__towerTest.snapshot().roomKey==='west_landing_3');
   await galleryPage.close();
 
   // Choosing a different Marauder must give the player that actual ECS

@@ -69,7 +69,7 @@ test('G3 world expansion: the actual gallery_4 graph node can be explored',()=>{
  assert.equal(game.submit({type:'survey_gallery'}).reason,'not_in_reach');
  assert.equal(game.submit({type:'move',destination:graph.gallery.key}).reason,
    'unknown_destination');
- walkTo(game,{x:0,z:3.85});
+ walkTo(game,{x:0,z:-4.40});
  assert.equal(game.submit({type:'survey_gallery'}).ok,true);
  assert.ok(game.snapshot().player.knownRooms.includes(graph.gallery.key));
  assert.equal(game.submit({type:'move',destination:graph.gallery.key}).ok,true);
@@ -122,7 +122,7 @@ test('G3.3 castle increment: a reachable gallery bench consumes world time',()=>
  assert.equal(game.submit({type:'wait_gallery'}).reason,'not_in_reach');
  walkTo(game,{x:0,z:12.65});
  assert.equal(game.submit({type:'move',destination:graph.landing.key}).ok,true);
- walkTo(game,{x:0,z:3.85});
+ walkTo(game,{x:0,z:-4.40});
  assert.equal(game.submit({type:'survey_gallery'}).ok,true);
  assert.equal(game.submit({type:'move',destination:graph.gallery.key}).ok,true);
  assert.equal(game.submit({type:'wait_gallery'}).reason,'not_in_reach');
