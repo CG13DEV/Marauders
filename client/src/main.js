@@ -76,7 +76,7 @@ function toast(text){
 }
 function labelFor(room){
   if(room.key===graph.common.key)return 'Гостиная Гриффиндора';
-  if(room.key===graph.landing.key)return 'Лестничная площадка у портрета';
+  if(room.key===graph.landing.key)return 'Башня Большой лестницы';
   if(room.key===graph.gallery.key)return 'Галерея четвёртого этажа';
   if(room.type==='legacy')return room.wing==='boys'
     ?'Старая спальня мальчиков':'Старая спальня девочек';
@@ -87,9 +87,9 @@ function detailFor(room){
   if(room.key===graph.common.key)
     return 'Четыре автономных ученика из отдельной ECS-микросимуляции. Решения принимает мир.';
   if(room.key===graph.landing.key)
-    return 'С лестницы замка — по каменной площадке к портрету Толстой дамы.';
+    return 'Башня, полная портретов и движущихся лестниц. Их маршруты меняются со временем.';
   if(room.key===graph.gallery.key)
-    return 'Высокие окна, портреты и каменные своды. За арками продолжается замок.';
+    return 'Галерея доступна с поворотной лестницы. Дождись, пока она соединит площадки.';
   if(room.type==='legacy')
     return 'Узел старого графа. В исследовательской конфигурации здесь никто не живёт.';
   return debugMode?'Граф: '+room.students+' жителей из '+room.capacity:
@@ -124,9 +124,11 @@ function rebuildScene(){
   stage=buildStage(room,graph);
   scene.add(stage.group);
   if(roomKey===graph.common.key)buildCupVisual();
+  stage.setWorldSeconds(living.snapshot().worldSeconds);
   pendingPortal=null;target=null;
   const preference=roomKey===graph.common.key?STARTS.common:
-    roomKey===graph.landing.key?STARTS.landing:STARTS.bedroom;
+    roomKey===graph.landing.key?STARTS.landing:
+      roomKey===graph.gallery.key?STARTS.gallery:STARTS.bedroom;
   const authoritative=living.snapshot().player.position;
   const spawn=safeSpawn(stage,authoritative);
   if(Math.hypot(spawn.x-authoritative.x,spawn.z-authoritative.z)>.01)
@@ -374,7 +376,9 @@ function enter(next){
   if(!byKey.has(next)){toast('Комната пока за пределами прототипа.');return;}
   const result=living.submit({type:'move',destination:next});
   if(!result.ok){
-    toast('Мир отказал в переходе: '+result.reason);
+    toast(result.reason==='stair_misaligned'
+      ?'Лестница сейчас повёрнута в другую сторону. Дождись соединения.'
+      :'Мир отказал в переходе: '+result.reason);
     return;
   }
   roomKey=result.player.room;
@@ -488,7 +492,9 @@ function usePortal(portal){
     const result=living.submit({type:'survey_gallery'});
     if(result.ok){toast('За лестницей открылась галерея. Нажми F ещё раз.');
       updateLivingUi(living.snapshot());updateHeader();return;}
-    if(result.reason==='already_explored'){enter(graph.gallery.key);return;}
+    if(result.reason==='already_explored'){
+      enter(graph.gallery.key);return;
+    }
     toast('Сначала подойди к лестнице.');return;
   }
   if(portal.kind==='return_landing'){enter(graph.landing.key);return;}
@@ -525,6 +531,13 @@ function refreshHint(){
   $('cup-break').disabled=state.cup?.broken===true||busy;
   const portal=nearCup?{kind:'inspect_cup',desc:'Осмотреть старую чашку'}:
     nearestPortal();
+  if(portal?.kind==='stair_gallery'&&
+     liveView.player.grandStair?.aligned===false)
+    portal.desc='Лестница повернулась: подожди '+
+      liveView.player.grandStair.secondsToAlign+' игровых секунд';
+  if(portal?.kind==='return_landing'&&
+     liveView.player.grandStair?.aligned===false)
+    portal.desc='Лестница ещё не соединилась. Подожди.';
   const hint=$('action-hint');
   hint.hidden=!portal||busy;
   if(portal&&!busy)$('action-hint-text').textContent=portal.desc;
@@ -562,6 +575,7 @@ $('cup-break').addEventListener('click',()=>{
   updateLivingUi(living.snapshot());
 });
 function clipMovement(x,z){
+  if(stage.walkableExtras?.({x,z}))return {x,z};
   if(stage.bounds)return {
     x:THREE.MathUtils.clamp(x,stage.bounds.minX,stage.bounds.maxX),
     z:THREE.MathUtils.clamp(z,stage.bounds.minZ,stage.bounds.maxZ)
@@ -705,6 +719,7 @@ function tick(){
   if(frame!==lastView){lastView=frame;
     $('sprite-facing').textContent='РАКУРС '+(frame+1)+' / 8';}
   $('heading-rose').style.transform='rotate('+(-yaw*180/Math.PI)+'deg)';
+  stage?.setWorldSeconds(living.snapshot().worldSeconds);
   if(stage.fire){
     stage.fire.glow.intensity=11.7+Math.sin(performance.now()*.004)*1.3;
     stage.fire.flame.scale.y=1.26+Math.sin(performance.now()*.006)*.12;
