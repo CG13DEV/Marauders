@@ -171,7 +171,7 @@ export type SpellRejection =
   | 'speaker_cannot_hear' | 'student_cannot_hear' | 'already_understood';
 
 export type BookRejection = 'unknown_book' | 'book_not_in_reach' | 'cannot_read' |
-  'already_reading' | 'already_understood' | 'busy_at_lesson';
+  'already_reading' | 'already_understood' | 'busy_at_lesson' | 'reading_in_progress';
 
 export type HelpRejection =
   | 'not_missing_concept' | 'already_requested' | 'no_pending_request'
@@ -1022,6 +1022,10 @@ export function createSimulation() {
       emit(event);
       return {ok:true,events:[event]};
     }
+    // Reading is a world-time action, not background XP while performing
+    // unrelated spells or social actions. Successful travel above interrupts it.
+    if (activeReadings.has(command.actor) && command.type !== 'study_book')
+      return {ok:false,reason:'reading_in_progress',events:[]};
     if(command.type==='search_passages'){
       const here=currentRoom(command.actor);
       if(here===null||!hasComponent(ecs,command.actor,Vision))
