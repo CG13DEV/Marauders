@@ -1024,7 +1024,7 @@ export function createSimulation() {
     }
     // Reading is a world-time action, not background XP while performing
     // unrelated spells or social actions. Successful travel above interrupts it.
-    if (activeReadings.has(command.actor) && command.type !== 'study_book')
+    if (activeReadings.has(command.actor))
       return {ok:false,reason:'reading_in_progress',events:[]};
     if(command.type==='search_passages'){
       const here=currentRoom(command.actor);
