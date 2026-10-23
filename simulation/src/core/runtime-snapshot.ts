@@ -3,6 +3,7 @@ import type { Observation, WorldEvent, RoomDescriptor } from './Simulation.ts';
 import type { Belief } from './beliefs.ts';
 import type { LearningRecord } from './spellcraft.ts';
 import type {MagicObjectState,ActiveMagic,MagicPrimitive} from './magic-graph.ts';
+import type {ResearchRecord,ActiveResearchRecord} from './magic-research.ts';
 import type { AttendanceRecord, SchoolPriority } from './school-time.ts';
 import type { TutoringRequest, AssistanceMemory } from './social-learning.ts';
 import type { Trust } from './cognition.ts';
@@ -40,6 +41,8 @@ export type RuntimeSnapshot = {
   magicObjects?:[number,MagicObjectState][];
   activeMagic?:ActiveMagic[];
   magicPrimitives?:[number,MagicPrimitive[]][];
+  magicResearch?:ResearchRecord[];
+  activeMagicTrials?:ActiveResearchRecord[];
   activeReadings?: [number, {book:number;startedAt:number}][];
   schedules: [number, { records: AttendanceRecord[]; priority: SchoolPriority }][];
   dailyPlans: [number, DailyLifePlan][];
@@ -79,6 +82,9 @@ function remapEvent(event: WorldEvent, at: (id: number) => number): WorldEvent {
     case 'magic_pattern_cast': case 'magic_object_disturbed':
       return {...event,actor:at(event.actor),object:at(event.object)};
     case 'magic_primitive_learned':return {...event,actor:at(event.actor)};
+    case 'magic_hypothesis_proposed':return {...event,actor:at(event.actor)};
+    case 'magic_trial_started':case 'magic_trial_recorded':
+      return {...event,actor:at(event.actor),object:at(event.object)};
     case 'lesson_attendance': case 'spell_concept_learned': case 'spell_executed':
       return { ...event, actor: at(event.actor) };
     case 'tutoring_requested': return { ...event, actor: at(event.actor), listener: at(event.listener) };
@@ -155,6 +161,10 @@ export function remapRuntimeSnapshot(snapshot: RuntimeSnapshot, at: (id: number)
       ([id,state])=>[at(id),{...state,position:{...state.position},velocity:{...state.velocity}}] as [number,MagicObjectState])}),
     ...(snapshot.activeMagic===undefined?{}:{activeMagic:snapshot.activeMagic.map(a=>
       ({...a,target:at(a.target),actor:at(a.actor)}))}),
+    ...(snapshot.magicResearch===undefined?{}:{magicResearch:snapshot.magicResearch.map(
+      ([actor,notes])=>[at(actor),notes.map(note=>({...note,trials:note.trials.map(t=>({...t,object:at(t.object)}))}))] as ResearchRecord)}),
+    ...(snapshot.activeMagicTrials===undefined?{}:{activeMagicTrials:snapshot.activeMagicTrials.map(
+      ([actor,trial])=>[at(actor),{...trial,object:at(trial.object)}] as ActiveResearchRecord)}),
     ...(snapshot.magicPrimitives===undefined?{}:{magicPrimitives:snapshot.magicPrimitives.map(
       ([actor,known])=>[at(actor),[...known]] as [number,MagicPrimitive[]])}),
     ...(snapshot.activeReadings===undefined?{}:{activeReadings:snapshot.activeReadings.map(
