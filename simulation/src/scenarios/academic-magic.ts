@@ -1,4 +1,5 @@
 import { createSimulation } from '../core/Simulation.ts';
+import { introductorySpellFor } from './curriculum.ts';
 
 /**
  * [GAME] First vertical slice linking timetable attendance, physical library
@@ -19,8 +20,10 @@ export function createAcademicMagicSlice() {
     'Основы освещающих чар (учебный экземпляр)',library,'lumos');
   world.seedSpellKnowledge(professor,'lumos','independent');
   // A prototype teaching slot; 1970s placement is a GAME assumption.
+  const unit=introductorySpellFor(1,'Charms');
+  if(!unit)throw Error('Missing first-year prototype magic unit');
   const lesson = {id:'charms_intro',subject:'Чары',room:classroom,
-    startsAt:510,endsAt:550,teacher:professor,spell:'lumos' as const};
+    startsAt:510,endsAt:550,teacher:professor,spell:unit.spell};
   world.setTimetable(lily,[lesson],'lesson_first');
   world.setTimetable(remus,[lesson],'lesson_first');
   // The player-controlled pupil may choose the library over the class.
