@@ -234,8 +234,14 @@ export function remapRuntimeSnapshot(snapshot: RuntimeSnapshot, at: (id: number)
     }]),
     attemptedTutors: snapshot.attemptedTutors.map(([id, attempted]) => [at(id),
       attempted.map(value => {
-        const [speaker, spell] = value.split(':');
-        if (!speaker || !spell) throw new Error('Malformed remembered tutoring attempt');
+        const parts=value.split(':');
+        if(parts.length===3 && parts[0]==='practice' &&
+           Number.isSafeInteger(Number(parts[1])) && parts[2])
+          return 'practice:'+at(Number(parts[1]))+':'+parts[2];
+        const [speaker,spell]=parts;
+        if(parts.length!==2 || !speaker || !spell ||
+           !Number.isSafeInteger(Number(speaker)))
+          throw new Error('Malformed remembered tutoring attempt');
         return at(Number(speaker)) + ':' + spell;
       })
     ]),
