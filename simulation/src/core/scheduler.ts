@@ -549,7 +549,6 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       if(result.ok)socialParticipants.add(guide);
       else failed?.add('practice:'+guide+':'+concept);
     }
-    phase('guided-knowledge-practice');
 
     // Opt-in intention arbitration. Scheduling, commitments and bodily needs
     // all compete through observed obligations, not a global RPG action score.
