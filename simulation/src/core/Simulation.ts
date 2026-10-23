@@ -399,6 +399,15 @@ export function createSimulation() {
     primitives.get(actor)!.add(primitive);
   }
 
+  function learnMagicPrimitive(actor:EntityId,primitive:MagicPrimitive,
+    lessonId:string,minute:number):boolean{
+    const known=primitives.get(actor);
+    if(!known||known.has(primitive))return false;
+    known.add(primitive);
+    emit({type:'magic_primitive_learned',actor,primitive,lessonId,minute});
+    return true;
+  }
+
   /** A physical book exposes its title on sight, not its spell contents. */
   function spellBook(key: string, label: string, initialRoom: EntityId, spell: SpellId): EntityId {
     if (!isRoom(initialRoom) || !isSpellId(spell)) throw Error('Invalid spell book');
