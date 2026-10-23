@@ -105,7 +105,7 @@ function remapCommand(command: Command, ids: Map<number, number>): Command {
 function canonicalize(value: unknown, idToKey: Map<number, string>): unknown {
   const entityFields = new Set([
     'actor', 'listener', 'requester', 'helper', 'teacher', 'culprit', 'object',
-    'target', 'door', 'from', 'to', 'room', 'destination', 'source', 'observer', 'partner', 'promisor', 'beneficiary', 'pupil', 'speaker', 'announcer', 'questioned'
+    'target', 'book', 'door', 'from', 'to', 'room', 'destination', 'source', 'observer', 'partner', 'promisor', 'beneficiary', 'pupil', 'speaker', 'announcer', 'questioned'
   ]);
   function recur(input: unknown, parent?: string): unknown {
     if(parent==='passageDiscoveries'&&typeof input==='number')
