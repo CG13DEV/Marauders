@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createAutonomousAcademicMagicSlice} from '../src/scenarios/autonomous-academic-magic.ts';
+import {createSchoolWeek} from '../src/scenarios/school-week.ts';
 import {createPersistentSimulation,restoreCheckpoint,restoreSimulation,
   serializeCheckpoint,serializeSimulation} from '../src/core/persistence.ts';
 
@@ -90,4 +91,24 @@ test('unknown guide qualification is validated; a rejected helper is remembered 
   const remembered=restored.captureRuntime().attemptedTutors.find(([id])=>id===newPupil)?.[1]??[];
   assert.ok(remembered.includes('practice:'+newHelper+':lumos'));
   assert.equal(restored.spellStage(newPupil,'lumos'),'conceptual');
+});
+
+test('G4.1 full-school opt-in adds real library book and only first-year location knowledge',()=>{
+  const school=createSchoolWeek(undefined,'adaptive','autonomous','control',
+    'baseline','fixture-84','legacy','legacy','library-g4-1');
+  const student=school.students.find(s=>s.year===1)!;
+  const senior=school.students.find(s=>s.year===2)!;
+  const store=school.world.captureRuntime();
+  const first=store.dailyPlans.find(([actor])=>actor===student.id)![1];
+  const later=store.dailyPlans.find(([actor])=>actor===senior.id)![1];
+  assert.equal(first.libraryRoom,school.library);
+  assert.equal(later.libraryRoom,undefined);
+  const visitor=school.world.character('library_guest','Гость библиотеки',school.library);
+  assert.equal(school.world.visibleBooks(visitor).some(b=>b.label.includes('Lumos')),true);
+  assert.deepEqual(school.world.visibleBooks(student),[]);
+  const charms=school.professors.find(p=>p.subject==='Charms')!;
+  assert.equal(school.world.spellStage(charms.id,'lumos'),'independent');
+  const original=createSchoolWeek();
+  const idleVisitor=original.world.character('old_guest','Гость',original.library);
+  assert.deepEqual(original.world.visibleBooks(idleVisitor),[]);
 });
