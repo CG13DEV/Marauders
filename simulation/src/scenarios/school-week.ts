@@ -72,7 +72,8 @@ export function createSchoolWeek(
   expansion: 'baseline' | 'expanded' = 'baseline',
   scale: 'fixture-84' | 'research-600' = 'fixture-84',
   curriculum: 'legacy' | 'foundations-27' = 'legacy',
-  travel: 'legacy' | 'micro-28' | 'weighted-29' | 'unified-30' = 'legacy'
+  travel: 'legacy' | 'micro-28' | 'weighted-29' | 'unified-30' = 'legacy',
+  academicStudy: 'legacy' | 'library-g4-1' = 'legacy'
 ) {
   if(travel!=='legacy'&&travel!=='micro-28'&&travel!=='weighted-29'&&
      travel!=='unified-30')
@@ -83,6 +84,8 @@ export function createSchoolWeek(
     throw Error('Unknown curriculum');
   if(curriculum==='foundations-27'&&scale!=='research-600')
     throw Error('Foundations curriculum requires the research population');
+  if(academicStudy!=='legacy'&&academicStudy!=='library-g4-1')
+    throw Error('Unknown academic study mode');
   if(scale!=='fixture-84'&&scale!=='research-600')
     throw new Error('Unknown school population scale');
   if(!INTENTION_ROLLOUT_STAGES.includes(rollout))
@@ -95,6 +98,8 @@ export function createSchoolWeek(
   const layout = createCastleLayout(world);
   const { hall, greatHall, staffRoom, library, courtyard, hospital,
     classrooms, electiveRooms } = layout;
+  if(academicStudy==='library-g4-1')
+    world.spellBook('g41_lumos_primer','Lumos — основы освещающих чар',library,'lumos');
   const dorms = Object.fromEntries(HOUSES.map(house =>
     [house, layout.dorms[house].common])) as Record<House, number>;
   // The 84-pupil fixture keeps its original shared rooms. At scale, use
@@ -125,6 +130,11 @@ export function createSchoolWeek(
       (expansion === 'expanded' ? NAMED_STAFF[subject] : undefined) ??
         'Преподаватель: ' + SUBJECT_LABELS[subject], staffRoom);
     world.grantPointAuthority(id,'teacher');
+    if(academicStudy==='library-g4-1' && subject==='Charms'){
+      // A real qualified tutor; no NPC receives this knowledge by proximity.
+      world.seedSpellKnowledge(id,'lumos','independent');
+      world.setHelpful(id,true);
+    }
     // Ghost Binns still holds the History timetable, but must NOT eat,
     // sleep or accumulate human physiological needs in expanded mode.
     if (expansion !== 'expanded' || subject !== 'History of Magic')
@@ -193,6 +203,7 @@ export function createSchoolWeek(
           homeRoom: sleepingRoom, socialRoom: dorms[house],
           diningRoom: greatHall,
           leisureRoom: index % 3 === 0 ? library : index % 3 === 1 ? courtyard : dorms[house],
+          ...(academicStudy==='library-g4-1'&&year===1?{libraryRoom:library}:{ }),
           style: index % 3 === 2 ? 'reserved' : 'outgoing',
           interest: (['lessons', 'castle', 'hobbies'] as const)[index % 3]!,
           ...(social === 'autonomous' ? { socialInvitations: true } : {}),
@@ -420,7 +431,7 @@ export function createSchoolWeek(
   }
 
   return {
-    world, rollout, population, expansion, scale, curriculum, travel, residents, layout, hall, staffRoom, greatHall, library, courtyard, hospital,
+    world, rollout, population, expansion, scale, curriculum, travel, academicStudy, residents, layout, hall, staffRoom, greatHall, library, courtyard, hospital,
     dorms, dormitoryRooms, classrooms, electiveRooms, professors, students, teachingGroups,
     foundationTeachers,foundationSpaces,foundationAssignments,
     sessions, pupilSchedule, staffSchedule
