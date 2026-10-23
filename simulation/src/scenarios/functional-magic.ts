@@ -20,6 +20,8 @@ export function createFunctionalMagicSlice(world:Simulation=createSimulation()){
       primitive:'light_emission' as const}
   ];
   world.seedSpellKnowledge(teacher,'wingardium_leviosa','independent');
+  for(const principle of ['position_lock','force_feedback','light_emission'] as const)
+    world.seedMagicPrimitive(teacher,principle);
   world.setTimetable(pupil,lessons,'lesson_first');
   world.setTimetable(spectator,lessons,'lesson_first');
   world.setManualControl(spectator,true);
