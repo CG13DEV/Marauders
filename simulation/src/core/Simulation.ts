@@ -1002,7 +1002,7 @@ export function createSimulation() {
        !['inspect_object','signal_incident','break_object'].includes(command.type))
       return {ok:false,reason:'animal_action_unavailable',events:[]};
     if (command.type === 'study_book') {
-      if (!hasComponent(ecs, command.book, SpellBook) || !books.has(command.book))
+      if (!entityExists(ecs, command.book) || !hasComponent(ecs, command.book, SpellBook) || !books.has(command.book))
         return {ok:false, reason:'unknown_book', events:[]};
       if (currentRoom(command.actor) !== locationOf(command.book))
         return {ok:false, reason:'book_not_in_reach', events:[]};
