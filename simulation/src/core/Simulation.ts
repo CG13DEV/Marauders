@@ -74,6 +74,7 @@ export type Command =
   | { type: 'inspect_object'; actor: EntityId; target: EntityId }
   | { type: 'ask_about'; actor: EntityId; listener: EntityId; object: EntityId }
   | { type: 'tutor_spell'; actor: EntityId; listener: EntityId; spell: SpellId }
+  | { type: 'study_book'; actor: EntityId; book: EntityId }
   | { type: 'practice_spell'; actor: EntityId; spell: SpellId; guide?: EntityId; intent: string; target: string; incantation: string }
   | { type: 'cast_spell'; actor: EntityId; spell: SpellId; intent: string; target: string; incantation: string }
   | { type: 'ask_tutoring'; actor: EntityId; listener: EntityId; spell: SpellId }
@@ -108,8 +109,10 @@ export type WorldEvent =
   | { type: 'object_inspected'; actor: EntityId; target: EntityId; broken: boolean }
   | { type: 'question_asked'; actor: EntityId; listener: EntityId; object: EntityId; answered: boolean }
   | { type: 'lesson_attendance'; actor: EntityId; lessonId: string; status: 'on_time' | 'late' | 'missed'; minute: number }
-  | { type: 'spell_concept_learned'; actor: EntityId; spell: SpellId; source: 'lesson' | 'tutoring'; minute: number }
+  | { type: 'spell_concept_learned'; actor: EntityId; spell: SpellId; source: 'lesson' | 'tutoring' | 'library'; minute: number }
   | { type: 'spell_executed'; actor: EntityId; spell: SpellId; mode: 'guided' | 'independent'; minute: number }
+  | { type: 'book_reading_started' | 'book_reading_interrupted'; actor: EntityId; book: EntityId; minute: number }
+  | { type: 'book_read'; actor: EntityId; book: EntityId; spell: SpellId; minute: number }
   | { type: 'tutoring_requested'; actor: EntityId; listener: EntityId; spell: SpellId; minute: number }
   | { type: 'tutoring_answered'; actor: EntityId; requester: EntityId; spell: SpellId; accepted: boolean; minute: number }
   | { type: 'meal_eaten'; actor: EntityId; kind: MealKind; minute: number }
@@ -167,6 +170,9 @@ export type SpellRejection =
   | 'invalid_guide' | 'guide_unqualified' | 'pattern_mismatch' | 'not_practiced'
   | 'speaker_cannot_hear' | 'student_cannot_hear' | 'already_understood';
 
+export type BookRejection = 'unknown_book' | 'book_not_in_reach' | 'cannot_read' |
+  'already_reading' | 'already_understood' | 'busy_at_lesson' | 'reading_in_progress';
+
 export type HelpRejection =
   | 'not_missing_concept' | 'already_requested' | 'no_pending_request'
   | 'not_colocated' | 'cannot_hear' | 'invalid_helper' | 'invalid_requester'
@@ -191,7 +197,7 @@ export type IntentionRejection='no_intention_planner'|'invalid_intention'|
 
 export type CommandResult =
   | { ok: true; events: readonly WorldEvent[]; scheduled?:true }
-  | { ok: false; reason: MoveRejection | BreakRejection | SocialRejection | DoorRejection | InspectRejection | QuestionRejection | SpellRejection | HelpRejection | DailyRejection | MeetingRejection | IntentionRejection | PointRejection | 'no_toilet_need' | 'wrong_toilet' |
+  | { ok: false; reason: MoveRejection | BreakRejection | SocialRejection | DoorRejection | InspectRejection | QuestionRejection | SpellRejection | BookRejection | HelpRejection | DailyRejection | MeetingRejection | IntentionRejection | PointRejection | 'no_toilet_need' | 'wrong_toilet' |
       'not_urgent' | 'no_animal_signal' | 'not_partner' | 'no_sighting' |
       'animal_cannot_speak' | 'animal_action_unavailable' | 'listener_cannot_speak' |
       'unknown_passage' | 'cannot_search_passages' | 'timed_action_in_progress'; events: readonly [] };
@@ -217,6 +223,10 @@ export function createSimulation() {
   const Room = {};
   const Character = {};
   const Fragile = { broken: [] as number[] };
+  const SpellBook = {};
+  const books = new Map<EntityId, SpellId>();
+  // In-flight reading is personal, time-bound world state, checkpointed below.
+  const activeReadings = new Map<EntityId, { book: EntityId; startedAt: number }>();
   const Door = { roomA: [] as EntityId[], roomB: [] as EntityId[], open: [] as number[] };
   const Vision = {};
   const Hearing = {};
@@ -347,6 +357,51 @@ export function createSimulation() {
     Fragile.broken[eid] = 0;
     addComponent(ecs, eid, LocatedIn(initialRoom));
     return eid;
+  }
+
+  /** A physical book exposes its title on sight, not its spell contents. */
+  function spellBook(key: string, label: string, initialRoom: EntityId, spell: SpellId): EntityId {
+    if (!isRoom(initialRoom) || !isSpellId(spell)) throw Error('Invalid spell book');
+    const eid = addNamedEntity(key, label);
+    addComponent(ecs, eid, SpellBook);
+    addComponent(ecs, eid, LocatedIn(initialRoom));
+    books.set(eid, spell);
+    return eid;
+  }
+
+  function visibleBooks(actor: EntityId): { id: EntityId; label: string }[] {
+    const location = currentRoom(actor);
+    if (location === null || !hasComponent(ecs, actor, Vision)) return [];
+    return [...books.keys()].filter(id => locationOf(id) === location)
+      .map(id => ({ id, label: Name.value[id]! }));
+  }
+
+  function readingOf(actor: EntityId): { book: EntityId; startedAt: number } | null {
+    const value = activeReadings.get(actor);
+    return value ? { ...value } : null;
+  }
+
+  function activeLessonAt(actor: EntityId, minute: number): boolean {
+    return (timetables.get(actor)?.records ?? []).some(lesson =>
+      minute >= lesson.startsAt && minute < lesson.endsAt);
+  }
+
+  function finishReadings(minute: number): void {
+    for (const [actor, reading] of [...activeReadings]) {
+      if (currentRoom(actor) !== locationOf(reading.book) || activeLessonAt(actor, minute)) {
+        activeReadings.delete(actor);
+        emit({ type:'book_reading_interrupted', actor, book:reading.book, minute });
+        continue;
+      }
+      if (minute < reading.startedAt + 20) continue;
+      activeReadings.delete(actor);
+      const spell = books.get(reading.book)!;
+      if (spellKnowledge.stage(actor, spell) !== 'unaware') continue;
+      spellKnowledge.learn(actor, spell, 'conceptual',
+        {kind:'library', book:reading.book, minute});
+      emit({type:'book_read', actor, book:reading.book, spell, minute});
+      emit({type:'spell_concept_learned', actor, spell, source:'library', minute});
+    }
   }
 
   function connect(a: EntityId, b: EntityId, options?: DoorOptions): EntityId | undefined {
@@ -921,10 +976,18 @@ export function createSimulation() {
       });
       if (reason !== null) return { ok: false, reason, events: [] };
 
+      const reading = activeReadings.get(command.actor);
+      const interruption: WorldEvent[] = [];
+      if (reading) {
+        activeReadings.delete(command.actor);
+        const event: WorldEvent = {type:'book_reading_interrupted', actor:command.actor,
+          book:reading.book, minute:schoolTime(tick).absoluteMinute};
+        emit(event); interruption.push(event);
+      }
       addComponent(ecs, command.actor, LocatedIn(command.destination));
       const event: WorldEvent = { type: 'entity_moved', actor: command.actor, from: from!, to: command.destination };
       emit(event);
-      return { ok: true, events: [event] };
+      return { ok: true, events: [...interruption, event] };
     }
 
     if (!entityExists(ecs, command.actor)) {
@@ -938,6 +1001,31 @@ export function createSimulation() {
     if(patrolPlans.get(command.actor)?.kind==='animal'&&
        !['inspect_object','signal_incident','break_object'].includes(command.type))
       return {ok:false,reason:'animal_action_unavailable',events:[]};
+    if (command.type === 'study_book') {
+      if (!entityExists(ecs, command.book) || !hasComponent(ecs, command.book, SpellBook) || !books.has(command.book))
+        return {ok:false, reason:'unknown_book', events:[]};
+      if (currentRoom(command.actor) !== locationOf(command.book))
+        return {ok:false, reason:'book_not_in_reach', events:[]};
+      if (!hasComponent(ecs, command.actor, Vision))
+        return {ok:false, reason:'cannot_read', events:[]};
+      if (activeReadings.has(command.actor))
+        return {ok:false, reason:'already_reading', events:[]};
+      const spell = books.get(command.book)!;
+      if (spellKnowledge.stage(command.actor, spell) !== 'unaware')
+        return {ok:false, reason:'already_understood', events:[]};
+      const minute = schoolTime(tick).absoluteMinute;
+      if (activeLessonAt(command.actor, minute))
+        return {ok:false, reason:'busy_at_lesson', events:[]};
+      activeReadings.set(command.actor, {book:command.book, startedAt:minute});
+      const event:WorldEvent = {type:'book_reading_started',actor:command.actor,
+        book:command.book,minute};
+      emit(event);
+      return {ok:true,events:[event]};
+    }
+    // Reading is a world-time action, not background XP while performing
+    // unrelated spells or social actions. Successful travel above interrupts it.
+    if (activeReadings.has(command.actor))
+      return {ok:false,reason:'reading_in_progress',events:[]};
     if(command.type==='search_passages'){
       const here=currentRoom(command.actor);
       if(here===null||!hasComponent(ecs,command.actor,Vision))
@@ -1911,6 +1999,8 @@ export function createSimulation() {
       recordDailyRest,
       profile:schedulerProfiler
     });
+    // Studies mature only after elapsed world time, not upon selecting a book.
+    finishReadings(schoolTime(tick).absoluteMinute);
     const schedulerEnd=tickDiagnostics?performance.now():0;
     const schedulerDecisionCount=decisions.length;
     // Patrollers share the exact same physics and personal graph as pupils.
@@ -2137,6 +2227,8 @@ export function createSimulation() {
       observations: [...observationsByCharacter.entries()],
       beliefs: characters.map(id => [id, beliefsByCharacter.read(id)]),
       learning: characters.map(id => [id, spellKnowledge.history(id)]),
+      ...(activeReadings.size?{activeReadings:[...activeReadings.entries()]
+        .map(([actor,reading])=>[actor,{...reading}] as [number,{book:number;startedAt:number}])}:{}),
       schedules: [...timetables.entries()],
       dailyPlans: [...dailyPlans.entries()],
       meals: [...meals.entries()],
@@ -2318,6 +2410,14 @@ export function createSimulation() {
     for (const [id, ledger] of state.observations) observationsByCharacter.set(id, ledger);
     for (const [id, ledger] of state.beliefs) beliefsByCharacter.replace(id, ledger);
     for (const [id, ledger] of state.learning) spellKnowledge.replace(id, ledger);
+    activeReadings.clear();
+    for (const [actor,reading] of state.activeReadings??[]) {
+      if(!isCharacter(actor) || !books.has(reading.book) ||
+         currentRoom(actor)!==locationOf(reading.book) ||
+         !Number.isSafeInteger(reading.startedAt) || reading.startedAt>schoolTime(state.tick).absoluteMinute)
+        throw Error('Invalid active book reading');
+      activeReadings.set(actor,{...reading});
+    }
 
     timetables.clear();
     for (const [id, schedule] of state.schedules) timetables.set(id, schedule);
@@ -2384,7 +2484,8 @@ export function createSimulation() {
   }
 
   return {
-    room, roomInfo, character, fragileObject, connect, execute, step,
+    room, roomInfo, character, fragileObject, spellBook, visibleBooks, readingOf,
+    connect, execute, step,
     createTimedMovement, setAutonomousTimedTravel, timedTravelOf,
     worldSeconds: () => worldClock.nowSeconds(),
     configureToilet,toiletState,configurePatrol,patrolState,
