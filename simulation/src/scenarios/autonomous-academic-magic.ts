@@ -1,4 +1,4 @@
-import {createSimulation} from '../core/Simulation.ts';
+import {createSimulation,type Simulation} from '../core/Simulation.ts';
 import {introductorySpellFor} from './curriculum.ts';
 
 /**
@@ -8,9 +8,9 @@ import {introductorySpellFor} from './curriculum.ts';
  * are sufficient for the existing intention + world action pipeline.
  */
 export function createAutonomousAcademicMagicSlice(
-  options: {bookTitle?:string;knowsLibrary?:boolean} = {}
+  options: {bookTitle?:string;knowsLibrary?:boolean;world?:Simulation} = {}
 ) {
-  const world=createSimulation();
+  const world=options.world??createSimulation();
   const classroom=world.room('charms','Класс чар',{floor:3,kind:'classroom',loreStatus:'GAME'});
   const corridor=world.room('corridor','Коридор',{floor:3,kind:'corridor',loreStatus:'GAME'});
   const library=world.room('library','Библиотека',{floor:3,kind:'library',loreStatus:'GAME'});
