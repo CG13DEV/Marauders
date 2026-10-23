@@ -6,7 +6,7 @@ import {createPersistentSimulation,restoreSimulation,restoreCheckpoint,
 import {compareMagicEvidence} from '../src/core/magic-research.ts';
 import {vec} from '../src/core/magic-graph.ts';
 
-const formula='wingardium_leviosa';
+const formula='wingardium_leviosa' as const;
 const draft=(actor:number,title:string,pattern:typeof held)=>({
   type:'propose_magic_hypothesis' as const,actor,spell:formula,title,pattern
 });
