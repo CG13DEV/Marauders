@@ -13,6 +13,8 @@ export type DailyLifePlan = {
   socialRoom?: number;
   /** Optional weekend destination such as a library or the courtyard. */
   leisureRoom?: number;
+  /** [GAME] Personally learned location of an accessible library, NOT its books. */
+  libraryRoom?: number;
   diningRoom: number;
   style: SocialStyle;
   interest: SocialTopic;
