@@ -21,6 +21,8 @@ test('class teaches one pupil; the absentee can later read a physical book for t
   const begun=world.execute({type:'study_book',actor:remus,book:textbook});
   assert.equal(begun.ok,true);
   assert.equal(world.spellStage(remus,'lumos'),'unaware');
+  assert.deepEqual(world.execute({type:'cast_spell',actor:remus,...pattern}),
+    {ok:false,reason:'reading_in_progress',events:[]});
   advance(world,1);
   assert.equal(world.spellStage(remus,'lumos'),'unaware');
   advance(world,1); // 09:40
