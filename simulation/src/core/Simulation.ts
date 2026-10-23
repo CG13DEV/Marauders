@@ -2081,7 +2081,7 @@ export function createSimulation() {
       knownExits,passageMinutes,planActorRoute,usesUnifiedTravel,
       canAnswerWitnessQuestion:actor=>patrolPlans.get(actor)?.kind!=='animal',
       execute, currentRoom, occupants, observations, assessment, trustOf,
-      trustForPurpose, knowledgeGaps, visibleBooks,
+      trustForPurpose, knowledgeGaps, visibleBooks, learnMagicPrimitive,
       pendingTutoring, attemptedTutors, searches, timetables, routines,
       dailyPlans, meals, conversations, rests,
       commitments, commitmentMemories, intentions, bodilyNeeds,
