@@ -361,7 +361,7 @@ export function createSchoolWeek(
     for(const assignment of foundationAssignments){
       const id='foundation_'+assignment.groupId+'_'+assignment.subject+'_'+
         assignment.startsAt;
-      const unit=introductorySpellFor(
+      const unit=assignment.subject==='Flying'?undefined:introductorySpellFor(
         assignment.groupId.startsWith('y1_')?1:2,assignment.subject);
       const introductory=unit!==undefined&&
         !explainedLumosTo.has(assignment.groupId);
