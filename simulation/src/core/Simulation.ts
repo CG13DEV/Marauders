@@ -696,6 +696,7 @@ export function createSimulation() {
     if (!isRoom(plan.homeRoom) || !isRoom(plan.diningRoom) ||
         (plan.socialRoom !== undefined && !isRoom(plan.socialRoom)) ||
         (plan.leisureRoom !== undefined && !isRoom(plan.leisureRoom)) ||
+        (plan.libraryRoom !== undefined && !isRoom(plan.libraryRoom)) ||
         (plan.intentionPlanning !== undefined &&
           typeof plan.intentionPlanning !== 'boolean') ||
         (plan.evidenceInquiry !== undefined &&
