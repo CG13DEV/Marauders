@@ -1,4 +1,5 @@
 import { isSpellId, type SpellId } from './spellcraft.ts';
+import {isMagicPrimitive,type MagicPrimitive} from './magic-graph.ts';
 
 /** Gameplay-only clock: ten simulated minutes per world step, starting at 08:00. */
 /** Absolute minutes allow lessons to be scheduled across multiple days. */
@@ -13,6 +14,8 @@ export type Lesson = {
   endsAt: number;
   /** Optional technique explicitly taught at startsAt + ten minutes. */
   spell?: SpellId;
+  /** [GAME] A principle taught explicitly, NOT the implementation of a spell. */
+  primitive?:MagicPrimitive;
   /** Academic provenance: different groups share physical teaching spaces. */
   groupId?: string;
   teacher?: number;
@@ -48,7 +51,9 @@ export function validateTimetable(lessons: readonly Lesson[]): void {
         (lesson.spell !== undefined && (
           !isSpellId(lesson.spell) ||
           lesson.endsAt - lesson.startsAt < 20 ||
-          lesson.startsAt % 10 !== 0))) {
+          lesson.startsAt % 10 !== 0)) ||
+        (lesson.primitive!==undefined && (!isMagicPrimitive(lesson.primitive) ||
+          lesson.endsAt-lesson.startsAt<20 || lesson.startsAt%10!==0))) {
       throw new Error('Invalid or duplicated school lesson');
     }
     if (i > 0 && sorted[i - 1]!.endsAt > lesson.startsAt) {
