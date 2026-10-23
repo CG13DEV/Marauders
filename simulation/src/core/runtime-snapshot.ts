@@ -36,6 +36,7 @@ export type RuntimeSnapshot = {
   observations: [number, Observation[]][];
   beliefs: [number, Belief[]][];
   learning: [number, LearningRecord[]][];
+  activeReadings?: [number, {book:number;startedAt:number}][];
   schedules: [number, { records: AttendanceRecord[]; priority: SchoolPriority }][];
   dailyPlans: [number, DailyLifePlan][];
   meals: [number, MealMemory[]][];
@@ -69,6 +70,8 @@ function remapEvent(event: WorldEvent, at: (id: number) => number): WorldEvent {
       claim: { ...event.claim, culprit: at(event.claim.culprit), object: at(event.claim.object) } };
     case 'object_inspected': return { ...event, actor: at(event.actor), target: at(event.target) };
     case 'question_asked': return { ...event, actor: at(event.actor), listener: at(event.listener), object: at(event.object) };
+    case 'book_reading_started': case 'book_reading_interrupted': case 'book_read':
+      return {...event,actor:at(event.actor),book:at(event.book)};
     case 'lesson_attendance': case 'spell_concept_learned': case 'spell_executed':
       return { ...event, actor: at(event.actor) };
     case 'tutoring_requested': return { ...event, actor: at(event.actor), listener: at(event.listener) };
@@ -114,7 +117,8 @@ function remapLearning(record: LearningRecord, at: (id: number) => number): Lear
   const source = record.source;
   return { ...record,
     source: source.kind === 'tutoring' || source.kind === 'guided_practice'
-      ? { ...source, teacher: at(source.teacher) } : { ...source }
+      ? { ...source, teacher: at(source.teacher) }
+      : source.kind === 'library' ? {...source,book:at(source.book)} : { ...source }
   };
 }
 
@@ -140,6 +144,8 @@ export function remapRuntimeSnapshot(snapshot: RuntimeSnapshot, at: (id: number)
     observations: snapshot.observations.map(([id, items]) => [at(id), items.map(x => remapObservation(x, at))]),
     beliefs: snapshot.beliefs.map(([id, items]) => [at(id), items.map(x => remapBelief(x, at))]),
     learning: snapshot.learning.map(([id, items]) => [at(id), items.map(x => remapLearning(x, at))]),
+    ...(snapshot.activeReadings===undefined?{}:{activeReadings:snapshot.activeReadings.map(
+      ([actor,reading])=>[at(actor),{...reading,book:at(reading.book)}] as [number,{book:number;startedAt:number}])}),
     schedules: snapshot.schedules.map(([id, value]) => [at(id), {
       records: value.records.map(record => ({ ...record, room: at(record.room), ...(record.teacher === undefined ? {} : { teacher: at(record.teacher) }) })), priority: value.priority
     }]),
