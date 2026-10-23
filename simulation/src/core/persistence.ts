@@ -20,6 +20,7 @@ type EntityCreation =
   | { kind: 'room'; key: string; label: string; id: number; descriptor?: RoomDescriptor }
   | { kind: 'character'; key: string; label: string; initialRoom: number; senses?: { vision?: boolean; hearing?: boolean }; id: number }
   | { kind: 'fragileObject'; key: string; label: string; initialRoom: number; id: number }
+  | { kind: 'spellBook'; key: string; label: string; initialRoom: number; spell: SpellId; id: number }
   | { kind: 'connect'; a: number; b: number; options?: DoorOptions; doorId?: number };
 
 type Operation = EntityCreation
@@ -74,6 +75,7 @@ function remapCommand(command: Command, ids: Map<number, number>): Command {
     case 'inspect_object': return { ...command, actor: at(command.actor), target: at(command.target) };
     case 'ask_about': return { ...command, actor: at(command.actor), listener: at(command.listener), object: at(command.object) };
     case 'tutor_spell': return { ...command, actor: at(command.actor), listener: at(command.listener) };
+    case 'study_book': return { ...command, actor:at(command.actor), book:at(command.book) };
     case 'ask_tutoring': return { ...command, actor: at(command.actor), listener: at(command.listener) };
     case 'answer_tutoring': return { ...command, actor: at(command.actor), requester: at(command.requester) };
     case 'practice_spell': return { ...command, actor: at(command.actor),
@@ -123,7 +125,7 @@ function canonicalize(value: unknown, idToKey: Map<number, string>): unknown {
 function auditOf(world: Simulation, operations: readonly Operation[]): string {
   const idToKey = new Map<number, string>();
   for (const op of operations) {
-    if (op.kind === 'room' || op.kind === 'character' || op.kind === 'fragileObject')
+    if (op.kind === 'room' || op.kind === 'character' || op.kind === 'fragileObject' || op.kind === 'spellBook')
       idToKey.set(op.id, op.key);
     if (op.kind === 'connect' && op.doorId !== undefined)
       idToKey.set(op.doorId, op.options?.door?.key ?? 'unnamed-door');
@@ -196,6 +198,11 @@ function createFacade(world: Simulation, operations: Operation[]) {
     fragileObject(key: string, label: string, initialRoom: number) {
       const id = world.fragileObject(key, label, initialRoom);
       operations.push({ kind: 'fragileObject', key, label, initialRoom, id });
+      return id;
+    },
+    spellBook(key: string, label: string, initialRoom: number, spell: SpellId) {
+      const id = world.spellBook(key, label, initialRoom, spell);
+      operations.push({kind:'spellBook',key,label,initialRoom,spell,id});
       return id;
     },
     connect(a: number, b: number, options?: DoorOptions) {
@@ -288,7 +295,7 @@ function createFacade(world: Simulation, operations: Operation[]) {
     checkpoint(): SavedCheckpointV2 {
       const setup = operations.filter((op): op is EntityCreation =>
         op.kind === 'room' || op.kind === 'character' ||
-        op.kind === 'fragileObject' || op.kind === 'connect');
+        op.kind === 'fragileObject' || op.kind === 'spellBook' || op.kind === 'connect');
       return {
         format: 'marauders.checkpoint', version: 2,
         setup: copy(setup), runtime: world.captureRuntime()
@@ -342,6 +349,9 @@ export function restoreCheckpoint(serialized: string | SavedCheckpointV2): Persi
       case 'fragileObject':
         ids.set(op.id, restored.fragileObject(op.key, op.label, at(op.initialRoom)));
         break;
+      case 'spellBook':
+        ids.set(op.id, restored.spellBook(op.key, op.label, at(op.initialRoom), op.spell));
+        break;
       case 'connect': {
         const newDoor = restored.connect(at(op.a), at(op.b), op.options);
         if (op.doorId !== undefined) {
@@ -385,6 +395,7 @@ export function restoreSimulation(serialized: string | SavedSimulationV1 | Saved
       case 'room': ids.set(op.id, restored.room(op.key, op.label, op.descriptor)); break;
       case 'character': ids.set(op.id, restored.character(op.key, op.label, at(op.initialRoom), op.senses)); break;
       case 'fragileObject': ids.set(op.id, restored.fragileObject(op.key, op.label, at(op.initialRoom))); break;
+      case 'spellBook': ids.set(op.id, restored.spellBook(op.key, op.label, at(op.initialRoom), op.spell)); break;
       case 'connect': {
         const newDoor = restored.connect(at(op.a), at(op.b), op.options);
         if (op.doorId !== undefined) {
