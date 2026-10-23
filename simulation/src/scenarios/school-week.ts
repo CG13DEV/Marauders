@@ -7,10 +7,8 @@ import { createSimulation } from '../core/Simulation.ts';
 import type { Lesson } from '../core/school-time.ts';
 import { createCastleLayout } from './castle-layout.ts';
 import { createCastleResidents, NAMED_STAFF } from './castle-residents.ts';
-import {
-  HOUSES, SUBJECTS, ELECTIVES, HOUSE_LABELS, SUBJECT_LABELS, electiveChoices,
-  type House, type CoreSubject, type ElectiveSubject, type Subject
-} from './curriculum.ts';
+import {HOUSES, SUBJECTS, ELECTIVES, HOUSE_LABELS, SUBJECT_LABELS, electiveChoices,
+  type House, type CoreSubject, type ElectiveSubject, type Subject, introductorySpellFor} from './curriculum.ts';
 import {cohortSize,dormGroupFor,RESEARCH_DORM_CAPACITY,
   RESEARCH_SCHOOL_POPULATION} from './school-population.ts';
 import {planFoundationTimetable,FOUNDATION_PROFILE,FOUNDATION_SUBJECTS,
@@ -244,13 +242,14 @@ export function createSchoolWeek(
     sessions.push(session);
     const groupYear = teachingGroups.find(group => group.id === groupId)?.year;
     // An additional Charms class does not replay the first introduction.
-    const introducesLumos = subject === 'Charms' && groupYear === 1 &&
+    const unit = introductorySpellFor(groupYear ?? 0, subject);
+    const introducesLumos = unit !== undefined &&
       !explainedLumosTo.has(groupId);
     if (introducesLumos) explainedLumosTo.add(groupId);
     const lesson: Lesson = {
       id, subject: SUBJECT_LABELS[subject], room,
       startsAt, endsAt, groupId, teacher,
-      ...(introducesLumos ? { spell: 'lumos' as const } : {})
+      ...(introducesLumos ? { spell: unit!.spell } : {})
     };
     staffSchedule.get(teacher)!.push(lesson);
     for (const student of students) pupilSchedule.get(student)!.push(lesson);
@@ -362,8 +361,9 @@ export function createSchoolWeek(
     for(const assignment of foundationAssignments){
       const id='foundation_'+assignment.groupId+'_'+assignment.subject+'_'+
         assignment.startsAt;
-      const introductory=assignment.subject==='Charms'&&
-        assignment.groupId.startsWith('y1_')&&
+      const unit=introductorySpellFor(
+        assignment.groupId.startsWith('y1_')?1:2,assignment.subject);
+      const introductory=unit!==undefined&&
         !explainedLumosTo.has(assignment.groupId);
       if(introductory)explainedLumosTo.add(assignment.groupId);
       const label=assignment.subject==='Flying'
@@ -373,7 +373,7 @@ export function createSchoolWeek(
         id,subject:label,room:assignment.room,
         startsAt:assignment.startsAt,endsAt:assignment.endsAt,
         groupId:assignment.groupId,teacher:assignment.teacher,
-        ...(introductory?{spell:'lumos' as const}:{})
+        ...(introductory?{spell:unit!.spell}:{})
       };
       sessions.push({
         id,subject:assignment.subject,teacher:assignment.teacher,
