@@ -514,6 +514,43 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       }else if(selected.response.kind==='leave')
         travelTo(actor,room,selected.response.destination);
     }
+    // G4.1 [GAME] After independent reading, a curious pupil can REQUEST a
+    // co-present willing guide for the existing guarded practice action.
+    // The selection never peeks into the guide's personal spell knowledge.
+    for(const actor of actors('dailyLife')){
+      const plan=dailyPlans.get(actor);
+      if(plan?.libraryRoom===undefined || !plan.learningAppointments ||
+         !isLeisure(minute) || has(actor,'manual') ||
+         occupiedBySchool.has(actor) || sleeping.has(actor) ||
+         socialParticipants.has(actor) || decidedActors.has(actor))continue;
+      const room=currentRoom(actor);
+      if(room===null)continue;
+      const concept=spellKnowledge.history(actor)
+        .filter(record=>record.stage==='conceptual')
+        .map(record=>record.spell)
+        .find(spell=>spellKnowledge.stage(actor,spell)==='conceptual');
+      if(!concept)continue;
+      const failed=attemptedTutors.get(actor);
+      const guide=occupants(room)
+        .filter(id=>id!==actor && !has(id,'manual') &&
+          has(id,'helpful') && has(id,'hearing') &&
+          trustOf(actor,id)!=='distrusted' &&
+          !occupiedBySchool.has(id) &&
+          !decidedActors.has(id) && !socialParticipants.has(id) &&
+          !failed?.has('practice:'+id+':'+concept))
+        .sort((a,b)=>a-b)[0];
+      if(guide===undefined)continue;
+      const definition=spellDefinitions[concept];
+      const action:Command={type:'practice_spell',actor,guide,spell:concept,
+        intent:definition.intent,target:definition.semanticTarget,
+        incantation:definition.incantation};
+      const result=execute(action);
+      recordDecision({actor,action,result});
+      if(result.ok)socialParticipants.add(guide);
+      else failed?.add('practice:'+guide+':'+concept);
+    }
+    phase('guided-knowledge-practice');
+
     // Opt-in intention arbitration. Scheduling, commitments and bodily needs
     // all compete through observed obligations, not a global RPG action score.
     // State transitions themselves do not consume an extra physical action.
@@ -1170,43 +1207,6 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
     }
 
     phase('evidence-inspection');
-    // G4.1 [GAME] After independent reading, a curious pupil can REQUEST a
-    // co-present willing guide for the existing guarded practice action.
-    // The selection never peeks into the guide's personal spell knowledge.
-    for(const actor of actors('dailyLife')){
-      const plan=dailyPlans.get(actor);
-      if(plan?.libraryRoom===undefined || !plan.learningAppointments ||
-         !isLeisure(minute) || has(actor,'manual') ||
-         occupiedBySchool.has(actor) || sleeping.has(actor) ||
-         socialParticipants.has(actor) || decidedActors.has(actor))continue;
-      const room=currentRoom(actor);
-      if(room===null)continue;
-      const concept=spellKnowledge.history(actor)
-        .filter(record=>record.stage==='conceptual')
-        .map(record=>record.spell)
-        .find(spell=>spellKnowledge.stage(actor,spell)==='conceptual');
-      if(!concept)continue;
-      const failed=attemptedTutors.get(actor);
-      const guide=occupants(room)
-        .filter(id=>id!==actor && !has(id,'manual') &&
-          has(id,'helpful') && has(id,'hearing') &&
-          trustOf(actor,id)!=='distrusted' &&
-          !occupiedBySchool.has(id) &&
-          !decidedActors.has(id) && !socialParticipants.has(id) &&
-          !failed?.has('practice:'+id+':'+concept))
-        .sort((a,b)=>a-b)[0];
-      if(guide===undefined)continue;
-      const definition=spellDefinitions[concept];
-      const action:Command={type:'practice_spell',actor,guide,spell:concept,
-        intent:definition.intent,target:definition.semanticTarget,
-        incantation:definition.incantation};
-      const result=execute(action);
-      recordDecision({actor,action,result});
-      if(result.ok)socialParticipants.add(guide);
-      else failed?.add('practice:'+guide+':'+concept);
-    }
-    phase('guided-knowledge-practice');
-
     // A curious experimenter can apply a genuinely learned pattern.
     // They must previously have performed guided practice; no secret unlock.
     for (const actor of actors('experimental')) {
