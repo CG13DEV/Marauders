@@ -70,8 +70,11 @@ test('G4.3 cannot observe remote targets or someone else’s replaced effect',()
   assert.equal(f.world.execute(testHypothesis(f.pupil,1,f.feather)).ok,true);
   f.world.step();
   assert.equal(f.world.execute({type:'cast_pattern',actor:f.teacher,
-    object:f.feather,pattern:forced}).ok,false); // teacher lacks? G4.2 seeded professor: has principles
-  // Corrected actor observation: teacher can cast; observer must detect replacement.
+    object:f.feather,pattern:forced}).ok,true);
+  assert.deepEqual(f.world.execute(record(f.pupil,1,f.feather)),
+    {ok:false,reason:'trial_interrupted',events:[]});
+  assert.deepEqual(f.world.magicHypotheses(f.pupil)[0]?.trials,[]);
+  assert.equal(f.world.activeMagicTrial(f.pupil),null);
 });
 
 test('G4.3 in-flight tests and observations survive journal replay and checkpoints',()=>{
