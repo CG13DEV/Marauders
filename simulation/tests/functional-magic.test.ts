@@ -58,7 +58,6 @@ test('time trajectory remains data, not a newly named spell or executable JS',()
   const f=createFunctionalMagicSlice();
   advance(f.world,14); // position_lock taught at 10:10
   assert.deepEqual(f.world.knownMagicPrimitives(f.pupil),['position_lock']);
-  f.world.seedSpellKnowledge; // no side effects
   const orbit:MagicPattern={nodes:[{kind:'levitate',controller:'position_lock',
     trajectory:{kind:'orbit',center:vec(0,0,0),radius:2,speed:Math.PI/2,height:3}},
     {kind:'light',intensity:5}]};
@@ -89,14 +88,17 @@ test('magic graph and personal primitive evidence survive journal and checkpoint
   assert.equal(persistent.execute({type:'cast_pattern',actor:f.pupil,
     object:f.feather,pattern:{nodes:[...feedback.nodes,{kind:'light',intensity:3}]}}).ok,true);
   advance(persistent,4);
-  for(const restored of [restoreSimulation(serializeSimulation(persistent)),
-    restoreCheckpoint(serializeCheckpoint(persistent))]){
+  const journal=serializeSimulation(persistent);
+  const checkpoint=serializeCheckpoint(persistent);
+  const expected=persistent.magicState(f.feather);
+  for(const restored of [restoreSimulation(journal),restoreCheckpoint(checkpoint)]){
     const pupil=restored.id('pupil')!,feather=restored.id('feather')!;
     assert.deepEqual(restored.knownMagicPrimitives(pupil),persistent.knownMagicPrimitives(f.pupil));
-    assert.deepEqual(restored.magicState(feather),persistent.magicState(f.feather));
+    assert.deepEqual(restored.magicState(feather),expected);
     advance(restored,3);
-    advance(persistent,3);
-    assert.deepEqual(restored.magicState(feather),persistent.magicState(f.feather));
+    const comparison=restoreCheckpoint(checkpoint);
+    advance(comparison,3);
+    assert.deepEqual(restored.magicState(feather),comparison.magicState(comparison.id('feather')!));
   }
 });
 
