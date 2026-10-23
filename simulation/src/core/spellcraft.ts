@@ -16,6 +16,7 @@ export type SpellStage = 'unaware' | 'conceptual' | 'guided' | 'independent';
 export type LearningSource =
   | { kind: 'lesson'; lessonId: string; minute: number }
   | { kind: 'tutoring'; teacher: number; minute: number }
+  | { kind: 'library'; book: number; minute: number }
   | { kind: 'guided_practice'; teacher: number; minute: number }
   | { kind: 'independent_practice'; minute: number }
   | { kind: 'prior_training' };
