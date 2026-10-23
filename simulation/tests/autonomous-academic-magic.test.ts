@@ -105,7 +105,7 @@ test('G4.1 full-school opt-in adds real library book and only first-year locatio
   assert.equal(later.libraryRoom,undefined);
   const visitor=school.world.character('library_guest','Гость библиотеки',school.library);
   assert.equal(school.world.visibleBooks(visitor).some(b=>b.label.includes('Lumos')),true);
-  assert.deepEqual(school.world.visibleBooks(student),[]);
+  assert.deepEqual(school.world.visibleBooks(student.id),[]);
   const charms=school.professors.find(p=>p.subject==='Charms')!;
   assert.equal(school.world.spellStage(charms.id,'lumos'),'independent');
   const original=createSchoolWeek();
