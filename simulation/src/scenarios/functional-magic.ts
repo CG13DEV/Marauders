@@ -3,9 +3,11 @@ import {vec} from '../core/magic-graph.ts';
 /** [GAME] Four actual classroom lessons; nothing here claims a 1970s timetable. */
 export function createFunctionalMagicSlice(world:Simulation=createSimulation()){
   const classroom=world.room('charms_lab','Класс чар',{floor:3,kind:'classroom',loreStatus:'GAME'});
+  const corridor=world.room('corridor','Коридор',{floor:3,kind:'corridor',loreStatus:'GAME'});
+  world.connect(classroom,corridor);
   const teacher=world.character('professor','Профессор чар',classroom);
   const pupil=world.character('pupil','Любознательный первокурсник',classroom);
-  const spectator=world.character('spectator','Отсутствующий ученик',classroom);
+  const spectator=world.character('spectator','Отсутствующий ученик',corridor);
   const feather=world.magicObject('feather','Перо',classroom,1,vec(0,0,0));
   const lessons=[
     {id:'formula',subject:'Charms',room:classroom,teacher,startsAt:540,endsAt:600,
