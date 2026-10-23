@@ -23,8 +23,10 @@ test('school teaches a black-box spell before its implementation principles',()=
     object:f.feather,pattern:hold}),{ok:false,reason:'primitive_not_known',events:[]});
   assert.deepEqual(f.world.execute({type:'cast_spell',actor:f.pupil,...formula,
     object:f.feather}),{ok:false,reason:'not_practiced',events:[]});
-  assert.equal(f.world.execute({type:'practice_spell',actor:f.pupil,guide:f.teacher,...formula}).ok,true);
-  assert.equal(f.world.execute({type:'practice_spell',actor:f.pupil,...formula}).ok,true);
+  assert.deepEqual(f.world.execute({type:'practice_spell',actor:f.pupil,guide:f.teacher,...formula}),
+    {ok:false,reason:'missing_object',events:[]});
+  assert.equal(f.world.execute({type:'practice_spell',actor:f.pupil,guide:f.teacher,object:f.feather,...formula}).ok,true);
+  assert.equal(f.world.execute({type:'practice_spell',actor:f.pupil,object:f.feather,...formula}).ok,true);
   assert.equal(f.world.execute({type:'cast_spell',actor:f.pupil,object:f.feather,...formula}).ok,true);
   f.world.step();
   assert.equal(f.world.magicState(f.feather)?.position.y,2);
