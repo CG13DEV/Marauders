@@ -152,3 +152,15 @@ test('the same learned Wingardium Leviosa takes a higher-order trajectory parame
   assert.ok(Math.abs(f.world.magicState(f.feather)!.position.x+1.5)<1e-9);
   assert.equal(f.world.spellStage(f.pupil,'wingardium_leviosa'),'independent');
 });
+
+test('a present but uninformed lecturer cannot transmit an unknown primitive',()=>{
+  const w=createPersistentSimulation();
+  const room=w.room('test_class','Класс');
+  const teacher=w.character('untrained_teacher','Неподготовленный учитель',room);
+  const pupil=w.character('test_pupil','Ученик',room);
+  w.setTimetable(pupil,[{id:'unsupported_lecture',subject:'Чары',room,
+    teacher,startsAt:540,endsAt:600,primitive:'position_lock'}]);
+  advance(w,8);
+  assert.deepEqual(w.knownMagicPrimitives(pupil),[]);
+  assert.equal(w.events().some(e=>e.type==='magic_primitive_learned'),false);
+});
