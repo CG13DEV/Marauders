@@ -58,6 +58,7 @@
 - [Animagus system](docs/game-design/animagus-system.md)
 - [Progression](docs/game-design/progression.md)
 - [Spell learning: school curriculum, library, invention](docs/game-design/spell-learning-and-curriculum.md)
+- [Academic magic integration — school, books and personal knowledge (headless slice)](docs/technical/academic-magic-integration.md)
 - [AI world simulation](docs/technical/ai-world-simulation.md)
 - [Research sources](research/sources.md)
 - [Hogwarts geometry research](research/hogwarts-geometry.md)
