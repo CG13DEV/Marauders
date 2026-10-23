@@ -69,3 +69,25 @@ test('G4.1 journal and checkpoint preserve private library destination and mid-b
     assert.equal(restored.learningHistory(remus)[0]?.source.kind,'library');
   }
 });
+
+test('unknown guide qualification is validated; a rejected helper is remembered through checkpoint remap',()=>{
+  const w=createPersistentSimulation();
+  const library=w.room('library','Библиотека');
+  const pupil=w.character('pupil','Ученик',library);
+  const helper=w.character('helper','Неквалифицированный помощник',library);
+  w.seedSpellKnowledge(pupil,'lumos','conceptual');
+  w.seedSpellKnowledge(helper,'lumos','conceptual');
+  w.setHelpful(helper,true);
+  w.setDailyLife(pupil,{homeRoom:library,diningRoom:library,libraryRoom:library,
+    socialRoom:library,style:'reserved',interest:'lessons',
+    learningAppointments:true,intentionPlanning:true});
+  advance(w,70); // first free evening window at 19:10
+  const attempts=w.captureRuntime().attemptedTutors.find(([id])=>id===pupil)?.[1]??[];
+  assert.ok(attempts.includes('practice:'+helper+':lumos'));
+  assert.equal(w.spellStage(pupil,'lumos'),'conceptual');
+  const restored=restoreCheckpoint(serializeCheckpoint(w));
+  const newPupil=restored.id('pupil')!,newHelper=restored.id('helper')!;
+  const remembered=restored.captureRuntime().attemptedTutors.find(([id])=>id===newPupil)?.[1]??[];
+  assert.ok(remembered.includes('practice:'+newHelper+':lumos'));
+  assert.equal(restored.spellStage(newPupil,'lumos'),'conceptual');
+});
