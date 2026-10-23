@@ -80,6 +80,10 @@ export function createMagicRuntime(){
     const x=objects.get(id);return x?clone(x):null;
   }
   function knowsTarget(id:number):boolean{return objects.has(id);}
+  /** Authoritative effect identity for guarded experiment recording, never sent to NPCs. */
+  function current(target:number):ActiveMagic|null{
+    const effect=active.get(target);return effect?clone(effect):null;
+  }
   function apply(actor:number,target:number,pattern:MagicPattern,startMinute:number):void{
     if(!objects.has(target)||!validateMagicPattern(pattern)||
        !Number.isSafeInteger(startMinute))
@@ -133,5 +137,5 @@ export function createMagicRuntime(){
     for(const [id,o] of saved.objects)objects.set(id,clone({...o,mass:oldMasses.get(id)!}));
     for(const a of saved.active)active.set(a.target,clone(a));
   }
-  return {register,knowsTarget,state,apply,disturb,advance,snapshot,replace};
+  return {register,knowsTarget,current,state,apply,disturb,advance,snapshot,replace};
 }
