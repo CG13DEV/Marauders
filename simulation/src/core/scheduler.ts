@@ -68,6 +68,7 @@ export type SchedulerContext = {
     purpose:MeetingCommitment['purpose']): Trust;
   knowledgeGaps(actor: EntityId): SpellId[];
   learnMagicPrimitive(actor:EntityId,primitive:MagicPrimitive,lessonId:string,minute:number):boolean;
+  knowsMagicPrimitive(actor:EntityId,primitive:MagicPrimitive):boolean;
   /** Books physically seen in the actor's current room; only public covers. */
   visibleBooks(actor: EntityId): VisibleBook[];
   pendingTutoring: Map<EntityId, TutoringRequest>;
@@ -106,6 +107,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
     exits, knownExits, passageMinutes, planActorRoute, usesUnifiedTravel,
     execute:executeRaw, currentRoom, occupants, canAnswerWitnessQuestion,observations, assessment,
     trustOf, trustForPurpose, knowledgeGaps, visibleBooks, learnMagicPrimitive,
+    knowsMagicPrimitive,
     pendingTutoring, attemptedTutors, searches,
     timetables, routines, dailyPlans, meals, conversations, rests,
     commitments, commitmentMemories, intentions, bodilyNeeds,toiletNeeds,
@@ -1275,7 +1277,9 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
             type: 'spell_concept_learned', actor, spell: lesson.spell, source: 'lesson', minute
           });
         }
-        if(lesson.primitive)learnMagicPrimitive(actor,lesson.primitive,lesson.id,minute);
+        if(lesson.primitive && lesson.teacher!==undefined &&
+           knowsMagicPrimitive(lesson.teacher,lesson.primitive))
+          learnMagicPrimitive(actor,lesson.primitive,lesson.id,minute);
       }
     }
     resolveMeetings(minute);
