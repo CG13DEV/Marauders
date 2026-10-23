@@ -8,7 +8,7 @@ import {vec} from '../src/core/magic-graph.ts';
 
 const formula='wingardium_leviosa';
 const draft=(actor:number,title:string,pattern:typeof held)=>({
-  type:'propose_magic_hypothesis' as const,actor,spell:formula as const,title,pattern
+  type:'propose_magic_hypothesis' as const,actor,spell:formula,title,pattern
 });
 const testHypothesis=(actor:number,hypothesisId:number,object:number)=>({
   type:'test_magic_hypothesis' as const,actor,hypothesisId,object
