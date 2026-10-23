@@ -1,6 +1,7 @@
 /** Runtime-owned stores: exactly one instance per ECS world, never globals. */
 import { createBeliefStore } from './beliefs.ts';
 import { createSpellKnowledge } from './spellcraft.ts';
+import { createMagicResearch } from './magic-research.ts';
 import type { EntityId, Observation, WorldEvent, RoomDescriptor } from './Simulation.ts';
 import type { TutoringRequest, AssistanceMemory } from './social-learning.ts';
 import type { AttendanceRecord, SchoolPriority } from './school-time.ts';
@@ -32,6 +33,7 @@ export function createRuntimeStores() {
     observationsByCharacter: new Map<EntityId, Observation[]>(),
     beliefsByCharacter: createBeliefStore(),
     spellKnowledge: createSpellKnowledge(),
+    magicResearch: createMagicResearch(),
     pendingTutoring: new Map<EntityId, TutoringRequest>(),
     attemptedTutors: new Map<EntityId, Set<string>>(),
     assistanceHistory: new Map<EntityId, AssistanceMemory[]>(),
