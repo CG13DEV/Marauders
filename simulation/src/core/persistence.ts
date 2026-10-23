@@ -12,6 +12,7 @@ import type { Trust } from './cognition.ts';
 import type { HouseId, PointAuthority } from './house-points.ts';
 import type { PatrolKind } from './resident-life.ts';
 import type { SpellId, SpellStage } from './spellcraft.ts';
+import type {MagicPrimitive,Vec3} from './magic-graph.ts';
 import type { Lesson, SchoolPriority } from './school-time.ts';
 import type { DailyLifePlan } from './daily-life.ts';
 import { remapRuntimeSnapshot, type RuntimeSnapshot } from './runtime-snapshot.ts';
@@ -20,6 +21,7 @@ type EntityCreation =
   | { kind: 'room'; key: string; label: string; id: number; descriptor?: RoomDescriptor }
   | { kind: 'character'; key: string; label: string; initialRoom: number; senses?: { vision?: boolean; hearing?: boolean }; id: number }
   | { kind: 'fragileObject'; key: string; label: string; initialRoom: number; id: number }
+  | {kind:'magicObject';key:string;label:string;initialRoom:number;mass:number;position:Vec3;id:number}
   | { kind: 'spellBook'; key: string; label: string; initialRoom: number; spell: SpellId; id: number }
   | { kind: 'connect'; a: number; b: number; options?: DoorOptions; doorId?: number };
 
@@ -37,7 +39,8 @@ type Operation = EntityCreation
   | { kind: 'setTimetable'; actor: number; lessons: Lesson[]; priority?: SchoolPriority }
   | { kind: 'setDailyLife'; actor: number; plan: DailyLifePlan | null }
   | { kind: 'setTravelMode'; actor:number; mode:'unified-30'|null }
-  | { kind: 'seedSpellKnowledge'; actor: number; spell: SpellId; stage: Exclude<SpellStage, 'unaware'> };
+  | { kind: 'seedSpellKnowledge'; actor: number; spell: SpellId; stage: Exclude<SpellStage, 'unaware'> }
+  | {kind:'seedMagicPrimitive';actor:number;primitive:MagicPrimitive};
 
 export type SavedCheckpointV2 = {
   format: 'marauders.checkpoint';
@@ -78,9 +81,12 @@ function remapCommand(command: Command, ids: Map<number, number>): Command {
     case 'study_book': return { ...command, actor:at(command.actor), book:at(command.book) };
     case 'ask_tutoring': return { ...command, actor: at(command.actor), listener: at(command.listener) };
     case 'answer_tutoring': return { ...command, actor: at(command.actor), requester: at(command.requester) };
+    case 'cast_pattern':case 'disturb_object':
+      return {...command,actor:at(command.actor),object:at(command.object)};
     case 'practice_spell': return { ...command, actor: at(command.actor),
       ...(command.guide === undefined ? {} : { guide: at(command.guide) }) };
-    case 'cast_spell': return { ...command, actor: at(command.actor) };
+    case 'cast_spell': return { ...command, actor: at(command.actor),
+      ...(command.object===undefined?{}:{object:at(command.object)}) };
     case 'use_toilet':case 'signal_incident':return {...command,actor:at(command.actor),
       ...('listener' in command?{listener:at(command.listener)}:{})};
     case 'eat_meal': return { ...command, actor: at(command.actor) };
@@ -125,13 +131,14 @@ function canonicalize(value: unknown, idToKey: Map<number, string>): unknown {
 function auditOf(world: Simulation, operations: readonly Operation[]): string {
   const idToKey = new Map<number, string>();
   for (const op of operations) {
-    if (op.kind === 'room' || op.kind === 'character' || op.kind === 'fragileObject' || op.kind === 'spellBook')
+    if (op.kind === 'room' || op.kind === 'character' || op.kind === 'fragileObject' || op.kind === 'magicObject' || op.kind === 'spellBook')
       idToKey.set(op.id, op.key);
     if (op.kind === 'connect' && op.doorId !== undefined)
       idToKey.set(op.doorId, op.options?.door?.key ?? 'unnamed-door');
   }
   const characters = operations.filter((o): o is Extract<EntityCreation, { kind: 'character' }> =>
     o.kind === 'character');
+  const magicObjects=operations.filter((o):o is Extract<EntityCreation,{kind:'magicObject'}>=>o.kind==='magicObject');
   const objects = operations.filter((o): o is Extract<EntityCreation, { kind: 'fragileObject' }> =>
     o.kind === 'fragileObject');
   const doors = operations.filter((o): o is Extract<EntityCreation, { kind: 'connect' }> =>
@@ -148,6 +155,7 @@ function auditOf(world: Simulation, operations: readonly Operation[]): string {
       observations: world.observations(c.id),
       beliefs: world.beliefs(c.id), attendance: world.attendance(c.id),
       learning: world.learningHistory(c.id), gaps: world.knowledgeGaps(c.id),
+      ...(world.knownMagicPrimitives(c.id).length?{magicPrimitives:world.knownMagicPrimitives(c.id)}:{}),
       illuminated: world.isIlluminated(c.id),
       request: world.tutoringRequest(c.id), help: world.assistance(c.id),
       meals: world.mealHistory(c.id),
@@ -167,6 +175,8 @@ function auditOf(world: Simulation, operations: readonly Operation[]): string {
     })),
     objects: objects.map(o => ({ key: o.key, room: world.locationOf(o.id), broken: world.isBroken(o.id) })),
     doors: doors.map(o => ({ key: o.options?.door?.key, open: world.doorIsOpen(o.doorId!) })),
+    ...(magicObjects.length?{magicObjects:magicObjects.map(o=>({key:o.key,
+      room:world.locationOf(o.id),state:world.magicState(o.id)}))}:{}),
     ...(world.pointHistory().length?{
       housePoints:world.housePoints(),pointLedger:world.pointHistory()
     }:{}),
@@ -198,6 +208,12 @@ function createFacade(world: Simulation, operations: Operation[]) {
     fragileObject(key: string, label: string, initialRoom: number) {
       const id = world.fragileObject(key, label, initialRoom);
       operations.push({ kind: 'fragileObject', key, label, initialRoom, id });
+      return id;
+    },
+    magicObject(key:string,label:string,initialRoom:number,mass=1,
+      position:Vec3={x:0,y:0,z:0}){
+      const id=world.magicObject(key,label,initialRoom,mass,position);
+      operations.push({kind:'magicObject',key,label,initialRoom,mass,position:copy(position),id});
       return id;
     },
     spellBook(key: string, label: string, initialRoom: number, spell: SpellId) {
@@ -291,11 +307,15 @@ function createFacade(world: Simulation, operations: Operation[]) {
       world.seedSpellKnowledge(actor, spell, stage);
       operations.push({ kind: 'seedSpellKnowledge', actor, spell, stage });
     },
+    seedMagicPrimitive(actor:number,primitive:MagicPrimitive){
+      world.seedMagicPrimitive(actor,primitive);
+      operations.push({kind:'seedMagicPrimitive',actor,primitive});
+    },
     /** Materialized checkpoint: never replays past ticks upon restoration. */
     checkpoint(): SavedCheckpointV2 {
       const setup = operations.filter((op): op is EntityCreation =>
         op.kind === 'room' || op.kind === 'character' ||
-        op.kind === 'fragileObject' || op.kind === 'spellBook' || op.kind === 'connect');
+        op.kind === 'fragileObject' || op.kind === 'magicObject' || op.kind === 'spellBook' || op.kind === 'connect');
       return {
         format: 'marauders.checkpoint', version: 2,
         setup: copy(setup), runtime: world.captureRuntime()
@@ -349,6 +369,9 @@ export function restoreCheckpoint(serialized: string | SavedCheckpointV2): Persi
       case 'fragileObject':
         ids.set(op.id, restored.fragileObject(op.key, op.label, at(op.initialRoom)));
         break;
+      case 'magicObject':
+        ids.set(op.id, restored.magicObject(op.key,op.label,at(op.initialRoom),op.mass,op.position));
+        break;
       case 'spellBook':
         ids.set(op.id, restored.spellBook(op.key, op.label, at(op.initialRoom), op.spell));
         break;
@@ -395,6 +418,7 @@ export function restoreSimulation(serialized: string | SavedSimulationV1 | Saved
       case 'room': ids.set(op.id, restored.room(op.key, op.label, op.descriptor)); break;
       case 'character': ids.set(op.id, restored.character(op.key, op.label, at(op.initialRoom), op.senses)); break;
       case 'fragileObject': ids.set(op.id, restored.fragileObject(op.key, op.label, at(op.initialRoom))); break;
+      case 'magicObject': ids.set(op.id,restored.magicObject(op.key,op.label,at(op.initialRoom),op.mass,op.position));break;
       case 'spellBook': ids.set(op.id, restored.spellBook(op.key, op.label, at(op.initialRoom), op.spell)); break;
       case 'connect': {
         const newDoor = restored.connect(at(op.a), at(op.b), op.options);
@@ -436,6 +460,7 @@ export function restoreSimulation(serialized: string | SavedSimulationV1 | Saved
           ...(op.plan.libraryRoom === undefined ? {} : { libraryRoom: at(op.plan.libraryRoom) }) }
         : null); break;
       case 'seedSpellKnowledge': restored.seedSpellKnowledge(at(op.actor), op.spell, op.stage); break;
+      case 'seedMagicPrimitive': restored.seedMagicPrimitive(at(op.actor),op.primitive);break;
       default: throw new Error('Unsupported journal operation: ' + (op as Operation).kind);
     }
   }
