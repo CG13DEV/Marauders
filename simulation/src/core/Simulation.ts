@@ -2091,6 +2091,7 @@ export function createSimulation() {
       canAnswerWitnessQuestion:actor=>patrolPlans.get(actor)?.kind!=='animal',
       execute, currentRoom, occupants, observations, assessment, trustOf,
       trustForPurpose, knowledgeGaps, visibleBooks, learnMagicPrimitive,
+      knowsMagicPrimitive:(actor,primitive)=>primitives.get(actor)?.has(primitive)===true,
       pendingTutoring, attemptedTutors, searches, timetables, routines,
       dailyPlans, meals, conversations, rests,
       commitments, commitmentMemories, intentions, bodilyNeeds,
