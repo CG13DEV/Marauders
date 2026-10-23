@@ -696,6 +696,7 @@ export function createSimulation() {
     if (!isRoom(plan.homeRoom) || !isRoom(plan.diningRoom) ||
         (plan.socialRoom !== undefined && !isRoom(plan.socialRoom)) ||
         (plan.leisureRoom !== undefined && !isRoom(plan.leisureRoom)) ||
+        (plan.libraryRoom !== undefined && !isRoom(plan.libraryRoom)) ||
         (plan.intentionPlanning !== undefined &&
           typeof plan.intentionPlanning !== 'boolean') ||
         (plan.evidenceInquiry !== undefined &&
@@ -1973,7 +1974,9 @@ export function createSimulation() {
       },
       actors: trait => Array.from(query(ecs, [Character, agentComponents[trait]])),
       has: (actor, flag) => hasComponent(ecs, actor, flags[flag]) ||
-        (flag==='manual' && (timedMovement?.hasActor(actor)??false)),
+        // An engrossed reader cannot simultaneously start another action.
+        (flag==='manual' && (activeReadings.has(actor) ||
+          (timedMovement?.hasActor(actor)??false))),
       isTimedActor: actor => autonomousTimedTravel.has(actor),
       scheduleTimedMove:scheduleAutonomousMove,
       visibleFragiles: room => Array.from(query(ecs, [Fragile, LocatedIn(room)])),
@@ -1989,7 +1992,7 @@ export function createSimulation() {
       knownExits,passageMinutes,planActorRoute,usesUnifiedTravel,
       canAnswerWitnessQuestion:actor=>patrolPlans.get(actor)?.kind!=='animal',
       execute, currentRoom, occupants, observations, assessment, trustOf,
-      trustForPurpose, knowledgeGaps,
+      trustForPurpose, knowledgeGaps, visibleBooks,
       pendingTutoring, attemptedTutors, searches, timetables, routines,
       dailyPlans, meals, conversations, rests,
       commitments, commitmentMemories, intentions, bodilyNeeds,

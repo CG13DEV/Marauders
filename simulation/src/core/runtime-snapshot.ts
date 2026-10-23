@@ -152,7 +152,8 @@ export function remapRuntimeSnapshot(snapshot: RuntimeSnapshot, at: (id: number)
     dailyPlans: snapshot.dailyPlans.map(([id, plan]) => [at(id), {
       ...plan, homeRoom: at(plan.homeRoom), diningRoom: at(plan.diningRoom),
       ...(plan.socialRoom === undefined ? {} : { socialRoom: at(plan.socialRoom) }),
-      ...(plan.leisureRoom === undefined ? {} : { leisureRoom: at(plan.leisureRoom) })
+      ...(plan.leisureRoom === undefined ? {} : { leisureRoom: at(plan.leisureRoom) }),
+      ...(plan.libraryRoom === undefined ? {} : { libraryRoom: at(plan.libraryRoom) })
     }]),
     meals: snapshot.meals.map(([id, values]) => [at(id), values.map(v => ({ ...v }))]),
     conversations: snapshot.conversations.map(([id, values]) => [at(id),
@@ -233,8 +234,14 @@ export function remapRuntimeSnapshot(snapshot: RuntimeSnapshot, at: (id: number)
     }]),
     attemptedTutors: snapshot.attemptedTutors.map(([id, attempted]) => [at(id),
       attempted.map(value => {
-        const [speaker, spell] = value.split(':');
-        if (!speaker || !spell) throw new Error('Malformed remembered tutoring attempt');
+        const parts=value.split(':');
+        if(parts.length===3 && parts[0]==='practice' &&
+           Number.isSafeInteger(Number(parts[1])) && parts[2])
+          return 'practice:'+at(Number(parts[1]))+':'+parts[2];
+        const [speaker,spell]=parts;
+        if(parts.length!==2 || !speaker || !spell ||
+           !Number.isSafeInteger(Number(speaker)))
+          throw new Error('Malformed remembered tutoring attempt');
         return at(Number(speaker)) + ':' + spell;
       })
     ]),

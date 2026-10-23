@@ -26,6 +26,7 @@ import {chooseSocialResponse} from './social-choice.ts';
 import {ownUnrepairedCommitment,considersConcreteRepair} from './reconciliation.ts';
 import {contextualAvoidance} from './social-context.ts';
 import { spellDefinitions, type SpellId, type LearningRecord } from './spellcraft.ts';
+import { chooseLocalStudyBook, type VisibleBook } from './library-learning.ts';
 import type { Belief } from './beliefs.ts';
 import { willingToTutor, type TutoringRequest } from './social-learning.ts';
 import type { WitnessSearch, TimetableState } from './runtime-stores.ts';
@@ -65,6 +66,8 @@ export type SchedulerContext = {
   trustForPurpose(observer: EntityId, source: EntityId,
     purpose:MeetingCommitment['purpose']): Trust;
   knowledgeGaps(actor: EntityId): SpellId[];
+  /** Books physically seen in the actor's current room; only public covers. */
+  visibleBooks(actor: EntityId): VisibleBook[];
   pendingTutoring: Map<EntityId, TutoringRequest>;
   attemptedTutors: Map<EntityId, Set<string>>;
   searches: Map<EntityId, WitnessSearch>;
@@ -100,7 +103,8 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
     advanceClock, actors, has, visibleFragiles, intactFragiles, passageAction,
     exits, knownExits, passageMinutes, planActorRoute, usesUnifiedTravel,
     execute:executeRaw, currentRoom, occupants, canAnswerWitnessQuestion,observations, assessment,
-    trustOf, trustForPurpose, knowledgeGaps, pendingTutoring, attemptedTutors, searches,
+    trustOf, trustForPurpose, knowledgeGaps, visibleBooks,
+    pendingTutoring, attemptedTutors, searches,
     timetables, routines, dailyPlans, meals, conversations, rests,
     commitments, commitmentMemories, intentions, bodilyNeeds,toiletNeeds,
     transitionIntention, resolveMeetings,
@@ -418,7 +422,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
     for(const actor of actors('dailyLife')){
       const plan=dailyPlans.get(actor);
       if(!plan?.intentionPlanning)continue;
-      if(plan.learningAppointments && plan.socialInvitations &&
+      if(plan.learningAppointments && (plan.socialInvitations || plan.libraryRoom!==undefined) &&
          actors('seeksHelp').includes(actor))
         for(const spell of knowledgeGaps(actor))
           if(!(intentions.get(actor)??[]).some(g=>isOpenIntention(g)&&
@@ -510,6 +514,42 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       }else if(selected.response.kind==='leave')
         travelTo(actor,room,selected.response.destination);
     }
+    // G4.1 [GAME] After independent reading, a curious pupil can REQUEST a
+    // co-present willing guide for the existing guarded practice action.
+    // The selection never peeks into the guide's personal spell knowledge.
+    for(const actor of actors('dailyLife')){
+      const plan=dailyPlans.get(actor);
+      if(plan?.libraryRoom===undefined || !plan.learningAppointments ||
+         !isLeisure(minute) || has(actor,'manual') ||
+         occupiedBySchool.has(actor) || sleeping.has(actor) ||
+         socialParticipants.has(actor) || decidedActors.has(actor))continue;
+      const room=currentRoom(actor);
+      if(room===null)continue;
+      const concept=spellKnowledge.history(actor)
+        .filter(record=>record.stage==='conceptual')
+        .map(record=>record.spell)
+        .find(spell=>spellKnowledge.stage(actor,spell)==='conceptual');
+      if(!concept)continue;
+      const failed=attemptedTutors.get(actor);
+      const guide=occupants(room)
+        .filter(id=>id!==actor && !has(id,'manual') &&
+          has(id,'helpful') && has(id,'hearing') &&
+          trustOf(actor,id)!=='distrusted' &&
+          !occupiedBySchool.has(id) &&
+          !decidedActors.has(id) && !socialParticipants.has(id) &&
+          !failed?.has('practice:'+id+':'+concept))
+        .sort((a,b)=>a-b)[0];
+      if(guide===undefined)continue;
+      const definition=spellDefinitions[concept];
+      const action:Command={type:'practice_spell',actor,guide,spell:concept,
+        intent:definition.intent,target:definition.semanticTarget,
+        incantation:definition.incantation};
+      const result=execute(action);
+      recordDecision({actor,action,result});
+      if(result.ok)socialParticipants.add(guide);
+      else failed?.add('practice:'+guide+':'+concept);
+    }
+
     // Opt-in intention arbitration. Scheduling, commitments and bodily needs
     // all compete through observed obligations, not a global RPG action score.
     // State transitions themselves do not consume an extra physical action.
@@ -630,7 +670,9 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       if(choice.kind==='visit'||choice.kind==='pursue'){
         const goal=choice.intention;
         if(goal.kind==='learn_concept' && goal.spell){
-          const intention=planStudyIntention({
+          // Do not inspect a candidate's private knowledge: a local meeting is
+          // proposed from trust and proximity, then world validity decides.
+          const intention=plan.socialInvitations ? planStudyIntention({
             learner:actor,gaps:[goal.spell],
             room:plan.leisureRoom??plan.socialRoom??room,
             candidates:occupants(room),
@@ -641,10 +683,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
               !occupiedBySchool.has(other) && !socialParticipants.has(other) &&
               !decidedActors.has(other),
             minute
-          });
-          if(!intention){
-            transitionIntention(actor,goal.id,'paused','waiting');
-          }
+          }):null;
           if(intention){
             const action:Command={type:'offer_meeting',actor,
               listener:intention.helper,room:intention.room,
@@ -655,8 +694,32 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
               transitionIntention(actor,goal.id,'active');
               socialParticipants.add(actor);
               socialParticipants.add(intention.helper);
-            }
+            } else transitionIntention(actor,goal.id,'paused','waiting');
+            continue;
           }
+          // The only remote knowledge is *where the library is*. Contents
+          // become available to the planner only upon actual arrival.
+          const library=plan.libraryRoom;
+          if(library===undefined){
+            transitionIntention(actor,goal.id,'paused','waiting');
+            continue;
+          }
+          if(room!==library){
+            const moved=travelTo(actor,room,library);
+            transitionIntention(actor,goal.id,moved?.result.ok?'active':'paused',
+              moved?.result.ok?undefined:'waiting');
+            continue;
+          }
+          const book=chooseLocalStudyBook(goal.spell,visibleBooks(actor));
+          if(book===null){
+            transitionIntention(actor,goal.id,'paused','waiting');
+            continue;
+          }
+          const action:Command={type:'study_book',actor,book};
+          const result=execute(action);
+          recordDecision({actor,action,result});
+          transitionIntention(actor,goal.id,result.ok?'active':'paused',
+            result.ok?undefined:'waiting');
           continue;
         }
         if(goal.kind==='inquire'&&goal.object!==undefined){

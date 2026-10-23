@@ -1,0 +1,114 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {createAutonomousAcademicMagicSlice} from '../src/scenarios/autonomous-academic-magic.ts';
+import {createSchoolWeek} from '../src/scenarios/school-week.ts';
+import {createPersistentSimulation,restoreCheckpoint,restoreSimulation,
+  serializeCheckpoint,serializeSimulation} from '../src/core/persistence.ts';
+
+const advance=(world:{step:()=>unknown},times:number)=>{
+  for(let i=0;i<times;i++)world.step();
+};
+
+test('G4.1 pupil autonomously replaces missed class with library study then practises',()=>{
+  const f=createAutonomousAcademicMagicSlice();
+  advance(f.world,8);
+  assert.equal(f.world.attendance(f.remus)[0]?.status,'missed');
+  assert.equal(f.world.spellStage(f.lily,'lumos'),'conceptual');
+  assert.equal(f.world.spellStage(f.remus,'lumos'),'unaware');
+  assert.deepEqual(f.world.visibleBooks(f.remus),[]); // no remote sight
+  f.releaseAfterMissedLesson();
+  advance(f.world,140); // includes evening library opening window
+  const events=f.world.events();
+  const reading=events.findIndex(e=>e.type==='book_read' && e.actor===f.remus);
+  const entered=events.findIndex(e=>e.type==='entity_moved' &&
+    e.actor===f.remus && e.to===f.library);
+  assert.ok(entered>=0,'pupil must physically reach known library');
+  assert.ok(reading>entered,'book finishes only after an observed physical journey');
+  assert.equal(f.world.learningHistory(f.remus)[0]?.source.kind,'library');
+  assert.equal(f.world.spellStage(f.remus,'lumos'),'independent');
+  assert.ok(events.some(e=>e.type==='spell_executed'&&e.actor===f.remus&&e.mode==='guided'));
+  assert.ok(events.some(e=>e.type==='spell_executed'&&e.actor===f.remus&&e.mode==='independent'));
+  assert.equal(f.world.isIlluminated(f.remus),true);
+});
+
+test('no personally known library -> no magical remote book discovery',()=>{
+  const f=createAutonomousAcademicMagicSlice({knowsLibrary:false});
+  advance(f.world,8);
+  f.releaseAfterMissedLesson();
+  advance(f.world,140);
+  assert.equal(f.world.spellStage(f.remus,'lumos'),'unaware');
+  assert.equal(f.world.events().some(e=>e.type==='book_read'&&e.actor===f.remus),false);
+});
+
+test('an uninformative local cover cannot reveal hidden contents of book',()=>{
+  const f=createAutonomousAcademicMagicSlice({bookTitle:'Трактат об основах чар'});
+  advance(f.world,8);f.releaseAfterMissedLesson();
+  advance(f.world,140);
+  assert.ok(f.world.events().some(e=>
+    e.type==='entity_moved'&&e.actor===f.remus&&e.to===f.library));
+  assert.equal(f.world.events().some(e=>e.type==='book_read'&&e.actor===f.remus),false);
+  assert.equal(f.world.spellStage(f.remus,'lumos'),'unaware');
+});
+
+test('G4.1 journal and checkpoint preserve private library destination and mid-book reading',()=>{
+  const persistent=createPersistentSimulation();
+  const f=createAutonomousAcademicMagicSlice({world:persistent});
+  advance(persistent,8);
+  f.releaseAfterMissedLesson();
+  for(let n=0;n<100 && !persistent.readingOf(f.remus);n++)persistent.step();
+  assert.ok(persistent.readingOf(f.remus),'the pupil must autonomously start reading');
+  const checkpoint=restoreCheckpoint(serializeCheckpoint(persistent));
+  const replay=restoreSimulation(serializeSimulation(persistent));
+  for(const restored of [checkpoint,replay]){
+    const remus=restored.id('remus')!;
+    const book=restored.id('lumos_manual')!;
+    assert.deepEqual(restored.readingOf(remus),{
+      book,startedAt:persistent.readingOf(f.remus)!.startedAt
+    });
+    advance(restored,25);
+    assert.equal(restored.spellStage(remus,'lumos'),'independent');
+    assert.equal(restored.learningHistory(remus)[0]?.source.kind,'library');
+  }
+});
+
+test('unknown guide qualification is validated; a rejected helper is remembered through checkpoint remap',()=>{
+  const w=createPersistentSimulation();
+  const library=w.room('library','Библиотека');
+  const pupil=w.character('pupil','Ученик',library);
+  const helper=w.character('helper','Неквалифицированный помощник',library);
+  w.seedSpellKnowledge(pupil,'lumos','conceptual');
+  w.seedSpellKnowledge(helper,'lumos','conceptual');
+  w.setHelpful(helper,true);
+  w.setDailyLife(pupil,{homeRoom:library,diningRoom:library,libraryRoom:library,
+    socialRoom:library,style:'reserved',interest:'lessons',
+    learningAppointments:true,intentionPlanning:true});
+  advance(w,70); // first free evening window at 19:10
+  const attempts=w.captureRuntime().attemptedTutors.find(([id])=>id===pupil)?.[1]??[];
+  assert.ok(attempts.includes('practice:'+helper+':lumos'));
+  assert.equal(w.spellStage(pupil,'lumos'),'conceptual');
+  const restored=restoreCheckpoint(serializeCheckpoint(w));
+  const newPupil=restored.id('pupil')!,newHelper=restored.id('helper')!;
+  const remembered=restored.captureRuntime().attemptedTutors.find(([id])=>id===newPupil)?.[1]??[];
+  assert.ok(remembered.includes('practice:'+newHelper+':lumos'));
+  assert.equal(restored.spellStage(newPupil,'lumos'),'conceptual');
+});
+
+test('G4.1 full-school opt-in adds real library book and only first-year location knowledge',()=>{
+  const school=createSchoolWeek(undefined,'adaptive','autonomous','control',
+    'baseline','fixture-84','legacy','legacy','library-g4-1');
+  const student=school.students.find(s=>s.year===1)!;
+  const senior=school.students.find(s=>s.year===2)!;
+  const store=school.world.captureRuntime();
+  const first=store.dailyPlans.find(([actor])=>actor===student.id)![1];
+  const later=store.dailyPlans.find(([actor])=>actor===senior.id)![1];
+  assert.equal(first.libraryRoom,school.library);
+  assert.equal(later.libraryRoom,undefined);
+  const visitor=school.world.character('library_guest','Гость библиотеки',school.library);
+  assert.equal(school.world.visibleBooks(visitor).some(b=>b.label.includes('Lumos')),true);
+  assert.deepEqual(school.world.visibleBooks(student.id),[]);
+  const charms=school.professors.find(p=>p.subject==='Charms')!;
+  assert.equal(school.world.spellStage(charms.id,'lumos'),'independent');
+  const original=createSchoolWeek();
+  const idleVisitor=original.world.character('old_guest','Гость',original.library);
+  assert.deepEqual(original.world.visibleBooks(idleVisitor),[]);
+});
