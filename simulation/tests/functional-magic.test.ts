@@ -129,3 +129,26 @@ test('guided levitation practice replays its actual feather interaction',()=>{
   assert.deepEqual(j.magicState(j.id('feather')!),w.magicState(f.feather));
   assert.equal(j.spellStage(j.id('pupil')!,'wingardium_leviosa'),'guided');
 });
+
+test('the same learned Wingardium Leviosa takes a higher-order trajectory parameter',()=>{
+  const f=createFunctionalMagicSlice();
+  advance(f.world,8);
+  assert.equal(f.world.execute({type:'practice_spell',actor:f.pupil,
+    guide:f.teacher,object:f.feather,...formula}).ok,true);
+  assert.equal(f.world.execute({type:'practice_spell',actor:f.pupil,
+    object:f.feather,...formula}).ok,true);
+  const trajectory={kind:'orbit' as const,center:vec(0,0,0),
+    radius:1.5,speed:Math.PI/2,height:2};
+  assert.deepEqual(f.world.execute({type:'cast_spell',actor:f.pupil,
+    object:f.feather,...formula,trajectory}),
+    {ok:false,reason:'primitive_not_known',events:[]});
+  advance(f.world,6); // physical presence at the 10:10 principle lesson
+  assert.deepEqual(f.world.knownMagicPrimitives(f.pupil),['position_lock']);
+  assert.equal(f.world.execute({type:'cast_spell',actor:f.pupil,
+    object:f.feather,...formula,trajectory}).ok,true);
+  f.world.step();
+  assert.ok(Math.abs(f.world.magicState(f.feather)!.position.x)<1e-9);
+  f.world.step();
+  assert.ok(Math.abs(f.world.magicState(f.feather)!.position.x+1.5)<1e-9);
+  assert.equal(f.world.spellStage(f.pupil,'wingardium_leviosa'),'independent');
+});
