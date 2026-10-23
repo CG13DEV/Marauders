@@ -117,3 +117,15 @@ test('failed and forged graphs have no impact on persistent world',()=>{
     {ok:false,reason:'invalid_magic_pattern',events:[]});
   assert.deepEqual(f.world.magicState(f.feather),old);
 });
+
+test('guided levitation practice replays its actual feather interaction',()=>{
+  const w=createPersistentSimulation();
+  const f=createFunctionalMagicSlice(w);
+  advance(w,8);
+  assert.equal(w.execute({type:'practice_spell',actor:f.pupil,guide:f.teacher,
+    object:f.feather,...formula}).ok,true);
+  advance(w,1);
+  const j=restoreSimulation(serializeSimulation(w));
+  assert.deepEqual(j.magicState(j.id('feather')!),w.magicState(f.feather));
+  assert.equal(j.spellStage(j.id('pupil')!,'wingardium_leviosa'),'guided');
+});
