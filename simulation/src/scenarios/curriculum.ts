@@ -30,6 +30,18 @@ export const SUBJECT_LABELS: Record<Subject, string> = {
   'Muggle Studies': 'Магловедение'
 };
 
+/** [GAME] Explicit prototype curriculum mapping, not an asserted 1970s syllabus.
+ * Adding a formula here never changes its casting rules or leaks knowledge
+ * to pupils outside the real lesson attendance pipeline.
+ */
+export const SPELL_TEACHING_UNITS = [
+  {year:1, subject:'Charms', spell:'lumos', provenance:'GAME'}
+] as const;
+
+export function introductorySpellFor(year:number, subject:Subject) {
+  return SPELL_TEACHING_UNITS.find(unit=>unit.year===year && unit.subject===subject);
+}
+
 export const HOUSES = [
   'gryffindor', 'ravenclaw', 'hufflepuff', 'slytherin'
 ] as const;
