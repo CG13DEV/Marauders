@@ -19,6 +19,7 @@
     "learning-demo": "node --experimental-strip-types src/cli/learning-demo.ts",
     "academic-magic-demo": "node --experimental-strip-types src/cli/academic-magic-demo.ts",
     "autonomous-academic-magic-demo": "node --experimental-strip-types src/cli/autonomous-academic-magic-demo.ts",
+    "functional-magic-demo": "node --experimental-strip-types src/cli/functional-magic-demo.ts",
     "help-demo": "node --experimental-strip-types src/cli/help-demo.ts",
     "play": "node --experimental-strip-types src/cli/play.ts",
     "play-demo": "node --experimental-strip-types src/cli/play.ts --demo",
