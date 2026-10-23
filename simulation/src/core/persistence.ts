@@ -84,7 +84,8 @@ function remapCommand(command: Command, ids: Map<number, number>): Command {
     case 'cast_pattern':case 'disturb_object':
       return {...command,actor:at(command.actor),object:at(command.object)};
     case 'practice_spell': return { ...command, actor: at(command.actor),
-      ...(command.guide === undefined ? {} : { guide: at(command.guide) }) };
+      ...(command.guide === undefined ? {} : { guide: at(command.guide) }),
+      ...(command.object===undefined?{}:{object:at(command.object)}) };
     case 'cast_spell': return { ...command, actor: at(command.actor),
       ...(command.object===undefined?{}:{object:at(command.object)}) };
     case 'use_toilet':case 'signal_incident':return {...command,actor:at(command.actor),
