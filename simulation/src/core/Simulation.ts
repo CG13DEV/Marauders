@@ -78,7 +78,7 @@ export type Command =
   | { type: 'ask_about'; actor: EntityId; listener: EntityId; object: EntityId }
   | { type: 'tutor_spell'; actor: EntityId; listener: EntityId; spell: SpellId }
   | { type: 'study_book'; actor: EntityId; book: EntityId }
-  | { type: 'practice_spell'; actor: EntityId; spell: SpellId; guide?: EntityId; intent: string; target: string; incantation: string }
+  | { type: 'practice_spell'; actor: EntityId; spell: SpellId; guide?: EntityId; intent: string; target: string; incantation: string; object?:EntityId }
   | { type: 'cast_spell'; actor: EntityId; spell: SpellId; intent: string; target: string; incantation: string;
       object?: EntityId; trajectory?:Trajectory }
   | {type:'cast_pattern';actor:EntityId;object:EntityId;pattern:MagicPattern}
@@ -1722,24 +1722,24 @@ export function createSimulation() {
         }
       }
       if(pattern.operation==='levitate_object'){
-        if(command.type==='cast_spell'){
-          if(command.object===undefined||!magic.knowsTarget(command.object))
-            return {ok:false,reason:'missing_object',events:[]};
-          if(currentRoom(command.actor)!==locationOf(command.object))
-            return {ok:false,reason:'object_not_in_reach',events:[]};
-          const patternCopy=JSON.parse(JSON.stringify(DEFAULT_LEVITATION)) as MagicPattern;
-          if(command.trajectory!==undefined){
-            if(!primitives.get(command.actor)!.has('position_lock'))
-              return {ok:false,reason:'primitive_not_known',events:[]};
-            patternCopy.nodes=[{kind:'levitate',controller:'position_lock',
-              trajectory:command.trajectory}];
-            if(!validateMagicPattern(patternCopy))
-              return {ok:false,reason:'invalid_magic_pattern',events:[]};
-          }
-          magic.apply(command.actor,command.object,patternCopy,schoolTime(tick).absoluteMinute);
-          emit({type:'magic_pattern_cast',actor:command.actor,object:command.object,
-            source:'formula',minute:schoolTime(tick).absoluteMinute});
+        // Practice and casting are the same world action: a feather must
+        // actually exist and be within reach. No abstract stage-grinding.
+        if(command.object===undefined||!magic.knowsTarget(command.object))
+          return {ok:false,reason:'missing_object',events:[]};
+        if(currentRoom(command.actor)!==locationOf(command.object))
+          return {ok:false,reason:'object_not_in_reach',events:[]};
+        const patternCopy=JSON.parse(JSON.stringify(DEFAULT_LEVITATION)) as MagicPattern;
+        if(command.type==='cast_spell'&&command.trajectory!==undefined){
+          if(!primitives.get(command.actor)!.has('position_lock'))
+            return {ok:false,reason:'primitive_not_known',events:[]};
+          patternCopy.nodes=[{kind:'levitate',controller:'position_lock',
+            trajectory:command.trajectory}];
+          if(!validateMagicPattern(patternCopy))
+            return {ok:false,reason:'invalid_magic_pattern',events:[]};
         }
+        magic.apply(command.actor,command.object,patternCopy,schoolTime(tick).absoluteMinute);
+        emit({type:'magic_pattern_cast',actor:command.actor,object:command.object,
+          source:'formula',minute:schoolTime(tick).absoluteMinute});
       }
       if (pattern.operation === 'emit_light') addComponent(ecs, command.actor, Illuminated);
       if (command.type === 'practice_spell' && stage === 'conceptual') {
