@@ -813,13 +813,20 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
         // override of lessons, promises, hunger, rest or manual decisions.
         // The laboratory is personally known through the pupil's timetable.
         // G4.5: science can emerge without a pre-assigned "researcher" tag.
-        const emerging=plan.magicalResearch?null:personalMagicResearchInitiative({
+        const attendedRelevantLab=!plan.magicalResearch&&plan.intentionPlanning&&
+          isResearchTime(minute)&&
+          (plan.interest==='lessons'||plan.interest==='hobbies')&&
+          (timetables.get(actor)?.records.some(l=>
+            l.spell==='wingardium_leviosa'&&l.arrivedAt!==undefined)??false);
+        // Legacy 84/600-pupil simulations have no Wingardium workshop:
+        // avoid per-actor spell and notebook reads entirely in those worlds.
+        const emerging=attendedRelevantLab?personalMagicResearchInitiative({
           plan,lessons:timetables.get(actor)?.records??[],
           stage:spellKnowledge.stage(actor,'wingardium_leviosa'),
           learned:(['position_lock','force_feedback'] as const)
             .filter(primitive=>knowsMagicPrimitive(actor,primitive)),
           notes:magicHypotheses(actor),pending:activeMagicTrial(actor),minute
-        });
+        }):null;
         const lab=plan.magicalResearch??emerging;
         if(lab?.spell==='wingardium_leviosa' && isResearchTime(minute) &&
            has(actor,'vision') &&
