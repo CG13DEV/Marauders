@@ -6,7 +6,7 @@
 import type {Command} from './Simulation.ts';
 import type {MagicHypothesis,PendingMagicTrial} from './magic-research.ts';
 import type {MagicPrimitive,Vec3,MagicPattern} from './magic-graph.ts';
-export type LocalMagicalObject={id:number;label:string;position:Vec3};
+export type LocalMagicalObject={id:number;label:string;position:Vec3;busy?:boolean};
 
 /** After-school laboratory access and normal evening leisure. No classes or
  * meals are preempted; the outer intention/need arbiter still has final say. */
@@ -25,12 +25,16 @@ export function nextLocalMagicResearchAction(input:{
   visible:readonly LocalMagicalObject[];
   hypotheses:readonly MagicHypothesis[];
   pending:PendingMagicTrial|null;
+  preferredController?:'position_lock'|'force_feedback';
 }):Command|null{
   const {actor,spell,minute,known,visible,hypotheses,pending}=input;
-  // No global search for target IDs: object discovery happens by sight.
+  // A busy feather is visibly being experimented on: no hidden experiment
+  // owner or global object catalog. Deterministic rotation spreads pupils
+  // across whatever physical props they actually see.
+  const free=[...visible].filter(o=>!o.busy).sort((a,b)=>a.id-b.id);
   const object=pending
     ?visible.find(x=>x.id===pending.object)
-    :[...visible].sort((a,b)=>a.id-b.id)[0];
+    :free.length?free[actor%free.length]:undefined;
   if(!object)return null;
   if(pending){
     if(minute===pending.startMinute+10){
@@ -44,10 +48,15 @@ export function nextLocalMagicResearchAction(input:{
   }
   // One hypothesis per personally learned controller. We don't claim either
   // hypothesis matches the original spell, only that both can be tested.
-  for(const [controller,title] of [
+  const choices=[
     ['position_lock','Удержание положения'],
     ['force_feedback','Компенсация отклонения']
-  ] as const){
+  ] as const;
+  const preferred=input.preferredController;
+  const ordered=preferred
+    ?[...choices].sort((a,b)=>Number(b[0]===preferred)-Number(a[0]===preferred))
+    :choices;
+  for(const [controller,title] of ordered){
     if(!known.includes(controller)||
        hypotheses.some(h=>h.pattern.nodes.some(node=>
          node.kind==='levitate'&&node.controller===controller)))continue;
