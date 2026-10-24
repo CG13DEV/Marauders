@@ -403,6 +403,13 @@ export function createSimulation() {
   }
 
   function magicState(object:EntityId){return magic.state(object);}
+  /** Visible local targets only: never reveal remote object IDs or hidden mass. */
+  function visibleMagicObjects(actor:EntityId){
+    const room=currentRoom(actor);
+    if(room===null||!isCharacter(actor)||!hasComponent(ecs,actor,Vision))return [];
+    return magic.snapshot().objects.filter(([id])=>locationOf(id)===room)
+      .map(([id,state])=>({id,label:Name.value[id]!,position:{...state.position}}));
+  }
   /** The actor owns these notes: never a globally discoverable spell decoder. */
   function magicHypotheses(actor:EntityId){return magicResearch.history(actor);}
   function activeMagicTrial(actor:EntityId){return magicResearch.pending(actor);}
@@ -2190,7 +2197,8 @@ export function createSimulation() {
       knownExits,passageMinutes,planActorRoute,usesUnifiedTravel,
       canAnswerWitnessQuestion:actor=>patrolPlans.get(actor)?.kind!=='animal',
       execute, currentRoom, occupants, observations, assessment, trustOf,
-      trustForPurpose, knowledgeGaps, visibleBooks, learnMagicPrimitive,
+      trustForPurpose, knowledgeGaps, visibleBooks, visibleMagicObjects,
+      magicHypotheses, activeMagicTrial, learnMagicPrimitive,
       knowsMagicPrimitive:(actor,primitive)=>primitives.get(actor)?.has(primitive)===true,
       pendingTutoring, attemptedTutors, searches, timetables, routines,
       dailyPlans, meals, conversations, rests,
@@ -2702,7 +2710,7 @@ export function createSimulation() {
 
   return {
     room, roomInfo, character, fragileObject, spellBook, visibleBooks, readingOf,
-    magicObject,magicState,knownMagicPrimitives,seedMagicPrimitive,
+    magicObject,magicState,visibleMagicObjects,knownMagicPrimitives,seedMagicPrimitive,
     magicHypotheses,activeMagicTrial,
     connect, execute, step,
     createTimedMovement, setAutonomousTimedTravel, timedTravelOf,
