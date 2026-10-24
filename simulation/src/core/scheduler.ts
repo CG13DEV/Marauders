@@ -29,6 +29,7 @@ import { spellDefinitions, type SpellId, type LearningRecord } from './spellcraf
 import type {MagicPrimitive} from './magic-graph.ts';
 import type {MagicHypothesis,PendingMagicTrial} from './magic-research.ts';
 import {isResearchTime,nextLocalMagicResearchAction,type LocalMagicalObject} from './autonomous-magic-research.ts';
+import {personalMagicResearchInitiative} from './personal-magic-initiative.ts';
 import { chooseLocalStudyBook, type VisibleBook } from './library-learning.ts';
 import type { Belief } from './beliefs.ts';
 import { willingToTutor, type TutoringRequest } from './social-learning.ts';
@@ -811,7 +812,15 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
         // G4.4: science is one possible use of truly free time, never an
         // override of lessons, promises, hunger, rest or manual decisions.
         // The laboratory is personally known through the pupil's timetable.
-        const lab=plan.magicalResearch;
+        // G4.5: science can emerge without a pre-assigned "researcher" tag.
+        const emerging=plan.magicalResearch?null:personalMagicResearchInitiative({
+          plan,lessons:timetables.get(actor)?.records??[],
+          stage:spellKnowledge.stage(actor,'wingardium_leviosa'),
+          learned:(['position_lock','force_feedback'] as const)
+            .filter(primitive=>knowsMagicPrimitive(actor,primitive)),
+          notes:magicHypotheses(actor),pending:activeMagicTrial(actor),minute
+        });
+        const lab=plan.magicalResearch??emerging;
         if(lab?.spell==='wingardium_leviosa' && isResearchTime(minute) &&
            has(actor,'vision') &&
            spellKnowledge.stage(actor,lab.spell)!=='unaware'){
@@ -825,7 +834,8 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
               .filter(primitive=>knowsMagicPrimitive(actor,primitive)),
             visible:visibleMagicObjects(actor),
             hypotheses:magicHypotheses(actor),
-            pending:activeMagicTrial(actor)
+            pending:activeMagicTrial(actor),
+            ...(emerging?{preferredController:emerging.preferred}:{})
           });
           if(action){
             const result=execute(action);
@@ -1266,13 +1276,15 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
     // still goes through execute(practice_spell), checking tutor knowledge.
     for(const actor of actors('timetable')){
       const plan=dailyPlans.get(actor);
-      if(plan?.magicalResearch?.spell!=='wingardium_leviosa' ||
+      if(!(plan?.magicalResearch?.spell==='wingardium_leviosa' ||
+           (plan?.intentionPlanning &&
+            timetables.get(actor)?.records.some(l=>l.spell==='wingardium_leviosa'))) ||
          has(actor,'manual')||decidedActors.has(actor)||
          !has(actor,'vision'))continue;
       const room=currentRoom(actor);
       if(room===null)continue;
       const lesson=timetables.get(actor)?.records.find(l=>
-        l.spell===plan.magicalResearch!.spell &&
+        l.spell==='wingardium_leviosa' &&
         minute>l.startsAt && minute<l.endsAt &&
         l.room===room && l.status!=='missed' && l.arrivedAt!==undefined);
       if(!lesson||lesson.teacher===undefined||currentRoom(lesson.teacher)!==room)
