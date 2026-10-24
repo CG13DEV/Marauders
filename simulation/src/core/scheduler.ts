@@ -27,6 +27,8 @@ import {ownUnrepairedCommitment,considersConcreteRepair} from './reconciliation.
 import {contextualAvoidance} from './social-context.ts';
 import { spellDefinitions, type SpellId, type LearningRecord } from './spellcraft.ts';
 import type {MagicPrimitive} from './magic-graph.ts';
+import type {MagicHypothesis,PendingMagicTrial} from './magic-research.ts';
+import {nextLocalMagicResearchAction,type LocalMagicalObject} from './autonomous-magic-research.ts';
 import { chooseLocalStudyBook, type VisibleBook } from './library-learning.ts';
 import type { Belief } from './beliefs.ts';
 import { willingToTutor, type TutoringRequest } from './social-learning.ts';
@@ -71,6 +73,9 @@ export type SchedulerContext = {
   knowsMagicPrimitive(actor:EntityId,primitive:MagicPrimitive):boolean;
   /** Books physically seen in the actor's current room; only public covers. */
   visibleBooks(actor: EntityId): VisibleBook[];
+  visibleMagicObjects(actor:EntityId):LocalMagicalObject[];
+  magicHypotheses(actor:EntityId):MagicHypothesis[];
+  activeMagicTrial(actor:EntityId):PendingMagicTrial|null;
   pendingTutoring: Map<EntityId, TutoringRequest>;
   attemptedTutors: Map<EntityId, Set<string>>;
   searches: Map<EntityId, WitnessSearch>;
@@ -106,7 +111,8 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
     advanceClock, actors, has, visibleFragiles, intactFragiles, passageAction,
     exits, knownExits, passageMinutes, planActorRoute, usesUnifiedTravel,
     execute:executeRaw, currentRoom, occupants, canAnswerWitnessQuestion,observations, assessment,
-    trustOf, trustForPurpose, knowledgeGaps, visibleBooks, learnMagicPrimitive,
+    trustOf, trustForPurpose, knowledgeGaps, visibleBooks,visibleMagicObjects,
+    magicHypotheses,activeMagicTrial,learnMagicPrimitive,
     knowsMagicPrimitive,
     pendingTutoring, attemptedTutors, searches,
     timetables, routines, dailyPlans, meals, conversations, rests,
@@ -802,6 +808,31 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       // still has habitual social destinations and curfew-driven homeward
       // travel. The old planner and new one share the same public topology.
       if(choice.kind==='idle'){
+        // G4.4: science is one possible use of truly free time, never an
+        // override of lessons, promises, hunger, rest or manual decisions.
+        // The laboratory is personally known through the pupil's timetable.
+        const lab=plan.magicalResearch;
+        if(lab?.spell==='wingardium_leviosa' && isLeisure(minute) &&
+           has(actor,'vision') &&
+           spellKnowledge.stage(actor,lab.spell)!=='unaware'){
+          if(room!==lab.room){
+            travelTo(actor,room,lab.room);
+            continue;
+          }
+          const action=nextLocalMagicResearchAction({
+            actor,spell:lab.spell,minute,
+            known:(['position_lock','force_feedback'] as const)
+              .filter(primitive=>knowsMagicPrimitive(actor,primitive)),
+            visible:visibleMagicObjects(actor),
+            hypotheses:magicHypotheses(actor),
+            pending:activeMagicTrial(actor)
+          });
+          if(action){
+            const result=execute(action);
+            recordDecision({actor,action,result});
+            continue;
+          }
+        }
         const destination=isLeisure(minute)
           ? leisureDestination(plan,minute)
           : shouldReturnHome(minute)?plan.homeRoom:null;
@@ -1228,6 +1259,37 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       };
       const result = execute(action);
       recordDecision({ actor, action, result });
+    }
+
+    // G4.4: guided and then independent levitation takes place IN an
+    // attended teaching session, with a real nearby feather. Every attempt
+    // still goes through execute(practice_spell), checking tutor knowledge.
+    for(const actor of actors('timetable')){
+      const plan=dailyPlans.get(actor);
+      if(plan?.magicalResearch?.spell!=='wingardium_leviosa' ||
+         has(actor,'manual')||decidedActors.has(actor)||
+         !has(actor,'vision'))continue;
+      const room=currentRoom(actor);
+      if(room===null)continue;
+      const lesson=timetables.get(actor)?.records.find(l=>
+        l.spell===plan.magicalResearch!.spell &&
+        minute>l.startsAt && minute<l.endsAt &&
+        l.room===room && l.status!=='missed' && l.arrivedAt!==undefined);
+      if(!lesson||lesson.teacher===undefined||currentRoom(lesson.teacher)!==room)
+        continue;
+      const stage=spellKnowledge.stage(actor,'wingardium_leviosa');
+      const guided=minute===lesson.startsAt+20&&stage==='conceptual';
+      const solo=minute===lesson.startsAt+30&&stage==='guided';
+      if(!guided&&!solo)continue;
+      const object=visibleMagicObjects(actor).sort((a,b)=>a.id-b.id)[0];
+      if(!object)continue;
+      const definition=spellDefinitions.wingardium_leviosa;
+      const action:Command={type:'practice_spell',actor,
+        spell:'wingardium_leviosa',intent:definition.intent,
+        target:definition.semanticTarget,incantation:definition.incantation,
+        object:object.id,...(guided?{guide:lesson.teacher}:{})};
+      const result=execute(action);
+      recordDecision({actor,action,result});
     }
 
     phase('spell-practice');
