@@ -28,7 +28,7 @@ import {contextualAvoidance} from './social-context.ts';
 import { spellDefinitions, type SpellId, type LearningRecord } from './spellcraft.ts';
 import type {MagicPrimitive} from './magic-graph.ts';
 import type {MagicHypothesis,PendingMagicTrial} from './magic-research.ts';
-import {nextLocalMagicResearchAction,type LocalMagicalObject} from './autonomous-magic-research.ts';
+import {isResearchTime,nextLocalMagicResearchAction,type LocalMagicalObject} from './autonomous-magic-research.ts';
 import { chooseLocalStudyBook, type VisibleBook } from './library-learning.ts';
 import type { Belief } from './beliefs.ts';
 import { willingToTutor, type TutoringRequest } from './social-learning.ts';
@@ -812,7 +812,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
         // override of lessons, promises, hunger, rest or manual decisions.
         // The laboratory is personally known through the pupil's timetable.
         const lab=plan.magicalResearch;
-        if(lab?.spell==='wingardium_leviosa' && isLeisure(minute) &&
+        if(lab?.spell==='wingardium_leviosa' && isResearchTime(minute) &&
            has(actor,'vision') &&
            spellKnowledge.stage(actor,lab.spell)!=='unaware'){
           if(room!==lab.room){
