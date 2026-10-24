@@ -42,6 +42,11 @@ export function personalMagicResearchInitiative(input:{
 
   const available=learned.filter(x=>x==='position_lock'||x==='force_feedback');
   if(available.length===0)return null;
+  // A tinkerer seeks a *responsive*, dynamic control experiment. Merely
+  // memorizing the static position lock does not yet tempt that pupil into
+  // the laboratory. An academic-minded learner may investigate earlier.
+  if(plan.interest==='hobbies'&&!available.includes('force_feedback'))
+    return null;
   // The personally observed room, not omniscient world topology.
   const preferred=plan.interest==='hobbies'?'force_feedback':'position_lock';
   const studied=new Set(notes.flatMap(h=>h.pattern.nodes
