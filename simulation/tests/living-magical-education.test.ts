@@ -41,6 +41,9 @@ test('G4.4 school pupil learns, physically practises, then conducts autonomous t
   assert.equal(w.spellStage(f.learner.id,'wingardium_leviosa'),'independent');
   assert.deepEqual(w.knownMagicPrimitives(f.learner.id),
     ['force_feedback','position_lock']);
+  const workshops=w.attendance(f.learner.id).filter(x=>x.id.startsWith('g44_'));
+  assert.equal(workshops.length,3);
+  assert.ok(workshops.every(l=>l.status==='on_time'||l.status==='late'));
   const notes=w.magicHypotheses(f.learner.id);
   assert.equal(notes.length,2,'two distinct personally reasoned controllers');
   assert.equal(notes[0]?.trials.length,1);
