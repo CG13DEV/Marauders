@@ -8,6 +8,12 @@ export const spellDefinitions = {
     semanticTarget: 'wand_tip',
     operation: 'emit_light',
     incantation: 'Lumos'
+  },
+  wingardium_leviosa: {
+    intent: 'levitate',
+    semanticTarget: 'object',
+    operation: 'levitate_object',
+    incantation: 'Wingardium Leviosa'
   }
 } as const;
 

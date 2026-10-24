@@ -26,6 +26,7 @@ import {chooseSocialResponse} from './social-choice.ts';
 import {ownUnrepairedCommitment,considersConcreteRepair} from './reconciliation.ts';
 import {contextualAvoidance} from './social-context.ts';
 import { spellDefinitions, type SpellId, type LearningRecord } from './spellcraft.ts';
+import type {MagicPrimitive} from './magic-graph.ts';
 import { chooseLocalStudyBook, type VisibleBook } from './library-learning.ts';
 import type { Belief } from './beliefs.ts';
 import { willingToTutor, type TutoringRequest } from './social-learning.ts';
@@ -66,6 +67,8 @@ export type SchedulerContext = {
   trustForPurpose(observer: EntityId, source: EntityId,
     purpose:MeetingCommitment['purpose']): Trust;
   knowledgeGaps(actor: EntityId): SpellId[];
+  learnMagicPrimitive(actor:EntityId,primitive:MagicPrimitive,lessonId:string,minute:number):boolean;
+  knowsMagicPrimitive(actor:EntityId,primitive:MagicPrimitive):boolean;
   /** Books physically seen in the actor's current room; only public covers. */
   visibleBooks(actor: EntityId): VisibleBook[];
   pendingTutoring: Map<EntityId, TutoringRequest>;
@@ -103,7 +106,8 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
     advanceClock, actors, has, visibleFragiles, intactFragiles, passageAction,
     exits, knownExits, passageMinutes, planActorRoute, usesUnifiedTravel,
     execute:executeRaw, currentRoom, occupants, canAnswerWitnessQuestion,observations, assessment,
-    trustOf, trustForPurpose, knowledgeGaps, visibleBooks,
+    trustOf, trustForPurpose, knowledgeGaps, visibleBooks, learnMagicPrimitive,
+    knowsMagicPrimitive,
     pendingTutoring, attemptedTutors, searches,
     timetables, routines, dailyPlans, meals, conversations, rests,
     commitments, commitmentMemories, intentions, bodilyNeeds,toiletNeeds,
@@ -1260,17 +1264,22 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
         });
       }
       for (const lesson of timetable.records) {
-        if (!lesson.spell || minute !== lesson.startsAt + 10 ||
+        if ((!lesson.spell && !lesson.primitive) || minute !== lesson.startsAt + 10 ||
             presentRoom !== lesson.room || lesson.status === 'pending' ||
             lesson.status === 'missed' ||
             lesson.arrivedAt === undefined || lesson.arrivedAt > minute ||
             (lesson.teacher !== undefined &&
               currentRoom(lesson.teacher) !== lesson.room)) continue;
-        const learned = spellKnowledge.learn(actor, lesson.spell, 'conceptual',
-          { kind: 'lesson', lessonId: lesson.id, minute });
-        if (learned) emit({
-          type: 'spell_concept_learned', actor, spell: lesson.spell, source: 'lesson', minute
-        });
+        if(lesson.spell){
+          const learned = spellKnowledge.learn(actor, lesson.spell, 'conceptual',
+            { kind: 'lesson', lessonId: lesson.id, minute });
+          if (learned) emit({
+            type: 'spell_concept_learned', actor, spell: lesson.spell, source: 'lesson', minute
+          });
+        }
+        if(lesson.primitive && lesson.teacher!==undefined &&
+           knowsMagicPrimitive(lesson.teacher,lesson.primitive))
+          learnMagicPrimitive(actor,lesson.primitive,lesson.id,minute);
       }
     }
     resolveMeetings(minute);
