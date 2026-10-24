@@ -80,8 +80,8 @@ test('G4.4 checkpoint keeps personally known laboratory and real feather locatio
   const feather=restored.id('g44_class_feather')!;
   assert.ok(restored.magicState(feather));
   const plan=restored.captureRuntime().dailyPlans.find(([id])=>id===actor)![1];
-  assert.equal(plan.magicalResearch?.room,restored.id('classroom_charms') ??
-    school.classrooms.Charms);
+  assert.equal(restored.label(plan.magicalResearch!.room),
+    persistent.label(school.classrooms.Charms));
   assert.equal(restored.spellStage(actor,'wingardium_leviosa'),
     persistent.spellStage(student.id,'wingardium_leviosa'));
 });
