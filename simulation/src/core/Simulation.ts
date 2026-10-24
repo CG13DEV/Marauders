@@ -768,6 +768,8 @@ export function createSimulation() {
         (plan.socialRoom !== undefined && !isRoom(plan.socialRoom)) ||
         (plan.leisureRoom !== undefined && !isRoom(plan.leisureRoom)) ||
         (plan.libraryRoom !== undefined && !isRoom(plan.libraryRoom)) ||
+        (plan.magicalResearch !== undefined && (!isRoom(plan.magicalResearch.room) ||
+          !isSpellId(plan.magicalResearch.spell))) ||
         (plan.intentionPlanning !== undefined &&
           typeof plan.intentionPlanning !== 'boolean') ||
         (plan.evidenceInquiry !== undefined &&
