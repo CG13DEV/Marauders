@@ -420,7 +420,7 @@ export function createSchoolWeek(
   // reserved elective years, so it doesn't overbook an existing lesson.
   if(academicStudy==='living-g4-4'){
     const researcher=students.find(student=>student.year===1&&
-      student.house===HOUSES[0]&&student.key.endsWith('_0'));
+      student.house===HOUSES[0]);
     if(!researcher)throw Error('G4.4 needs a first-year research pupil');
     const cohort=teachingGroups.find(group=>group.id===researcher.groupId);
     const teacher=teachersBySubject.get('Charms');
