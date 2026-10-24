@@ -407,8 +407,10 @@ export function createSimulation() {
   function visibleMagicObjects(actor:EntityId){
     const room=currentRoom(actor);
     if(room===null||!isCharacter(actor)||!hasComponent(ecs,actor,Vision))return [];
+    const busy=new Set(magicResearch.snapshot().active.map(([,trial])=>trial.object));
     return magic.snapshot().objects.filter(([id])=>locationOf(id)===room)
-      .map(([id,state])=>({id,label:Name.value[id]!,position:{...state.position}}));
+      .map(([id,state])=>({id,label:Name.value[id]!,
+        position:{...state.position},busy:busy.has(id)}));
   }
   /** The actor owns these notes: never a globally discoverable spell decoder. */
   function magicHypotheses(actor:EntityId){return magicResearch.history(actor);}
@@ -1726,7 +1728,9 @@ export function createSimulation() {
     if(command.type==='test_magic_hypothesis'){
       const hypothesis=magicResearch.owns(command.actor,command.hypothesisId);
       if(!hypothesis)return {ok:false,reason:'unknown_hypothesis',events:[]};
-      if(magicResearch.pending(command.actor))
+      if(magicResearch.pending(command.actor)||
+         magicResearch.snapshot().active.some(([owner,trial])=>
+           owner!==command.actor&&trial.object===command.object))
         return {ok:false,reason:'trial_already_running',events:[]};
       if(hypothesis.trials.length>=48)
         return {ok:false,reason:'trial_limit',events:[]};
