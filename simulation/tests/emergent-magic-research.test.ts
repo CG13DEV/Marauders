@@ -37,7 +37,10 @@ test('G4.5 science is an earned personal decision, not an assigned researcher fl
   assert.equal(personalMagicResearchInitiative({...criteria,
     plan:{...plan,interest:'castle'}}),null);
   assert.equal(personalMagicResearchInitiative({...criteria,
-    plan:{...plan,interest:'hobbies'}})?.preferred,'force_feedback');
+    plan:{...plan,interest:'hobbies'}}),null);
+  assert.equal(personalMagicResearchInitiative({...criteria,
+    plan:{...plan,interest:'hobbies'},
+    learned:['position_lock','force_feedback']})?.preferred,'force_feedback');
 });
 
 test('G4.5 two distinct curious classmates independently discover and test magic',()=>{
