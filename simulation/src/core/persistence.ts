@@ -81,6 +81,9 @@ function remapCommand(command: Command, ids: Map<number, number>): Command {
     case 'study_book': return { ...command, actor:at(command.actor), book:at(command.book) };
     case 'ask_tutoring': return { ...command, actor: at(command.actor), listener: at(command.listener) };
     case 'answer_tutoring': return { ...command, actor: at(command.actor), requester: at(command.requester) };
+    case 'test_magic_hypothesis':case 'record_magic_trial':
+      return {...command,actor:at(command.actor),object:at(command.object)};
+    case 'propose_magic_hypothesis':return {...command,actor:at(command.actor)};
     case 'cast_pattern':case 'disturb_object':
       return {...command,actor:at(command.actor),object:at(command.object)};
     case 'practice_spell': return { ...command, actor: at(command.actor),
@@ -156,6 +159,8 @@ function auditOf(world: Simulation, operations: readonly Operation[]): string {
       observations: world.observations(c.id),
       beliefs: world.beliefs(c.id), attendance: world.attendance(c.id),
       learning: world.learningHistory(c.id), gaps: world.knowledgeGaps(c.id),
+      ...(world.magicHypotheses(c.id).length?{research:world.magicHypotheses(c.id)}:{}),
+      ...(world.activeMagicTrial(c.id)?{activeResearch:world.activeMagicTrial(c.id)}:{}),
       ...(world.knownMagicPrimitives(c.id).length?{magicPrimitives:world.knownMagicPrimitives(c.id)}:{}),
       illuminated: world.isIlluminated(c.id),
       request: world.tutoringRequest(c.id), help: world.assistance(c.id),

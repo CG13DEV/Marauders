@@ -20,6 +20,7 @@ import {contextualRelationship} from './social-context.ts';
 import {ownUnrepairedCommitment} from './reconciliation.ts';
 
 import { createRuntimeStores } from './runtime-stores.ts';
+import {validHypothesisTitle,type MagicMeasurement} from './magic-research.ts';
 import {createMagicRuntime,validateMagicPattern,requiredPrimitives,
   DEFAULT_LEVITATION,isMagicPrimitive,type Vec3,type MagicPattern,
   type Trajectory,type MagicPrimitive} from './magic-graph.ts';
@@ -83,6 +84,9 @@ export type Command =
       object?: EntityId; trajectory?:Trajectory }
   | {type:'cast_pattern';actor:EntityId;object:EntityId;pattern:MagicPattern}
   | {type:'disturb_object';actor:EntityId;object:EntityId;impulse:Vec3}
+  | {type:'propose_magic_hypothesis';actor:EntityId;spell:SpellId;title:string;pattern:MagicPattern}
+  | {type:'test_magic_hypothesis';actor:EntityId;hypothesisId:number;object:EntityId}
+  | {type:'record_magic_trial';actor:EntityId;hypothesisId:number;object:EntityId}
   | { type: 'ask_tutoring'; actor: EntityId; listener: EntityId; spell: SpellId }
   | { type: 'answer_tutoring'; actor: EntityId; requester: EntityId; spell: SpellId; accept: boolean }
   | { type: 'eat_meal'; actor: EntityId; kind: MealKind }
@@ -120,6 +124,8 @@ export type WorldEvent =
   | {type:'magic_primitive_learned';actor:EntityId;primitive:MagicPrimitive;lessonId:string;minute:number}
   | {type:'magic_pattern_cast';actor:EntityId;object:EntityId;source:'formula'|'composition';minute:number}
   | {type:'magic_object_disturbed';actor:EntityId;object:EntityId;minute:number}
+  | {type:'magic_hypothesis_proposed';actor:EntityId;hypothesisId:number;spell:SpellId;minute:number}
+  | {type:'magic_trial_started'|'magic_trial_recorded';actor:EntityId;hypothesisId:number;object:EntityId;minute:number}
   | { type: 'book_reading_started' | 'book_reading_interrupted'; actor: EntityId; book: EntityId; minute: number }
   | { type: 'book_read'; actor: EntityId; book: EntityId; spell: SpellId; minute: number }
   | { type: 'tutoring_requested'; actor: EntityId; listener: EntityId; spell: SpellId; minute: number }
@@ -180,6 +186,13 @@ export type SpellRejection =
   | 'speaker_cannot_hear' | 'student_cannot_hear' | 'already_understood'
   | 'missing_object' | 'object_not_in_reach' | 'invalid_magic_pattern' | 'primitive_not_known' | 'invalid_impulse';
 
+export type MagicResearchRejection =
+  | 'not_understood' | 'primitive_not_known' | 'invalid_magic_pattern'
+  | 'invalid_research_title' | 'research_limit' | 'unknown_hypothesis'
+  | 'trial_already_running' | 'trial_not_started' | 'trial_not_elapsed'
+  | 'trial_interrupted' | 'trial_limit' | 'cannot_observe'
+  | 'object_not_in_reach' | 'missing_object';
+
 export type BookRejection = 'unknown_book' | 'book_not_in_reach' | 'cannot_read' |
   'already_reading' | 'already_understood' | 'busy_at_lesson' | 'reading_in_progress';
 
@@ -207,7 +220,7 @@ export type IntentionRejection='no_intention_planner'|'invalid_intention'|
 
 export type CommandResult =
   | { ok: true; events: readonly WorldEvent[]; scheduled?:true }
-  | { ok: false; reason: MoveRejection | BreakRejection | SocialRejection | DoorRejection | InspectRejection | QuestionRejection | SpellRejection | BookRejection | HelpRejection | DailyRejection | MeetingRejection | IntentionRejection | PointRejection | 'no_toilet_need' | 'wrong_toilet' |
+  | { ok: false; reason: MoveRejection | BreakRejection | SocialRejection | DoorRejection | InspectRejection | QuestionRejection | SpellRejection | MagicResearchRejection | BookRejection | HelpRejection | DailyRejection | MeetingRejection | IntentionRejection | PointRejection | 'no_toilet_need' | 'wrong_toilet' |
       'not_urgent' | 'no_animal_signal' | 'not_partner' | 'no_sighting' |
       'animal_cannot_speak' | 'animal_action_unavailable' | 'listener_cannot_speak' |
       'unknown_passage' | 'cannot_search_passages' | 'timed_action_in_progress'; events: readonly [] };
@@ -292,7 +305,7 @@ export function createSimulation() {
 
   const {
     keys, doors, events, observationsByCharacter, beliefsByCharacter, roomDetails,
-    spellKnowledge, pendingTutoring, attemptedTutors, assistanceHistory,
+    spellKnowledge, magicResearch, pendingTutoring, attemptedTutors, assistanceHistory,
     searches, routines, timetables, dailyPlans, meals, conversations, rests,
     commitments, commitmentMemories, intentions, bodilyNeeds,
     houseMembership, pointAuthorities, pointLedger, pointNews,
@@ -352,6 +365,7 @@ export function createSimulation() {
     observationsByCharacter.set(eid, []);
     beliefsByCharacter.register(eid);
     spellKnowledge.register(eid);
+    magicResearch.register(eid);
     primitives.set(eid,new Set());
     attemptedTutors.set(eid, new Set());
     assistanceHistory.set(eid, []);
@@ -389,6 +403,14 @@ export function createSimulation() {
   }
 
   function magicState(object:EntityId){return magic.state(object);}
+  /** The actor owns these notes: never a globally discoverable spell decoder. */
+  function magicHypotheses(actor:EntityId){return magicResearch.history(actor);}
+  function activeMagicTrial(actor:EntityId){return magicResearch.pending(actor);}
+  function measurement(object:EntityId):MagicMeasurement{
+    const state=magic.state(object);
+    if(!state)throw Error('Missing observed magical object');
+    return {position:{...state.position},light:state.light};
+  }
   function knownMagicPrimitives(actor:EntityId):MagicPrimitive[]{
     return [...(primitives.get(actor)??[])].sort();
   }
@@ -1670,6 +1692,82 @@ export function createSimulation() {
       return { ok: true, events: [event] };
     }
 
+    if(command.type==='propose_magic_hypothesis'){
+      if(!isSpellId(command.spell))
+        return {ok:false,reason:'unknown_spell',events:[]};
+      if(spellKnowledge.stage(command.actor,command.spell)==='unaware')
+        return {ok:false,reason:'not_understood',events:[]};
+      if(!validHypothesisTitle(command.title))
+        return {ok:false,reason:'invalid_research_title',events:[]};
+      if(!validateMagicPattern(command.pattern))
+        return {ok:false,reason:'invalid_magic_pattern',events:[]};
+      if(requiredPrimitives(command.pattern).some(
+        primitive=>!primitives.get(command.actor)!.has(primitive)))
+        return {ok:false,reason:'primitive_not_known',events:[]};
+      if(magicResearch.history(command.actor).length>=24)
+        return {ok:false,reason:'research_limit',events:[]};
+      const minute=schoolTime(tick).absoluteMinute;
+      const hypothesisId=magicResearch.draft(command.actor,command.spell,
+        command.title,command.pattern,minute);
+      const event:WorldEvent={type:'magic_hypothesis_proposed',actor:command.actor,
+        spell:command.spell,hypothesisId,minute};
+      emit(event);
+      return {ok:true,events:[event]};
+    }
+    if(command.type==='test_magic_hypothesis'){
+      const hypothesis=magicResearch.owns(command.actor,command.hypothesisId);
+      if(!hypothesis)return {ok:false,reason:'unknown_hypothesis',events:[]};
+      if(magicResearch.pending(command.actor))
+        return {ok:false,reason:'trial_already_running',events:[]};
+      if(hypothesis.trials.length>=48)
+        return {ok:false,reason:'trial_limit',events:[]};
+      if(!magic.knowsTarget(command.object))
+        return {ok:false,reason:'missing_object',events:[]};
+      if(currentRoom(command.actor)!==locationOf(command.object))
+        return {ok:false,reason:'object_not_in_reach',events:[]};
+      if(!hasComponent(ecs,command.actor,Vision))
+        return {ok:false,reason:'cannot_observe',events:[]};
+      // Check again against personal knowledge; notes alone are not a spell.
+      if(requiredPrimitives(hypothesis.pattern).some(
+        primitive=>!primitives.get(command.actor)!.has(primitive)))
+        return {ok:false,reason:'primitive_not_known',events:[]};
+      const before=measurement(command.object);
+      const cast=execute({type:'cast_pattern',actor:command.actor,object:command.object,
+        pattern:hypothesis.pattern});
+      if(!cast.ok)return cast;
+      const minute=schoolTime(tick).absoluteMinute;
+      magicResearch.begin(command.actor,hypothesis.id,command.object,minute,before);
+      const event:WorldEvent={type:'magic_trial_started',actor:command.actor,
+        hypothesisId:hypothesis.id,object:command.object,minute};
+      emit(event);
+      return {ok:true,events:[...cast.events,event]};
+    }
+    if(command.type==='record_magic_trial'){
+      const active=magicResearch.pending(command.actor);
+      if(!active||active.hypothesisId!==command.hypothesisId||
+         active.object!==command.object)
+        return {ok:false,reason:'trial_not_started',events:[]};
+      if(!hasComponent(ecs,command.actor,Vision))
+        return {ok:false,reason:'cannot_observe',events:[]};
+      if(currentRoom(command.actor)!==locationOf(command.object))
+        return {ok:false,reason:'object_not_in_reach',events:[]};
+      const minute=schoolTime(tick).absoluteMinute;
+      if(minute<active.startMinute+10)
+        return {ok:false,reason:'trial_not_elapsed',events:[]};
+      const hypothesis=magicResearch.owns(command.actor,active.hypothesisId);
+      const effect=magic.current(command.object);
+      if(!hypothesis||!effect||effect.actor!==command.actor||
+         effect.startMinute!==active.startMinute||
+         JSON.stringify(effect.pattern)!==JSON.stringify(hypothesis.pattern)){
+        magicResearch.cancel(command.actor);
+        return {ok:false,reason:'trial_interrupted',events:[]};
+      }
+      magicResearch.finish(command.actor,command.object,minute,measurement(command.object));
+      const event:WorldEvent={type:'magic_trial_recorded',actor:command.actor,
+        object:command.object,hypothesisId:active.hypothesisId,minute};
+      emit(event);
+      return {ok:true,events:[event]};
+    }
     if(command.type==='cast_pattern'){
       if(!magic.knowsTarget(command.object))
         return {ok:false,reason:'missing_object',events:[]};
@@ -2330,6 +2428,8 @@ export function createSimulation() {
       observations: [...observationsByCharacter.entries()],
       beliefs: characters.map(id => [id, beliefsByCharacter.read(id)]),
       learning: characters.map(id => [id, spellKnowledge.history(id)]),
+      ...(magicResearch.snapshot().research.length?{magicResearch:magicResearch.snapshot().research}:{}),
+      ...(magicResearch.snapshot().active.length?{activeMagicTrials:magicResearch.snapshot().active}:{}),
       ...(magic.snapshot().objects.length?{magicObjects:magic.snapshot().objects,
         activeMagic:magic.snapshot().active}:{}),
       ...([...primitives.values()].some(v=>v.size)?{magicPrimitives:[...primitives.entries()]
@@ -2517,6 +2617,7 @@ export function createSimulation() {
     for (const [id, ledger] of state.observations) observationsByCharacter.set(id, ledger);
     for (const [id, ledger] of state.beliefs) beliefsByCharacter.replace(id, ledger);
     for (const [id, ledger] of state.learning) spellKnowledge.replace(id, ledger);
+    magicResearch.restore(state.magicResearch??[],state.activeMagicTrials??[]);
     magic.replace({objects:state.magicObjects??[],active:state.activeMagic??[]});
     for(const v of primitives.values())v.clear();
     for(const [actor,known] of state.magicPrimitives??[]){
@@ -2600,6 +2701,7 @@ export function createSimulation() {
   return {
     room, roomInfo, character, fragileObject, spellBook, visibleBooks, readingOf,
     magicObject,magicState,knownMagicPrimitives,seedMagicPrimitive,
+    magicHypotheses,activeMagicTrial,
     connect, execute, step,
     createTimedMovement, setAutonomousTimedTravel, timedTravelOf,
     worldSeconds: () => worldClock.nowSeconds(),
