@@ -463,7 +463,9 @@ export function restoreSimulation(serialized: string | SavedSimulationV1 | Saved
         ? { ...op.plan, homeRoom: at(op.plan.homeRoom), diningRoom: at(op.plan.diningRoom),
           ...(op.plan.socialRoom === undefined ? {} : { socialRoom: at(op.plan.socialRoom) }),
           ...(op.plan.leisureRoom === undefined ? {} : { leisureRoom: at(op.plan.leisureRoom) }),
-          ...(op.plan.libraryRoom === undefined ? {} : { libraryRoom: at(op.plan.libraryRoom) }) }
+          ...(op.plan.libraryRoom === undefined ? {} : { libraryRoom: at(op.plan.libraryRoom) }),
+          ...(op.plan.magicalResearch===undefined?{}:{magicalResearch:{...op.plan.magicalResearch,
+            room:at(op.plan.magicalResearch.room)}}) }
         : null); break;
       case 'seedSpellKnowledge': restored.seedSpellKnowledge(at(op.actor), op.spell, op.stage); break;
       case 'seedMagicPrimitive': restored.seedMagicPrimitive(at(op.actor),op.primitive);break;

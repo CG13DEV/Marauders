@@ -73,7 +73,7 @@ export function createSchoolWeek(
   scale: 'fixture-84' | 'research-600' = 'fixture-84',
   curriculum: 'legacy' | 'foundations-27' = 'legacy',
   travel: 'legacy' | 'micro-28' | 'weighted-29' | 'unified-30' = 'legacy',
-  academicStudy: 'legacy' | 'library-g4-1' = 'legacy'
+  academicStudy: 'legacy' | 'library-g4-1' | 'living-g4-4' = 'legacy'
 ) {
   if(travel!=='legacy'&&travel!=='micro-28'&&travel!=='weighted-29'&&
      travel!=='unified-30')
@@ -84,7 +84,8 @@ export function createSchoolWeek(
     throw Error('Unknown curriculum');
   if(curriculum==='foundations-27'&&scale!=='research-600')
     throw Error('Foundations curriculum requires the research population');
-  if(academicStudy!=='legacy'&&academicStudy!=='library-g4-1')
+  if(academicStudy!=='legacy'&&academicStudy!=='library-g4-1'&&
+     academicStudy!=='living-g4-4')
     throw Error('Unknown academic study mode');
   if(scale!=='fixture-84'&&scale!=='research-600')
     throw new Error('Unknown school population scale');
@@ -98,7 +99,11 @@ export function createSchoolWeek(
   const layout = createCastleLayout(world);
   const { hall, greatHall, staffRoom, library, courtyard, hospital,
     classrooms, electiveRooms } = layout;
-  if(academicStudy==='library-g4-1')
+  if(academicStudy==='living-g4-4'){
+    // An ordinary, spatially real feather in the shared Charms classroom.
+    world.magicObject('g44_class_feather','Учебное перо',classrooms.Charms,1);
+  }
+  if(academicStudy!=='legacy')
     world.spellBook('g41_lumos_primer','Lumos — основы освещающих чар',library,'lumos');
   const dorms = Object.fromEntries(HOUSES.map(house =>
     [house, layout.dorms[house].common])) as Record<House, number>;
@@ -130,10 +135,15 @@ export function createSchoolWeek(
       (expansion === 'expanded' ? NAMED_STAFF[subject] : undefined) ??
         'Преподаватель: ' + SUBJECT_LABELS[subject], staffRoom);
     world.grantPointAuthority(id,'teacher');
-    if(academicStudy==='library-g4-1' && subject==='Charms'){
+    if(academicStudy!=='legacy' && subject==='Charms'){
       // A real qualified tutor; no NPC receives this knowledge by proximity.
       world.seedSpellKnowledge(id,'lumos','independent');
       world.setHelpful(id,true);
+      if(academicStudy==='living-g4-4'){
+        world.seedSpellKnowledge(id,'wingardium_leviosa','independent');
+        world.seedMagicPrimitive(id,'position_lock');
+        world.seedMagicPrimitive(id,'force_feedback');
+      }
     }
     // Ghost Binns still holds the History timetable, but must NOT eat,
     // sleep or accumulate human physiological needs in expanded mode.
@@ -203,12 +213,18 @@ export function createSchoolWeek(
           homeRoom: sleepingRoom, socialRoom: dorms[house],
           diningRoom: greatHall,
           leisureRoom: index % 3 === 0 ? library : index % 3 === 1 ? courtyard : dorms[house],
-          ...(academicStudy==='library-g4-1'&&year===1?{libraryRoom:library}:{ }),
+          ...(academicStudy!=='legacy'&&year===1?{libraryRoom:library}:{ }),
+          ...(academicStudy==='living-g4-4'&&year===1&&
+             house===HOUSES[0]&&index===0?{
+            magicalResearch:{room:classrooms.Charms,spell:'wingardium_leviosa' as const}
+          }:{}),
           style: index % 3 === 2 ? 'reserved' : 'outgoing',
           interest: (['lessons', 'castle', 'hobbies'] as const)[index % 3]!,
           ...(social === 'autonomous' ? { socialInvitations: true } : {}),
           ...(year === 1 ? { learningAppointments: true } : {}),
-          ...(students.length<=population.pupils?{intentionPlanning:true}:{}),
+          ...(students.length<=population.pupils||
+             (academicStudy==='living-g4-4'&&year===1&&house===HOUSES[0]&&index===0)
+            ?{intentionPlanning:true}:{}),
           ...(planning === 'adaptive' ? {schoolPlanning:'adaptive' as const} : {}),
           ...(year<=2&&(travel==='micro-28'||travel==='weighted-29')?
             {schoolTravel:travel}:{})
@@ -395,6 +411,44 @@ export function createSchoolWeek(
       staffSchedule.get(assignment.teacher)!.push(lesson);
       for(const pupil of assignment.students)
         pupilSchedule.get(pupil)!.push(lesson);
+    }
+  }
+
+  // G4.4 [GAME]: extend the SAME school timetable, teacher, classroom and
+  // per-pupil plans. These are explicit opt-in practical workshops, NOT the
+  // historical 1970s syllabus. The 16:00 slot is outside core classes and
+  // reserved elective years, so it doesn't overbook an existing lesson.
+  if(academicStudy==='living-g4-4'){
+    const researcher=students.find(student=>student.year===1&&
+      student.house===HOUSES[0]);
+    if(!researcher)throw Error('G4.4 needs a first-year research pupil');
+    const cohort=teachingGroups.find(group=>group.id===researcher.groupId);
+    const teacher=teachersBySubject.get('Charms');
+    if(!cohort||teacher===undefined)throw Error('G4.4 lab prerequisites unavailable');
+    for(const [day,unit] of [
+      [0,'wingardium_leviosa'],
+      [1,'position_lock'],
+      [2,'force_feedback']
+    ] as const){
+      const startsAt=day*1440+16*60;
+      const endsAt=startsAt+50;
+      const id='g44_charms_'+day;
+      const lesson:Lesson={id,subject:'Чары — исследовательский практикум',
+        room:classrooms.Charms,startsAt,endsAt,teacher,groupId:cohort.id,
+        ...(day===0?{spell:'wingardium_leviosa' as const}:
+          {primitive:unit as 'position_lock'|'force_feedback'})};
+      // The ordinary planner handles the actual trip, and attendance decides
+      // who truly heard the lecture. Nobody is teleported into the classroom.
+      for(const actor of [teacher,...cohort.students]){
+        const timetable=actor===teacher?staffSchedule:pupilSchedule;
+        const previous=timetable.get(actor);
+        if(!previous)throw Error('G4.4 missing pupil or teacher schedule');
+        if(previous.some(other=>other.startsAt<endsAt&&other.endsAt>startsAt))
+          throw Error('G4.4 practical lesson conflicts with existing calendar');
+        previous.push(lesson);
+      }
+      sessions.push({id,subject:'Charms',teacher,room:classrooms.Charms,
+        startsAt,endsAt,groupId:cohort.id,students:[...cohort.students]});
     }
   }
 
