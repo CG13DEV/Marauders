@@ -4,6 +4,7 @@
  * No fabricated social ties or numerical friendship meters.
  */
 import type { CommitmentPriority } from './social-commitments.ts';
+import type {SpellId} from './spellcraft.ts';
 export type MealKind = 'breakfast' | 'lunch' | 'dinner';
 export type SocialTopic = 'lessons' | 'castle' | 'hobbies';
 export type SocialStyle = 'outgoing' | 'reserved';
@@ -15,6 +16,8 @@ export type DailyLifePlan = {
   leisureRoom?: number;
   /** [GAME] Personally learned location of an accessible library, NOT its books. */
   libraryRoom?: number;
+  /** Opt-in, personally known laboratory destination & studied formula. */
+  magicalResearch?:{room:number;spell:SpellId};
   diningRoom: number;
   style: SocialStyle;
   interest: SocialTopic;
