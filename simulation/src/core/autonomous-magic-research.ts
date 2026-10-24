@@ -13,7 +13,8 @@ export type LocalMagicalObject={id:number;label:string;position:Vec3};
 export function isResearchTime(minute:number):boolean{
   const local=minute%1440;
   return (local>=17*60&&local<18*60)||
-    (local>=19*60+10&&local<20*60+30);
+    (local>=19*60+10&&local<20*60+30)||
+    (Math.floor(minute/1440)%7>=5&&local>=9*60&&local<11*60);
 }
 
 /** A very small scientific policy: construct alternate explanations and
@@ -50,13 +51,21 @@ export function nextLocalMagicResearchAction(input:{
     if(!known.includes(controller)||
        hypotheses.some(h=>h.pattern.nodes.some(node=>
          node.kind==='levitate'&&node.controller===controller)))continue;
+    // Keep the original experimental target constant across hypotheses.
+    // Recover it from the pupil's own notes, not the secret spell AST.
+    const prior=hypotheses.flatMap(h=>h.pattern.nodes).find(n=>
+      n.kind==='levitate'&&n.trajectory.kind==='hold');
+    const target=prior?.kind==='levitate'&&prior.trajectory.kind==='hold'
+      ?prior.trajectory.point
+      :{x:object.position.x,y:object.position.y+2,z:object.position.z};
     const pattern:MagicPattern={nodes:[{kind:'levitate',controller,
-      trajectory:{kind:'hold',point:{
-        x:object.position.x,y:object.position.y+2,z:object.position.z
-      }}}]};
+      trajectory:{kind:'hold',point:{...target}}}]};
     return {type:'propose_magic_hypothesis',actor,spell,title,pattern};
   }
   const next=hypotheses.find(h=>h.spell===spell&&h.trials.length===0);
-  return next?{type:'test_magic_hypothesis',actor,
-    hypothesisId:next.id,object:object.id}:null;
+  // Don't start a 20-minute observation if curfew / room hours close
+  // before the earliest legal measurement.
+  return next&&isResearchTime(minute+10)&&isResearchTime(minute+20)
+    ?{type:'test_magic_hypothesis',actor,
+      hypothesisId:next.id,object:object.id}:null;
 }
