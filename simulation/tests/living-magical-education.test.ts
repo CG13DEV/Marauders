@@ -44,7 +44,13 @@ test('G4.4 school pupil learns, physically practises, then conducts autonomous t
   const notes=w.magicHypotheses(f.learner.id);
   assert.equal(notes.length,2,'two distinct personally reasoned controllers');
   assert.equal(notes[0]?.trials.length,1);
-  assert.equal(notes[1]?.trials.length,1);
+  assert.equal(notes[1]?.trials.length,1,JSON.stringify({
+    notes,active:w.activeMagicTrial(f.learner.id),
+    room:w.currentRoom(f.learner.id),
+    researchEvents:w.events().filter(e=>e.actor===f.learner.id &&
+      (e.type.startsWith('magic_')||e.type==='entity_moved')).slice(-35),
+    attendance:w.attendance(f.learner.id).filter(l=>l.id.startsWith('g44'))
+  },null,2));
   assert.equal(notes[0]?.trials[0]?.object,f.feather);
   assert.equal(notes[1]?.trials[0]?.object,f.feather);
   const own=w.events().filter(e=>e.actor===f.learner.id);
