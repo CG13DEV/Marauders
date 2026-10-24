@@ -73,7 +73,7 @@ export function createSchoolWeek(
   scale: 'fixture-84' | 'research-600' = 'fixture-84',
   curriculum: 'legacy' | 'foundations-27' = 'legacy',
   travel: 'legacy' | 'micro-28' | 'weighted-29' | 'unified-30' = 'legacy',
-  academicStudy: 'legacy' | 'library-g4-1' | 'living-g4-4' = 'legacy'
+  academicStudy: 'legacy' | 'library-g4-1' | 'living-g4-4' | 'living-g4-5' = 'legacy'
 ) {
   if(travel!=='legacy'&&travel!=='micro-28'&&travel!=='weighted-29'&&
      travel!=='unified-30')
@@ -85,7 +85,7 @@ export function createSchoolWeek(
   if(curriculum==='foundations-27'&&scale!=='research-600')
     throw Error('Foundations curriculum requires the research population');
   if(academicStudy!=='legacy'&&academicStudy!=='library-g4-1'&&
-     academicStudy!=='living-g4-4')
+     academicStudy!=='living-g4-4'&&academicStudy!=='living-g4-5')
     throw Error('Unknown academic study mode');
   if(scale!=='fixture-84'&&scale!=='research-600')
     throw new Error('Unknown school population scale');
@@ -100,8 +100,17 @@ export function createSchoolWeek(
   const { hall, greatHall, staffRoom, library, courtyard, hospital,
     classrooms, electiveRooms } = layout;
   if(academicStudy==='living-g4-4'){
-    // An ordinary, spatially real feather in the shared Charms classroom.
+    // Preserve the one-feather comparison baseline of G4.4.
     world.magicObject('g44_class_feather','Учебное перо',classrooms.Charms,1);
+  }
+  if(academicStudy==='living-g4-5'){
+    // Shared laboratory, distinct ordinary objects. No NPC assigned to one:
+    // any student may choose from locally observed, unoccupied feathers.
+    const count=scale==='research-600'?24:8;
+    for(let index=0;index<count;index++)
+      world.magicObject('g45_feather_'+index,
+        'Учебное перо №'+(index+1),classrooms.Charms,1,
+        {x:(index%8)*0.5,y:0,z:Math.floor(index/8)*0.5});
   }
   if(academicStudy!=='legacy')
     world.spellBook('g41_lumos_primer','Lumos — основы освещающих чар',library,'lumos');
@@ -139,7 +148,7 @@ export function createSchoolWeek(
       // A real qualified tutor; no NPC receives this knowledge by proximity.
       world.seedSpellKnowledge(id,'lumos','independent');
       world.setHelpful(id,true);
-      if(academicStudy==='living-g4-4'){
+      if(academicStudy==='living-g4-4'||academicStudy==='living-g4-5'){
         world.seedSpellKnowledge(id,'wingardium_leviosa','independent');
         world.seedMagicPrimitive(id,'position_lock');
         world.seedMagicPrimitive(id,'force_feedback');
@@ -223,7 +232,9 @@ export function createSchoolWeek(
           ...(social === 'autonomous' ? { socialInvitations: true } : {}),
           ...(year === 1 ? { learningAppointments: true } : {}),
           ...(students.length<=population.pupils||
-             (academicStudy==='living-g4-4'&&year===1&&house===HOUSES[0]&&index===0)
+             (academicStudy==='living-g4-4'&&year===1&&house===HOUSES[0]&&index===0)||
+             (academicStudy==='living-g4-5'&&year===1&&
+                (house===HOUSES[0]||(scale==='fixture-84'&&house===HOUSES[1])))
             ?{intentionPlanning:true}:{}),
           ...(planning === 'adaptive' ? {schoolPlanning:'adaptive' as const} : {}),
           ...(year<=2&&(travel==='micro-28'||travel==='weighted-29')?
@@ -418,7 +429,7 @@ export function createSchoolWeek(
   // per-pupil plans. These are explicit opt-in practical workshops, NOT the
   // historical 1970s syllabus. The 16:00 slot is outside core classes and
   // reserved elective years, so it doesn't overbook an existing lesson.
-  if(academicStudy==='living-g4-4'){
+  if(academicStudy==='living-g4-4'||academicStudy==='living-g4-5'){
     const researcher=students.find(student=>student.year===1&&
       student.house===HOUSES[0]);
     if(!researcher)throw Error('G4.4 needs a first-year research pupil');
