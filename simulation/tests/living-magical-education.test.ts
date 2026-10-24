@@ -37,7 +37,7 @@ test('G4.4 is an opt-in school timetable, teacher, prop and personally known lab
 
 test('G4.4 school pupil learns, physically practises, then conducts autonomous trials',()=>{
   const f=fixture(),w=f.world;
-  advance(w,590); // covers three afternoon laboratories plus repeat free hours
+  advance(w,1000); // complete school week including weekend lab opportunities
   assert.equal(w.spellStage(f.learner.id,'wingardium_leviosa'),'independent');
   assert.deepEqual(w.knownMagicPrimitives(f.learner.id),
     ['force_feedback','position_lock']);
