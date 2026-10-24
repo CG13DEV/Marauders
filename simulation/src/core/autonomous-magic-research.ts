@@ -8,6 +8,14 @@ import type {MagicHypothesis,PendingMagicTrial} from './magic-research.ts';
 import type {MagicPrimitive,Vec3,MagicPattern} from './magic-graph.ts';
 export type LocalMagicalObject={id:number;label:string;position:Vec3};
 
+/** After-school laboratory access and normal evening leisure. No classes or
+ * meals are preempted; the outer intention/need arbiter still has final say. */
+export function isResearchTime(minute:number):boolean{
+  const local=minute%1440;
+  return (local>=17*60&&local<18*60)||
+    (local>=19*60+10&&local<20*60+30);
+}
+
 /** A very small scientific policy: construct alternate explanations and
  * probe a real object. The formulas are hypotheses, NOT spell provenance. */
 export function nextLocalMagicResearchAction(input:{
