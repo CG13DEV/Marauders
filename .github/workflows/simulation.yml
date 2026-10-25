@@ -22,6 +22,10 @@ jobs:
       - run: npm install
       - run: npm run typecheck
       - run: npm test
+      - name: G4 audit - 600 pupils in full magical research with CPU/memory gate
+        run: npm run magic-population-soak
+      - name: G4 audit - matched black-box named formula and hypothesis readings
+        run: npm run controlled-spell-demo
       - name: Experiment 31.2 endogenous first-action causality
         run: npm run spontaneous-demo
       - name: Experiment 31.3 lived-motivation counterfactual
