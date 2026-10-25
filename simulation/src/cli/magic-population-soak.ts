@@ -5,7 +5,8 @@ import {performance} from 'node:perf_hooks';
 import {createSchoolWeek} from '../scenarios/school-week.ts';
 
 type AcademicMode='legacy'|'living-g4-5';
-const ticks=560;
+// Seven complete simulated days: includes weekend lab access, not merely lectures.
+const ticks=1008;
 function measure(mode:AcademicMode){
   const started=performance.now();
   const scene=createSchoolWeek(undefined,'adaptive','off','96-all',
