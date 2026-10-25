@@ -84,6 +84,7 @@ function remapEvent(event: WorldEvent, at: (id: number) => number): WorldEvent {
     case 'magic_primitive_learned':return {...event,actor:at(event.actor)};
     case 'magic_hypothesis_proposed':return {...event,actor:at(event.actor)};
     case 'magic_trial_started':case 'magic_trial_recorded':
+    case 'magic_trial_abandoned':
       return {...event,actor:at(event.actor),object:at(event.object)};
     case 'lesson_attendance': case 'spell_concept_learned': case 'spell_executed':
       return { ...event, actor: at(event.actor) };
