@@ -28,6 +28,9 @@ function missedLessonAndMeeting() {
   assert.equal(world.attendance(remus)[0]?.status, 'missed');
   assert.equal(world.spellStage(lily, 'lumos'), 'conceptual');
   assert.deepEqual(world.knowledgeGaps(remus), ['lumos']);
+  // Professor has completed the lesson and physically leaves the room;
+  // voluntary peer tutoring must not accidentally target a third person.
+  world.execute({type:'move',actor:teacher,destination:library});
   world.connect(classroom, corridor);
   world.setRoutine(remus, [classroom]);
   return { world, classroom, corridor, library, remus, lily };
@@ -222,6 +225,9 @@ test('competing duties cause late arrival and later voluntary help without steer
   const james = world.character('james', 'Джеймс', corridor);
   const peter = world.character('peter', 'Питер', corridor);
   const cup = world.fragileObject('cup', 'Чашка', corridor);
+  const lecturer=world.character('charms_lecturer','Преподаватель чар',classroom);
+  world.seedSpellKnowledge(lecturer,'lumos','independent');
+  world.setManualControl(lecturer,true);
   for (const [source, claimed] of [[james, james], [peter, peter]] as const) {
     const result = world.execute({
       type: 'tell', actor: source, listener: remus,
@@ -231,7 +237,7 @@ test('competing duties cause late arrival and later voluntary help without steer
   }
   const lesson = {
     id: 'lumos_class', subject: 'Чары', room: classroom,
-    startsAt: 510, endsAt: 550, spell: 'lumos' as const
+    startsAt: 510, endsAt: 550, spell: 'lumos' as const,teacher:lecturer
   };
   world.setTimetable(lily, [lesson], 'lesson_first');
   world.setTimetable(remus, [lesson], 'inquiry_first');
