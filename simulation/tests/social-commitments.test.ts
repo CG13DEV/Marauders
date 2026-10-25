@@ -117,6 +117,7 @@ test('spell explanation requires the teacher physically present at teaching mome
     w.connect(room,corridor);
     const teacher=w.character('teacher','Преподаватель',teacherInRoom?room:corridor);
     const student=w.character('student','Первокурсник',room);
+    w.seedSpellKnowledge(teacher,'lumos','independent');
     if(!teacherInRoom)w.setManualControl(teacher,true);
     w.setTimetable(student,[{
       id:'charms',subject:'Чары',room,teacher,
