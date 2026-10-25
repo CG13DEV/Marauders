@@ -7,6 +7,8 @@ import type {SpellId} from './spellcraft.ts';
 import type {MagicPattern,Vec3} from './magic-graph.ts';
 
 export type MagicMeasurement={position:Vec3;light:number};
+/** [GAME] A trial reserves its prop for at most six ten-minute school ticks. */
+export const MAGIC_TRIAL_LEASE_MINUTES=60;
 export type MagicTrial={
   object:number; startMinute:number; observedMinute:number;
   before:MagicMeasurement; after:MagicMeasurement;
@@ -42,6 +44,8 @@ export function compareMagicEvidence(a:MagicTrial,b:MagicTrial){
 export function createMagicResearch(){
   const research=new Map<number,MagicHypothesis[]>();
   const active=new Map<number,PendingMagicTrial>();
+  // Index exclusive object reservations without copying everyone's notebook.
+  const reserved=new Map<number,number>();
 
   function register(actor:number){if(research.has(actor))throw Error('Research owner duplicated');
     research.set(actor,[]);}
@@ -61,9 +65,12 @@ export function createMagicResearch(){
     ledger.push(hypothesis);
     return hypothesis.id;
   }
+  function busy(object:number):boolean{return reserved.has(object);}
   function begin(actor:number,id:number,object:number,minute:number,before:MagicMeasurement){
-    if(!owns(actor,id)||active.has(actor))throw Error('Cannot begin research');
+    if(!owns(actor,id)||active.has(actor)||busy(object))
+      throw Error('Cannot begin research');
     active.set(actor,{hypothesisId:id,object,startMinute:minute,before:clone(before)});
+    reserved.set(object,actor);
   }
   function finish(actor:number,object:number,minute:number,after:MagicMeasurement){
     const task=active.get(actor);
@@ -72,10 +79,26 @@ export function createMagicResearch(){
     if(!hypothesis||hypothesis.trials.length>=48)throw Error('Research trial limit');
     const trial:MagicTrial={object,startMinute:task.startMinute,observedMinute:minute,
       before:clone(task.before),after:clone(after)};
-    hypothesis.trials.push(trial);active.delete(actor);
+    hypothesis.trials.push(trial);active.delete(actor);reserved.delete(object);
     return hypothesis.id;
   }
-  function cancel(actor:number){active.delete(actor);}
+  function cancel(actor:number):PendingMagicTrial|null{
+    const task=active.get(actor);
+    if(!task)return null;
+    active.delete(actor);reserved.delete(task.object);
+    return clone(task);
+  }
+  /** Authoritative clock expires abandoned work BEFORE NPC action selection. */
+  function expire(minute:number):[number,PendingMagicTrial][]{
+    const released:[number,PendingMagicTrial][]=[];
+    for(const [actor,task] of active){
+      if(minute-task.startMinute>=MAGIC_TRIAL_LEASE_MINUTES){
+        const abandoned=cancel(actor);
+        if(abandoned)released.push([actor,abandoned]);
+      }
+    }
+    return released;
+  }
   function snapshot(){
     return {research:[...research.entries()].filter(([,v])=>v.length>0)
       .map(([id,items])=>[id,clone(items)] as ResearchRecord),
@@ -83,7 +106,7 @@ export function createMagicResearch(){
   }
   function restore(records:ResearchRecord[],tasks:ActiveResearchRecord[]){
     research.forEach(v=>v.splice(0));
-    active.clear();
+    active.clear();reserved.clear();
     for(const [actor,items] of records){
       if(!research.has(actor)||items.length>24||!Array.isArray(items)||
         items.some((h,i)=>h.id!==i+1||!validHypothesisTitle(h.title)||
@@ -92,11 +115,11 @@ export function createMagicResearch(){
       research.set(actor,clone(items));
     }
     for(const [actor,task] of tasks){
-      if(active.has(actor)||!owns(actor,task.hypothesisId)||
+      if(active.has(actor)||busy(task.object)||!owns(actor,task.hypothesisId)||
          !Number.isSafeInteger(task.startMinute))
         throw Error('Invalid active experiment');
-      active.set(actor,clone(task));
+      active.set(actor,clone(task));reserved.set(task.object,actor);
     }
   }
-  return {register,owns,history,pending,draft,begin,finish,cancel,snapshot,restore};
+  return {register,owns,history,pending,busy,draft,begin,finish,cancel,expire,snapshot,restore};
 }
