@@ -227,7 +227,6 @@ test('competing duties cause late arrival and later voluntary help without steer
   const cup = world.fragileObject('cup', 'Чашка', corridor);
   const lecturer=world.character('charms_lecturer','Преподаватель чар',classroom);
   world.seedSpellKnowledge(lecturer,'lumos','independent');
-  world.setManualControl(lecturer,true);
   for (const [source, claimed] of [[james, james], [peter, peter]] as const) {
     const result = world.execute({
       type: 'tell', actor: source, listener: remus,
@@ -239,6 +238,9 @@ test('competing duties cause late arrival and later voluntary help without steer
     id: 'lumos_class', subject: 'Чары', room: classroom,
     startsAt: 510, endsAt: 550, spell: 'lumos' as const,teacher:lecturer
   };
+  // Lecturer also has a real obligation to the same class, so is never an
+  // idle substitute for the pupil's chosen trusted peer during instruction.
+  world.setTimetable(lecturer,[lesson],'lesson_first');
   world.setTimetable(lily, [lesson], 'lesson_first');
   world.setTimetable(remus, [lesson], 'inquiry_first');
   world.setInquisitive(remus, true);
