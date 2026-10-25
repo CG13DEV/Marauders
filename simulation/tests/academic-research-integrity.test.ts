@@ -157,3 +157,48 @@ test('#79: teacher qualification and lesson provenance survive checkpoint/replay
       {kind:'lesson',lessonId:'lecture',minute:550});
   }
 });
+
+test('#78: loss of eyesight cannot create evidence but owner can still abandon',()=>{
+  const {world,a,feather}=scene();
+  assert.equal(world.execute({type:'test_magic_hypothesis',
+    actor:a,hypothesisId:1,object:feather}).ok,true);
+  const checkpoint=world.checkpoint();
+  const own=checkpoint.runtime.flags.find(([id])=>id===a)![1];
+  own.vision=false; // Test restored world in which sight was subsequently lost.
+  const restored=restoreCheckpoint(checkpoint);
+  const actor=restored.id('student_a')!,object=restored.id('feather')!;
+  assert.deepEqual(restored.visibleMagicObjects(actor),[]);
+  restored.step();
+  assert.deepEqual(restored.execute({type:'record_magic_trial',actor,
+    hypothesisId:1,object}),{ok:false,reason:'cannot_observe',events:[]});
+  assert.equal(restored.execute({type:'abandon_magic_trial',actor}).ok,true);
+  assert.equal(restored.magicHypotheses(actor)[0]?.trials.length,0);
+  assert.equal(restored.visibleMagicObjects(restored.id('student_b')!)[0]?.busy,false);
+});
+
+test('#80: two simultaneous scientists checkpoint and journal replay both trials',()=>{
+  const {world,lab,a,b,feather}=scene();
+  const second=world.magicObject('second','Второе перо',lab);
+  assert.equal(world.execute({type:'test_magic_hypothesis',
+    actor:a,hypothesisId:1,object:feather}).ok,true);
+  assert.equal(world.execute({type:'test_magic_hypothesis',
+    actor:b,hypothesisId:1,object:second}).ok,true);
+  world.step(); // both observers have been working simultaneously
+  const states=[restoreCheckpoint(serializeCheckpoint(world)),
+    restoreSimulation(serializeSimulation(world))];
+  for(const w of states){
+    const aa=w.id('student_a')!,bb=w.id('student_b')!;
+    const x=w.id('feather')!,y=w.id('second')!;
+    assert.equal(w.visibleMagicObjects(aa).filter(o=>o.busy).length,2);
+    w.step();
+    assert.equal(w.execute({type:'record_magic_trial',
+      actor:aa,hypothesisId:1,object:x}).ok,true);
+    assert.equal(w.execute({type:'record_magic_trial',
+      actor:bb,hypothesisId:1,object:y}).ok,true);
+    assert.equal(w.magicHypotheses(aa)[0]?.trials.length,1);
+    assert.equal(w.magicHypotheses(bb)[0]?.trials.length,1);
+    assert.equal(w.visibleMagicObjects(aa).filter(o=>o.busy).length,0);
+    assert.deepEqual(restoreCheckpoint(serializeCheckpoint(w))
+      .magicHypotheses(aa),w.magicHypotheses(aa));
+  }
+});
