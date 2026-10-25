@@ -11,8 +11,11 @@ function schoolWithConsequences() {
   const remus=w.character('remus','Ремус',hallway);
   const james=w.character('james','Джеймс',classroom);
   const cup=w.fragileObject('cup','Чашка',classroom);
+  const teacher=w.character('charms_teacher','Преподаватель чар',classroom);
+  w.seedSpellKnowledge(teacher,'lumos','independent');
+  w.setManualControl(teacher,true);
   w.setTimetable(lily,[{
-    id:'charms', subject:'Чары',room:classroom,startsAt:510,endsAt:550,spell:'lumos'
+    id:'charms', subject:'Чары',room:classroom,teacher,startsAt:510,endsAt:550,spell:'lumos'
   }]);
   w.setTimetable(remus,[{
     id:'charms', subject:'Чары',room:classroom,startsAt:510,endsAt:550,spell:'lumos'
