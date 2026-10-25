@@ -27,8 +27,24 @@ function measure(mode:AcademicMode){
     .map(s=>({key:s.key,trial:scene.world.activeMagicTrial(s.id)!}));
   if(mode==='living-g4-5'){
     if(pupil.length<600)throw Error('Population is not full 600 pupils');
-    if(withTrials.length<2||completedTrials<2)
+    if(withTrials.length<2||completedTrials<2){
+      const cohort=firstYear.filter(x=>x.house==='gryffindor').slice(0,12).map(x=>({
+        key:x.key,attendance:scene.world.attendance(x.id).filter(l=>l.id.startsWith('g44_'))
+          .map(l=>({lesson:l.id,status:l.status,arrivedAt:l.arrivedAt})),
+        stage:scene.world.spellStage(x.id,'wingardium_leviosa'),
+        known:scene.world.knownMagicPrimitives(x.id),
+        notes:scene.world.magicHypotheses(x.id).map(n=>({name:n.title,trials:n.trials.length})),
+        pending:scene.world.activeMagicTrial(x.id)!==null,
+        room:scene.world.currentRoom(x.id)
+      }));
+      console.error('[SCIENCE SOAK DIAGNOSTIC]',JSON.stringify({cohort,
+        finishedScientists:withTrials.length,completedTrials,
+        headCount:pupil.length,firstYear:firstYear.length,
+        researchEvents:scene.world.events().filter(e=>
+          e.type==='magic_trial_started'||e.type==='magic_trial_recorded').length
+      },null,2));
       throw Error('Research concurrency gate: too few independent science outcomes');
+    }
     if(firstYear.filter(s=>scene.world.attendance(s.id)
       .some(l=>l.spell==='wingardium_leviosa'&&l.arrivedAt!==undefined)).length<10)
       throw Error('Missing real shared school attendance');
