@@ -4,7 +4,8 @@ import { createSimulation } from '../src/core/Simulation.ts';
 import { createFirstRoom } from '../src/scenarios/first-room.ts';
 
 const pattern = { spell: 'lumos' as const, intent: 'illuminate', target: 'wand_tip', incantation: 'Lumos' };
-const lesson = (room: number) => ({
+const lesson = (room: number, teacher?:number) => ({
+  ...(teacher===undefined?{}:{teacher}),
   id: 'lumos_class', subject: 'Чары: свет', room, startsAt: 510, endsAt: 550, spell: 'lumos' as const
 });
 const advance = (world: ReturnType<typeof createSimulation>, n: number) => {
@@ -13,7 +14,9 @@ const advance = (world: ReturnType<typeof createSimulation>, n: number) => {
 
 test('class gives the concept only during instruction, never an instant spell unlock', () => {
   const { world, lily, commonRoom } = createFirstRoom();
-  world.setTimetable(lily, [lesson(commonRoom)]);
+  const teacher=world.character('professor','Преподаватель',commonRoom);
+  world.seedSpellKnowledge(teacher,'lumos','independent');
+  world.setTimetable(lily, [lesson(commonRoom,teacher)]);
   advance(world, 3);
   assert.equal(world.spellStage(lily, 'lumos'), 'unaware');
   advance(world, 1);
@@ -48,7 +51,9 @@ test('Lily can explain missed theory; Remus still cannot cast', () => {
   const room = w.room('classroom', 'Класс');
   const lily = w.character('lily', 'Лили', room);
   const remus = w.character('remus', 'Ремус', room);
-  w.setTimetable(lily, [lesson(room)]);
+  const teacher=w.character('teacher','Профессор',room);
+  w.seedSpellKnowledge(teacher,'lumos','independent');
+  w.setTimetable(lily, [lesson(room,teacher)]);
   advance(w, 4);
   assert.equal(w.spellStage(remus, 'lumos'), 'unaware');
   assert.equal(w.execute({ type: 'tutor_spell', actor: lily, listener: remus, spell: 'lumos' }).ok, true);
@@ -71,7 +76,7 @@ test('guided practice and later autonomous experimenting produce local light', (
   const teacher = w.character('teacher', 'Профессор', room);
   const james = w.character('james', 'Джеймс', room);
   w.seedSpellKnowledge(teacher, 'lumos', 'independent');
-  w.setTimetable(james, [lesson(room)]);
+  w.setTimetable(james, [lesson(room,teacher)]);
   advance(w, 4);
   assert.deepEqual(w.execute({ type: 'cast_spell', actor: james, ...pattern }),
     { ok: false, reason: 'not_practiced', events: [] });
@@ -128,8 +133,10 @@ test('missing a class leaves a concrete knowledge gap, recovered by meeting a pe
   const outside = w.room('outside', 'Недоступная комната');
   const remus = w.character('remus', 'Ремус', outside);
   const lily = w.character('lily', 'Лили', classroom);
-  w.setTimetable(remus, [lesson(classroom)]);
-  w.setTimetable(lily, [lesson(classroom)]);
+  const teacher=w.character('prof','Преподаватель',classroom);
+  w.seedSpellKnowledge(teacher,'lumos','independent');
+  w.setTimetable(remus, [lesson(classroom,teacher)]);
+  w.setTimetable(lily, [lesson(classroom,teacher)]);
   advance(w, 8);
   assert.equal(w.attendance(remus)[0]?.status, 'missed');
   assert.equal(w.learningDebt(remus), 1);

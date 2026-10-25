@@ -11,9 +11,12 @@ function missedLessonAndMeeting() {
   world.connect(classroom, library);
   const lily = world.character('lily', 'Лили Эванс', classroom);
   const remus = world.character('remus', 'Ремус Люпин', corridor);
+  const teacher=world.character('charms_teacher','Преподаватель чар',classroom);
+  world.seedSpellKnowledge(teacher,'lumos','independent');
+  world.setManualControl(teacher,true);
   const lesson = {
     id: 'lumos-lesson', subject: 'Чары', room: classroom,
-    startsAt: 510, endsAt: 550, spell: 'lumos' as const
+    startsAt: 510, endsAt: 550, spell: 'lumos' as const, teacher
   };
   world.setTimetable(lily, [lesson]);
   world.setTimetable(remus, [lesson]);
@@ -25,6 +28,9 @@ function missedLessonAndMeeting() {
   assert.equal(world.attendance(remus)[0]?.status, 'missed');
   assert.equal(world.spellStage(lily, 'lumos'), 'conceptual');
   assert.deepEqual(world.knowledgeGaps(remus), ['lumos']);
+  // Professor has completed the lesson and physically leaves the room;
+  // voluntary peer tutoring must not accidentally target a third person.
+  world.execute({type:'move',actor:teacher,destination:library});
   world.connect(classroom, corridor);
   world.setRoutine(remus, [classroom]);
   return { world, classroom, corridor, library, remus, lily };
@@ -219,6 +225,8 @@ test('competing duties cause late arrival and later voluntary help without steer
   const james = world.character('james', 'Джеймс', corridor);
   const peter = world.character('peter', 'Питер', corridor);
   const cup = world.fragileObject('cup', 'Чашка', corridor);
+  const lecturer=world.character('charms_lecturer','Преподаватель чар',classroom);
+  world.seedSpellKnowledge(lecturer,'lumos','independent');
   for (const [source, claimed] of [[james, james], [peter, peter]] as const) {
     const result = world.execute({
       type: 'tell', actor: source, listener: remus,
@@ -228,8 +236,11 @@ test('competing duties cause late arrival and later voluntary help without steer
   }
   const lesson = {
     id: 'lumos_class', subject: 'Чары', room: classroom,
-    startsAt: 510, endsAt: 550, spell: 'lumos' as const
+    startsAt: 510, endsAt: 550, spell: 'lumos' as const,teacher:lecturer
   };
+  // Lecturer also has a real obligation to the same class, so is never an
+  // idle substitute for the pupil's chosen trusted peer during instruction.
+  world.setTimetable(lecturer,[lesson],'lesson_first');
   world.setTimetable(lily, [lesson], 'lesson_first');
   world.setTimetable(remus, [lesson], 'inquiry_first');
   world.setInquisitive(remus, true);

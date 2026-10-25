@@ -83,7 +83,8 @@ function remapCommand(command: Command, ids: Map<number, number>): Command {
     case 'answer_tutoring': return { ...command, actor: at(command.actor), requester: at(command.requester) };
     case 'test_magic_hypothesis':case 'record_magic_trial':
       return {...command,actor:at(command.actor),object:at(command.object)};
-    case 'propose_magic_hypothesis':return {...command,actor:at(command.actor)};
+    case 'propose_magic_hypothesis':case 'abandon_magic_trial':
+      return {...command,actor:at(command.actor)};
     case 'cast_pattern':case 'disturb_object':
       return {...command,actor:at(command.actor),object:at(command.object)};
     case 'practice_spell': return { ...command, actor: at(command.actor),

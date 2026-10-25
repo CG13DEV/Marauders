@@ -27,7 +27,7 @@ export function createStarterSchool(): PersistentSimulation {
   world.setManualControl(james, true);
   const lumos = {
     id: 'lumos', subject: 'Чары: свет',
-    room: classroom, startsAt: 510, endsAt: 550,
+    room: classroom,teacher:professor,startsAt: 510, endsAt: 550,
     spell: 'lumos' as const
   };
   world.setTimetable(james, [lumos], 'lesson_first');

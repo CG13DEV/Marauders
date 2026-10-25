@@ -46,6 +46,7 @@ export type StepDecision = { actor: EntityId; action: Command; result: CommandRe
 
 export type SchedulerContext = {
   advanceClock(): number;
+  onWorldMinute(minute:number):void;
   actors(trait: AgentTrait): EntityId[];
   has(actor: EntityId, flag: ActorFlag): boolean;
   visibleFragiles(room: EntityId): EntityId[];
@@ -136,6 +137,7 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
       finally{profiler.command(performance.now()-started);}
     };
     const minute = advanceClock();
+    ctx.onWorldMinute(minute);
     // Only opt-in characters have bodily state. Rest requires sustained
     // physical presence at home during actual sleeping hours, not a marker.
     for(const [actor,needs] of bodilyNeeds){
@@ -1351,7 +1353,8 @@ export function runWorldStep(ctx: SchedulerContext): StepDecision[] {
             lesson.arrivedAt === undefined || lesson.arrivedAt > minute ||
             (lesson.teacher !== undefined &&
               currentRoom(lesson.teacher) !== lesson.room)) continue;
-        if(lesson.spell){
+        if(lesson.spell && lesson.teacher!==undefined &&
+           spellKnowledge.stage(lesson.teacher,lesson.spell)!=='unaware'){
           const learned = spellKnowledge.learn(actor, lesson.spell, 'conceptual',
             { kind: 'lesson', lessonId: lesson.id, minute });
           if (learned) emit({

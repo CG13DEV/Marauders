@@ -144,10 +144,11 @@ export function createSchoolWeek(
       (expansion === 'expanded' ? NAMED_STAFF[subject] : undefined) ??
         'Преподаватель: ' + SUBJECT_LABELS[subject], staffRoom);
     world.grantPointAuthority(id,'teacher');
-    if(academicStudy!=='legacy' && subject==='Charms'){
-      // A real qualified tutor; no NPC receives this knowledge by proximity.
+    if(subject==='Charms'){
+      // Lumos is on the prototype syllabus even in legacy/foundation modes:
+      // don't let the timetable grant concepts that this teacher cannot teach.
       world.seedSpellKnowledge(id,'lumos','independent');
-      world.setHelpful(id,true);
+      if(academicStudy!=='legacy')world.setHelpful(id,true);
       if(academicStudy==='living-g4-4'||academicStudy==='living-g4-5'){
         world.seedSpellKnowledge(id,'wingardium_leviosa','independent');
         world.seedMagicPrimitive(id,'position_lock');
@@ -373,6 +374,9 @@ export function createSchoolWeek(
           ...(travel==='micro-28'||travel==='weighted-29'?
             {schoolTravel:travel}:{})
         });
+        // Foundation Charms staff must also truly know the scheduled
+        // introductory Lumos formula; attendance alone cannot grant it.
+        if(subject==='Charms')world.seedSpellKnowledge(teacher,'lumos','independent');
         professors.push({id:teacher,subject});
         staffSchedule.set(teacher,[]);
         foundationTeachers.push({

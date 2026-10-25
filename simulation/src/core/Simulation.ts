@@ -87,6 +87,7 @@ export type Command =
   | {type:'propose_magic_hypothesis';actor:EntityId;spell:SpellId;title:string;pattern:MagicPattern}
   | {type:'test_magic_hypothesis';actor:EntityId;hypothesisId:number;object:EntityId}
   | {type:'record_magic_trial';actor:EntityId;hypothesisId:number;object:EntityId}
+  | {type:'abandon_magic_trial';actor:EntityId}
   | { type: 'ask_tutoring'; actor: EntityId; listener: EntityId; spell: SpellId }
   | { type: 'answer_tutoring'; actor: EntityId; requester: EntityId; spell: SpellId; accept: boolean }
   | { type: 'eat_meal'; actor: EntityId; kind: MealKind }
@@ -126,6 +127,8 @@ export type WorldEvent =
   | {type:'magic_object_disturbed';actor:EntityId;object:EntityId;minute:number}
   | {type:'magic_hypothesis_proposed';actor:EntityId;hypothesisId:number;spell:SpellId;minute:number}
   | {type:'magic_trial_started'|'magic_trial_recorded';actor:EntityId;hypothesisId:number;object:EntityId;minute:number}
+  | {type:'magic_trial_abandoned';actor:EntityId;hypothesisId:number;object:EntityId;minute:number;
+      cause:'expired'|'abandoned'|'interrupted'}
   | { type: 'book_reading_started' | 'book_reading_interrupted'; actor: EntityId; book: EntityId; minute: number }
   | { type: 'book_read'; actor: EntityId; book: EntityId; spell: SpellId; minute: number }
   | { type: 'tutoring_requested'; actor: EntityId; listener: EntityId; spell: SpellId; minute: number }
@@ -407,10 +410,11 @@ export function createSimulation() {
   function visibleMagicObjects(actor:EntityId){
     const room=currentRoom(actor);
     if(room===null||!isCharacter(actor)||!hasComponent(ecs,actor,Vision))return [];
-    const busy=new Set(magicResearch.snapshot().active.map(([,trial])=>trial.object));
-    return magic.snapshot().objects.filter(([id])=>locationOf(id)===room)
-      .map(([id,state])=>({id,label:Name.value[id]!,
-        position:{...state.position},busy:busy.has(id)}));
+    return Array.from(query(ecs,[MagicTarget,LocatedIn(room)])).map(id=>{
+      const state=magic.state(id)!;
+      return {id,label:Name.value[id]!,position:state.position,
+        light:state.light,busy:magicResearch.busy(id)};
+    });
   }
   /** The actor owns these notes: never a globally discoverable spell decoder. */
   function magicHypotheses(actor:EntityId){return magicResearch.history(actor);}
@@ -1725,12 +1729,21 @@ export function createSimulation() {
       emit(event);
       return {ok:true,events:[event]};
     }
+    if(command.type==='abandon_magic_trial'){
+      // An actor can abandon THEIR OWN appointment from any room, even blind.
+      // No target identifier or privileged world knowledge is accepted.
+      const task=magicResearch.cancel(command.actor);
+      if(!task)return {ok:false,reason:'trial_not_started',events:[]};
+      const event:WorldEvent={type:'magic_trial_abandoned',actor:command.actor,
+        hypothesisId:task.hypothesisId,object:task.object,
+        minute:schoolTime(tick).absoluteMinute,cause:'abandoned'};
+      emit(event);
+      return {ok:true,events:[event]};
+    }
     if(command.type==='test_magic_hypothesis'){
       const hypothesis=magicResearch.owns(command.actor,command.hypothesisId);
       if(!hypothesis)return {ok:false,reason:'unknown_hypothesis',events:[]};
-      if(magicResearch.pending(command.actor)||
-         magicResearch.snapshot().active.some(([owner,trial])=>
-           owner!==command.actor&&trial.object===command.object))
+      if(magicResearch.pending(command.actor)||magicResearch.busy(command.object))
         return {ok:false,reason:'trial_already_running',events:[]};
       if(hypothesis.trials.length>=48)
         return {ok:false,reason:'trial_limit',events:[]};
@@ -1772,7 +1785,10 @@ export function createSimulation() {
       if(!hypothesis||!effect||effect.actor!==command.actor||
          effect.startMinute!==active.startMinute||
          JSON.stringify(effect.pattern)!==JSON.stringify(hypothesis.pattern)){
-        magicResearch.cancel(command.actor);
+        const canceled=magicResearch.cancel(command.actor)!;
+        emit({type:'magic_trial_abandoned',actor:command.actor,
+          hypothesisId:canceled.hypothesisId,object:canceled.object,
+          minute,cause:'interrupted'});
         return {ok:false,reason:'trial_interrupted',events:[]};
       }
       magicResearch.finish(command.actor,command.object,minute,measurement(command.object));
@@ -2180,6 +2196,12 @@ export function createSimulation() {
         worldClock.advanceTo(next);
         tick++;
         return worldClock.absoluteMinute();
+      },
+      onWorldMinute: minute => {
+        for(const [actor,task] of magicResearch.expire(minute)){
+          emit({type:'magic_trial_abandoned',actor,hypothesisId:task.hypothesisId,
+            object:task.object,minute,cause:'expired'});
+        }
       },
       actors: trait => Array.from(query(ecs, [Character, agentComponents[trait]])),
       has: (actor, flag) => hasComponent(ecs, actor, flags[flag]) ||
