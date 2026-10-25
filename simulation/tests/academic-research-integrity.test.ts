@@ -132,6 +132,7 @@ test('#79: qualified co-present teacher, absence and primitive qualification',()
     startsAt:600,endsAt:660,primitive:'position_lock' as const};
   w.setTimetable(taught,[a,b]);
   w.setTimetable(missed,[a,b]);
+  w.setManualControl(missed,true);
   run(w,13);
   assert.equal(w.spellStage(taught,'lumos'),'conceptual');
   assert.equal(w.spellStage(missed,'lumos'),'unaware');
