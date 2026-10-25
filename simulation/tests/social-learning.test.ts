@@ -11,9 +11,12 @@ function missedLessonAndMeeting() {
   world.connect(classroom, library);
   const lily = world.character('lily', 'Лили Эванс', classroom);
   const remus = world.character('remus', 'Ремус Люпин', corridor);
+  const teacher=world.character('charms_teacher','Преподаватель чар',classroom);
+  world.seedSpellKnowledge(teacher,'lumos','independent');
+  world.setManualControl(teacher,true);
   const lesson = {
     id: 'lumos-lesson', subject: 'Чары', room: classroom,
-    startsAt: 510, endsAt: 550, spell: 'lumos' as const
+    startsAt: 510, endsAt: 550, spell: 'lumos' as const, teacher
   };
   world.setTimetable(lily, [lesson]);
   world.setTimetable(remus, [lesson]);
