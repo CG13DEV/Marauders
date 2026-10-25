@@ -413,7 +413,7 @@ export function createSimulation() {
     return Array.from(query(ecs,[MagicTarget,LocatedIn(room)])).map(id=>{
       const state=magic.state(id)!;
       return {id,label:Name.value[id]!,position:state.position,
-        busy:magicResearch.busy(id)};
+        light:state.light,busy:magicResearch.busy(id)};
     });
   }
   /** The actor owns these notes: never a globally discoverable spell decoder. */
