@@ -27,7 +27,7 @@ export type UiState = ReturnType<ReturnType<typeof createNarrativeWebSession>['s
 const rooms=['common_room','corridor','classroom','library'] as const;
 const people=['james','lily','remus','peter','professor'] as const;
 const keys=[...rooms,...people];
-const knownKey=(world:ReturnType<typeof createStarterSchool>,id:number)=>
+const knownKey=(world:ReturnType<typeof createStarterSchool>,id:number):string|null=>
   keys.find(key=>world.id(key)===id)??null;
 
 /** Author-authored room atmosphere: not simulated new objects or discoveries. */
