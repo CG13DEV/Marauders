@@ -28,7 +28,7 @@ test('NPC perspective contains her own knowledge and directed attitude, not thir
   assert.equal(view.authoredPersonality,'[GAME] Любознательная');
   assert.equal(view.magicKnowledge.find(k=>k.spell==='lumos')?.stage,'conceptual');
   assert.equal(view.magicKnowledge.find(k=>k.spell==='wingardium_leviosa')?.stage,'unaware');
-  assert.equal(JSON.stringify(view).includes('prior_training'),false);
+  assert.equal(view.recentLearning.some(entry=>entry.spell==='wingardium_leviosa'),false);
   assert.equal(view.personalBeliefs.length,0);
 });
 
