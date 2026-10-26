@@ -62,7 +62,10 @@
     "social-school-stress": "node --expose-gc --experimental-strip-types src/cli/schoolwide-social-stress-demo.ts",
     "narrative-play": "node --experimental-strip-types src/cli/narrative-play.ts",
     "narrative-demo": "node --experimental-strip-types src/cli/narrative-play.ts --demo",
-    "narrative-live": "node --experimental-strip-types src/cli/narrative-play.ts --live"
+    "narrative-live": "node --experimental-strip-types src/cli/narrative-play.ts --live",
+    "narrative-web": "node --experimental-strip-types src/cli/narrative-web.ts",
+    "narrative-web-live": "node --experimental-strip-types src/cli/narrative-web.ts --live",
+    "narrative-web-check": "node --check web/narrative.js"
   },
   "dependencies": {
     "bitecs": "0.4.0"
