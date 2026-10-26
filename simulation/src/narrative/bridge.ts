@@ -8,8 +8,12 @@ import {scenePerspective,npcPerspective} from './perspective.ts';
  */
 export class NarrativeBridge {
   private readonly recent=new Map<string,Array<{speaker:'player'|'npc';text:string}>>();
-  constructor(private readonly provider:NarrativeProvider,
-    private readonly profiles:Readonly<Record<string,string>>={}) {}
+  private readonly provider:NarrativeProvider;
+  private readonly profiles:Readonly<Record<string,string>>;
+  constructor(provider:NarrativeProvider, profiles:Readonly<Record<string,string>>={}) {
+    this.provider=provider;
+    this.profiles=profiles;
+  }
 
   clear():void { this.recent.clear(); }
 
