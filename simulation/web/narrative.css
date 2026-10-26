@@ -1,0 +1,97 @@
+:root {
+  color-scheme: dark;
+  --background:#101516;
+  --panel:#1c2525;
+  --text:#f1e9d7;
+  --muted:#aeb7ae;
+  --gold:#dfbc7a;
+  --edge:#3d4742;
+  --accent:#416b5e;
+  font-family: Georgia, "Times New Roman", serif;
+}
+* {box-sizing:border-box}
+body {margin:0;background:radial-gradient(circle at 35% 3%,#29342e 0%,#101516 65%);color:var(--text)}
+button,textarea,select,summary {font:inherit}
+button,summary {cursor:pointer}
+button {border:1px solid #6e795d;background:#304a3f;color:#f5ebd8;padding:9px 12px;border-radius:7px;transition:background .15s}
+button:hover {background:#456758}
+button:disabled {opacity:.48;cursor:not-allowed}
+button.subtle,.subtle {border:1px solid var(--edge);background:#202a27;color:var(--gold);font-size:.85rem;border-radius:7px;padding:8px 12px}
+button.subtle:hover,.subtle:hover {background:#354039}
+.shell {max-width:1750px;min-height:100vh;margin:auto;display:flex;flex-direction:column}
+.top {display:flex;justify-content:space-between;align-items:center;gap:24px;padding:22px 29px;border-bottom:1px solid var(--edge);background:#111a19c7}
+.brand{display:flex;align-items:center;gap:15px}
+.crest {border:1px solid var(--gold);color:var(--gold);font-size:28px;border-radius:50%;display:grid;place-items:center;width:53px;height:53px}
+.eyebrow,.chapter {font-family:system-ui,sans-serif;font-size:.69rem;font-weight:750;letter-spacing:.19em;color:var(--gold)}
+h1 {margin:2px 0;font-weight:normal;font-size:1.85rem}
+h1 em {font-weight:normal;color:var(--gold)}
+.top-meta {display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.time {color:#e7e0cc;font-size:.95rem}
+.mode {background:#4b4430;border:1px solid #726544;border-radius:100px;font-size:.73rem;letter-spacing:.06em;padding:7px 12px;color:#f2dcaa;font-family:system-ui,sans-serif}
+.mode.live {background:#513e33}
+.file {display:inline-flex;align-items:center;cursor:pointer}
+.layout {flex:1;display:grid;grid-template-columns:minmax(235px,270px) minmax(360px,1fr) minmax(250px,295px)}
+.left-panel,.right-panel {display:flex;flex-direction:column;gap:11px;padding:19px 14px;background:#18201e99}
+.left-panel {border-right:1px solid var(--edge)}
+.right-panel {border-left:1px solid var(--edge)}
+.panel {background:#202a27;border:1px solid var(--edge);border-radius:9px;padding:14px}
+.panel h2,.story-heading h2 {text-transform:uppercase;letter-spacing:.13em;font-family:system-ui,sans-serif;font-size:.72rem;font-weight:800;color:var(--gold);margin:0 0 15px}
+.hero-name {font-size:1.42rem;margin-bottom:7px}
+.hero-sub,.tiny {font-size:.78rem;line-height:1.45;color:var(--muted)}
+.tiny {margin-top:8px}
+.stat {border-top:1px solid #3d4642;padding:9px 0;display:flex;justify-content:space-between;gap:9px;align-items:baseline}
+.stat:first-child {border-top:none}
+.stat .value {color:#ebdab1;text-align:right}
+.stat strong {font-size:.92rem;font-weight:normal}
+.chip {font-family:system-ui,sans-serif;font-size:.65rem;background:#34453c;color:#c7d8ca;border-radius:4px;padding:3px 5px}
+.empty {color:var(--muted);font-size:.87rem;font-style:italic;line-height:1.55}
+.story {padding:33px min(5vw,65px);min-width:0;display:flex;flex-direction:column}
+.chapter span {padding:0 10px;color:#8a947d}
+.room-title {font-size:clamp(2.1rem,4vw,3.3rem);margin:18px 0 12px;line-height:1.06}
+.description {color:#d0c9b9;font-size:1.12rem;line-height:1.7;margin:0 0 19px}
+.notice {background:#26342e;border-left:3px solid #a79a70;padding:12px 14px;color:#e1d9bd;font-size:.91rem;line-height:1.5;border-radius:0 7px 7px 0;min-height:44px}
+.story-heading {display:flex;align-items:center;justify-content:space-between;margin-top:30px;gap:10px}
+.story-heading h2 {margin:0}
+.log {min-height:180px;flex:1;max-height:580px;overflow-y:auto;margin:14px 0 23px;display:flex;flex-direction:column;gap:13px;padding-right:4px}
+.entry {border-left:2px solid #52645a;padding:9px 15px 9px 16px;background:#2029268c;line-height:1.55;font-size:.97rem;white-space:pre-wrap;overflow-wrap:anywhere}
+.entry.player {border-left-color:var(--gold);background:#30302587}
+.entry.error {border-left-color:#db8e78}
+.entry .byline {font:700 .67rem system-ui,sans-serif;letter-spacing:.13em;text-transform:uppercase;color:var(--gold);margin-bottom:6px}
+.entry .body {font-size:.96rem}
+.composer {display:flex;flex-direction:column;gap:8px;border:1px solid #5a5e4b;border-radius:10px;padding:17px;background:#222d27}
+.composer label {color:var(--gold);font:700 .72rem system-ui,sans-serif;letter-spacing:.07em;text-transform:uppercase}
+select,textarea {width:100%;background:#141e1d;border:1px solid #4b574e;border-radius:6px;color:var(--text);padding:10px}
+textarea {resize:vertical;min-height:72px;font-size:.98rem;line-height:1.5}
+textarea:focus,select:focus,button:focus-visible {outline:2px solid var(--gold);outline-offset:2px}
+.composer-foot {display:flex;align-items:center;justify-content:space-between;gap:12px}
+.composer-foot .tiny {margin:0}
+.action-list {display:flex;flex-direction:column;gap:7px}
+.action-list button {text-align:left;background:#283730;border:1px solid #455247;font-size:.89rem}
+.person {border-top:1px solid var(--edge);padding:11px 0}
+.person:first-child {border-top:0}
+.person-name {display:block;font-size:1.02rem;margin-bottom:6px}
+.person-actions {display:flex;gap:5px;flex-wrap:wrap}
+.person-actions button {font-family:system-ui,sans-serif;font-size:.7rem;padding:6px 7px}
+.help-line {margin:7px 0}
+details summary {color:var(--gold);font-size:.9rem}
+.bottom {border-top:1px solid var(--edge);padding:13px 26px;display:flex;gap:15px;justify-content:space-between;color:var(--muted);font-family:system-ui,sans-serif;font-size:.69rem}
+@media(max-width:1160px) {
+  .layout {grid-template-columns:205px minmax(300px,1fr)}
+  .right-panel {grid-column:1 / -1;display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--edge);border-left:0}
+  .story {padding:30px}
+}
+@media(max-width:720px) {
+  .top {padding:15px;flex-direction:column;align-items:flex-start}
+  .layout {display:flex;flex-direction:column}
+  .story {order:0;padding:22px 17px}
+  .left-panel {order:1;border-right:0;border-top:1px solid var(--edge);display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+  .right-panel {order:2;display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+  .log {max-height:300px}
+  .composer-foot {align-items:flex-end}
+  .bottom {flex-direction:column}
+}
+@media(max-width:460px) {
+  .left-panel,.right-panel {grid-template-columns:1fr}
+  .composer-foot {flex-direction:column;align-items:stretch}
+  .room-title {font-size:2.15rem}
+}
