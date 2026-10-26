@@ -12,17 +12,35 @@ export interface NarrativeProvider {
   generate(request: NarrativeRequest): Promise<string>;
 }
 
+/** A deterministic contract fixture, NOT a simulated LLM or free-language parser. */
 export class MockNarrativeProvider implements NarrativeProvider {
   readonly requests: NarrativeRequest[] = [];
   async generate(request: NarrativeRequest): Promise<string> {
     this.requests.push({ ...request });
     const data = JSON.parse(request.input) as {
-      view?: { room: string }; perspective?: { name: string };
+      view?: {room:string;people?:string[];books?:string[];knownExits?:string[]};
+      perspective?: {name:string;magicKnowledge?:Array<{spell:string;stage:string}>};
+      utterance?:string;
     };
-    return request.kind === 'scene'
-      ? '[mock] Ты находишься здесь: ' + (data.view?.room ?? 'неизвестно') + '.'
-      : '[mock] ' + (data.perspective?.name ?? 'Собеседник') +
-        ': Я слушаю. Для свободной речи включи OpenAI API.';
+    if(request.kind==='scene'){
+      const view=data.view;
+      if(!view)return '[mock] Сцена пока недоступна.';
+      const people=view.people?.length?' Рядом: '+view.people.join(', ')+'.':'';
+      const exits=view.knownExits?.length?' Известные выходы: '+view.knownExits.join(', ')+'.':'';
+      return '[mock · факты ECS] '+view.room+'.'+people+exits;
+    }
+    const name=data.perspective?.name??'Собеседник';
+    const line=(data.utterance??'').toLowerCase();
+    if(/люмос|lumos/i.test(line)){
+      const stage=data.perspective?.magicKnowledge?.find(k=>k.spell==='lumos')?.stage??'unaware';
+      const answer=stage==='independent'?'Я умею применять Люмос самостоятельно.':
+        stage==='guided'?'Я упражнялась в Люмос с наставником, но пока не освоила его самостоятельно.':
+        stage==='conceptual'?'Я знаю теорию Люмос, но ещё не отработала заклинание.':
+        'Я пока не изучала Люмос.';
+      return '[mock · сценарная проверка знаний] '+name+': '+answer;
+    }
+    return '[mock · заглушка речи] '+name+
+      ': Я услышала вопрос. Свободный разговор без LLM пока недоступен.';
   }
 }
 
