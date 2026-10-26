@@ -55,6 +55,8 @@ jobs:
       - run: npm run learning-demo
       - run: npm run help-demo
       - run: npm run play-demo
+      - name: G5.1 isolated narrative smoke (no API key, no network)
+        run: npm run narrative-demo
       - run: npm run week-demo
       - run: npm run planner-demo
       - run: npm run commitment-demo
