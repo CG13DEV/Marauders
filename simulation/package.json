@@ -59,7 +59,10 @@
     "repair-initiative-demo": "node --experimental-strip-types src/cli/repair-initiative-demo.ts",
     "complex-relationships-demo": "node --experimental-strip-types src/cli/complex-relationships-demo.ts",
     "social-integration-demo": "node --experimental-strip-types src/cli/social-integration-demo.ts",
-    "social-school-stress": "node --expose-gc --experimental-strip-types src/cli/schoolwide-social-stress-demo.ts"
+    "social-school-stress": "node --expose-gc --experimental-strip-types src/cli/schoolwide-social-stress-demo.ts",
+    "narrative-play": "node --experimental-strip-types src/cli/narrative-play.ts",
+    "narrative-demo": "node --experimental-strip-types src/cli/narrative-play.ts --demo",
+    "narrative-live": "node --experimental-strip-types src/cli/narrative-play.ts --live"
   },
   "dependencies": {
     "bitecs": "0.4.0"
