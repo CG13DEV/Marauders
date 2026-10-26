@@ -2383,6 +2383,17 @@ export function createSimulation() {
     return decisions;
   }
 
+  /** Read-only subjective capabilities for the narrative presentation layer. */
+  function sensesOf(actor: EntityId): {vision:boolean;hearing:boolean}|null {
+    if(!isCharacter(actor))return null;
+    return {vision:hasComponent(ecs,actor,Vision),hearing:hasComponent(ecs,actor,Hearing)};
+  }
+  /** Personality hints only when explicitly configured by a world plan. */
+  function socialDispositionOf(actor:EntityId):{style:DailyLifePlan['style'];interest:DailyLifePlan['interest']}|null {
+    const plan=dailyPlans.get(actor);
+    return plan?{style:plan.style,interest:plan.interest}:null;
+  }
+
   function occupants(place: EntityId): EntityId[] {
     if (!isRoom(place)) return [];
     return Array.from(query(ecs, [Character, LocatedIn(place)]));
@@ -2756,7 +2767,7 @@ export function createSimulation() {
     tick: () => tick,
     clock: () => schoolTime(tick),
     beliefs: (observer: EntityId): Belief[] => beliefsByCharacter.read(observer),
-    currentRoom, locationOf, occupants, observations,
+    currentRoom, locationOf, occupants, observations, sensesOf, socialDispositionOf,
     knownExits,passageMinutes,planActorRoute,passageDiscoveries,routeProfile,tickProfile,schedulerProfile,
     isBroken: (eid: EntityId) => hasComponent(ecs, eid, Fragile) && Fragile.broken[eid] === 1,
     doorIsOpen: (eid: EntityId) => hasComponent(ecs, eid, Door) ? Door.open[eid] === 1 : null,
