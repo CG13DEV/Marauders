@@ -58,7 +58,7 @@ export class NarrativeBridge {
        world.currentRoom(player)!==startRoom)
       throw Error('Положение персонажей изменилось во время ответа — повтори разговор.');
     this.recent.set(key,[...prior.slice(-4),
-      {speaker:'player',text:utterance},{speaker:'npc',text:reply}].slice(-6));
+      {speaker:'player' as const,text:utterance},{speaker:'npc' as const,text:reply}].slice(-6));
     return reply;
   }
 
