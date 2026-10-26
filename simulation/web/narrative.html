@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Мародёры — текстовый Хогвартс</title>
+  <link rel="stylesheet" href="/narrative.css">
+  <script defer src="/narrative.js"></script>
+</head>
+<body>
+<div class="shell">
+  <header class="top">
+    <div class="brand">
+      <span class="crest" aria-hidden="true">✦</span>
+      <div><div class="eyebrow">MARAUDEURS · G5.1</div><h1>Хогвартс <em>живёт</em></h1></div>
+    </div>
+    <div class="top-meta">
+      <span id="mode" class="mode">MOCK · бесплатно</span>
+      <span id="time" class="time">Загружаем мир…</span>
+      <button id="save" class="subtle">Сохранить мир</button>
+      <label class="subtle file">Загрузить <input id="load" type="file" accept=".json,application/json" hidden></label>
+    </div>
+  </header>
+  <div class="layout">
+    <aside class="left-panel">
+      <section class="panel">
+        <h2>Твой персонаж</h2>
+        <div class="hero-name" id="player">—</div>
+        <div class="hero-sub">Игровой персонаж · первая учебная неделя</div>
+        <div id="light" class="tiny"></div>
+      </section>
+      <section class="panel">
+        <h2>Ближайшие занятия</h2>
+        <div id="lessons"></div>
+      </section>
+      <section class="panel">
+        <h2>Знания и магия</h2>
+        <div id="skills"></div>
+        <div id="gaps" class="tiny"></div>
+      </section>
+      <section class="panel">
+        <h2>Личная история</h2>
+        <div id="memory"></div>
+        <div class="tiny">Показываются только воспоминания твоего героя.</div>
+      </section>
+    </aside>
+    <main class="story">
+      <div class="chapter">ГЛАВА I <span>·</span> ЖИВАЯ ШКОЛА</div>
+      <div id="room" class="room-title">—</div>
+      <p id="atmosphere" class="description"></p>
+      <div id="perceived" class="notice"></div>
+      <div class="story-heading">
+        <h2>Хроника</h2>
+        <button id="describe" class="subtle">✧ Описать сцену</button>
+      </div>
+      <div id="log" class="log" role="log" aria-live="polite"></div>
+      <form id="talk-form" class="composer">
+        <label for="npc">Обратиться к</label>
+        <select id="npc" aria-label="Собеседник"></select>
+        <textarea id="utterance" maxlength="700" rows="3" placeholder="Напиши свою реплику. Свободная речь не исполняет игровые действия."></textarea>
+        <div class="composer-foot">
+          <span class="tiny">Enter — отправить · Shift+Enter — новая строка</span>
+          <button type="submit" id="say">Сказать ↗</button>
+        </div>
+      </form>
+    </main>
+    <aside class="right-panel">
+      <section class="panel">
+        <h2>Куда можно пойти</h2>
+        <div id="exits" class="action-list"></div>
+      </section>
+      <section class="panel">
+        <h2>Кто здесь</h2>
+        <div id="people"></div>
+      </section>
+      <section class="panel">
+        <h2>Предметы рядом</h2>
+        <div id="books"></div>
+      </section>
+      <section class="panel">
+        <h2>Что можно сделать</h2>
+        <div id="actions" class="action-list"></div>
+      </section>
+      <section class="panel">
+        <details>
+          <summary>Как устроена игра?</summary>
+          <div id="help" class="tiny"></div>
+        </details>
+      </section>
+    </aside>
+  </div>
+  <footer class="bottom">
+    <span id="indicator" role="status">Подключение к локальной симуляции…</span>
+    <span>Мир ≠ рассказчик · только ECS меняет игровые факты</span>
+  </footer>
+</div>
+</body>
+</html>

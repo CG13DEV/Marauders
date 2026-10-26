@@ -2,3 +2,7 @@ node_modules/
 dist/
 coverage/
 *.tsbuildinfo
+
+# Local API secrets — never commit keys
+.env
+.env.*
