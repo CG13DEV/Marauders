@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {request} from 'node:http';
 import {MockNarrativeProvider} from '../src/narrative/provider.ts';
 import {createNarrativeWebSession} from '../src/narrative/web-session.ts';
 import {makeNarrativeHttpServer} from '../src/cli/narrative-web.ts';
@@ -26,7 +27,7 @@ test('Mock story and NPC dialogue are deterministic and grounded in genuine less
   await app.dispatch({kind:'move',target:'corridor'});
   await app.dispatch({kind:'move',target:'classroom'});
   const first=await app.dispatch({kind:'speak',target:'lily',text:'Ты умеешь Люмос?'});
-  assert.match(first,/ещё не изучала/);
+  assert.match(first,/пока не изучала/);
   const beforeStage=JSON.stringify(app.save());
   const scene=await app.dispatch({kind:'describe'});
   assert.match(scene,/Кабинет чар/);
@@ -79,7 +80,13 @@ test('Local HTTP UI serves a real web shell, has no background LLM calls, and va
   const remote=await post({kind:'speak',target:'lily',text:'Привет'});
   assert.equal(remote.status,400);
   assert.equal(provider.requests.length,0);
-  assert.equal((await fetch(base+'api/state',{headers:{Host:'outside.example'}})).status,403);
+  const badHost=await new Promise<number>((resolve,reject)=>{
+    const r=request(base+'api/state',{headers:{host:'outside.example'}},res=>{
+      res.resume();resolve(res.statusCode??0);
+    });
+    r.once('error',reject);r.end();
+  });
+  assert.equal(badHost,403);
   assert.equal((await fetch(base+'api/state',{headers:{Origin:'http://evil.test'}})).status,403);
   const move=await post({kind:'move',target:'corridor'});
   assert.equal(move.status,200);
