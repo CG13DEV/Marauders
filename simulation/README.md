@@ -34,6 +34,10 @@ npm run typecheck
 
 Interactive commands for the first-room scenario: `look`, `go corridor`, `go library`, `go common_room`, `events`, `exit`.
 
+## G5.1 — Isolated Narrative Bridge [GAME]
+
+Run `npm run narrative-demo` (offline smoke), `npm run narrative-play` (interactive mock) or, **only after separate OpenAI API billing and a local `OPENAI_API_KEY` are configured**, `npm run narrative-live` (explicit paid API calls). In-game commands: `scene`, `say lily Привет!`; existing world commands (`go`, `wait`, `chat`, `save`, etc.) are unchanged. The language layer cannot create world facts or commitments. See [G5.1 technical contract](../docs/technical/g5-1-narrative-bridge.md).
+
 ## ECS world
 
 - Rooms, characters, fragile objects, and doors are entities with ECS components/relations.
