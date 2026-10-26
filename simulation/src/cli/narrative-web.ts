@@ -1,7 +1,8 @@
 /** [GAME] Local-only browser shell for the existing G5.1 ECS text world. */
 import {createServer,type Server,type IncomingMessage,type ServerResponse} from 'node:http';
 import {readFile} from 'node:fs/promises';
-import {NarrativeBridge} from '../narrative/bridge.ts';
+import {fileURLToPath} from 'node:url';
+import {resolve} from 'node:path';
 import {MockNarrativeProvider,OpenAINarrativeProvider} from '../narrative/provider.ts';
 import {createNarrativeWebSession,type UiAction} from '../narrative/web-session.ts';
 
@@ -110,7 +111,7 @@ export function makeNarrativeHttpServer(options:{
   };
 }
 
-if(process.argv[1]&&new URL('file://'+process.argv[1]).href===import.meta.url){
+if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
   if(!Number.isSafeInteger(portArg)||portArg<1||portArg>65535)
     throw Error('MARAUDERS_TEXT_PORT must be a valid port');
   const service=makeNarrativeHttpServer();
