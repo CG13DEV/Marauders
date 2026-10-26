@@ -21,6 +21,8 @@ jobs:
           node-version: '22'
       - run: npm install
       - run: npm run typecheck
+      - name: G5.1 browser controller JavaScript syntax
+        run: npm run narrative-web-check
       - run: npm test
       - name: G4 audit - 600 pupils in full magical research with CPU/memory gate
         run: npm run magic-population-soak
